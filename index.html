@@ -3,60 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Audit Interview Prep Tracker — Himanshi Garg</title>
+  <title>Mission Big 4 · Audit Interview Prep — Himanshi Garg</title>
+  <meta name="theme-color" content="#0a0e1f" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
-          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          fontFamily: {
+            sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+            display: ['"Plus Jakarta Sans"', 'Inter', 'sans-serif']
+          },
           colors: {
             brand: {
-              50:'#eef7ff',100:'#d9edff',200:'#bce0ff',300:'#8ecdff',400:'#59b0ff',
-              500:'#328fff',600:'#1b6ff5',700:'#1458e1',800:'#1748b6',900:'#193f8f',950:'#142657'
+              50:'#eef4ff',100:'#dbe6ff',200:'#bccfff',300:'#8eabff',400:'#5b7cfa',
+              500:'#3a5bef',600:'#2540db',700:'#1e33b8',800:'#1e2f92',900:'#1e2c73',950:'#141b45'
             }
           },
           keyframes: {
-            fadeUp: { '0%': { opacity:0, transform:'translateY(8px)' }, '100%': { opacity:1, transform:'translateY(0)' } },
-            pop: { '0%': { transform:'scale(.96)' }, '50%': { transform:'scale(1.03)' }, '100%': { transform:'scale(1)' } }
+            fadeUp: { '0%': { opacity:0, transform:'translateY(10px)' }, '100%': { opacity:1, transform:'translateY(0)' } },
+            pop: { '0%': { transform:'scale(.96)' }, '50%': { transform:'scale(1.03)' }, '100%': { transform:'scale(1)' } },
+            floaty: { '0%,100%': { transform:'translateY(0)' }, '50%': { transform:'translateY(-14px)' } },
+            shimmer: { '0%': { backgroundPosition:'-200% 0' }, '100%': { backgroundPosition:'200% 0' } }
           },
-          animation: { fadeUp: 'fadeUp .4s ease both', pop: 'pop .25s ease' }
+          animation: { fadeUp: 'fadeUp .45s cubic-bezier(.22,1,.36,1) both', pop: 'pop .25s ease' }
         }
       }
     }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
   <style>
     html { scroll-behavior: smooth; }
-    body { font-feature-settings: "cv02","cv03","cv04","cv11"; }
+    body { font-feature-settings: "cv02","cv03","cv04","cv11"; -webkit-font-smoothing: antialiased; }
+
+    /* ---- Aurora background ---- */
+    .aurora { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+    .aurora span { position: absolute; border-radius: 999px; filter: blur(90px); opacity: .55; animation: floaty 14s ease-in-out infinite; }
+    .aurora .b1 { width: 44vw; height: 44vw; left: -8vw; top: -10vw; background: radial-gradient(circle at 30% 30%, #5b7cfa, transparent 70%); }
+    .aurora .b2 { width: 38vw; height: 38vw; right: -6vw; top: 4vw; background: radial-gradient(circle at 70% 30%, #22d3ee, transparent 70%); animation-delay: -4s; }
+    .aurora .b3 { width: 40vw; height: 40vw; left: 30vw; bottom: -18vw; background: radial-gradient(circle at 50% 50%, #a855f7, transparent 70%); animation-delay: -8s; opacity:.4; }
+    .dark .aurora span { opacity: .28; }
+    /* subtle grain */
+    .grain { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .035;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-thumb { background: rgba(120,130,150,.35); border-radius: 999px; }
     ::-webkit-scrollbar-thumb:hover { background: rgba(120,130,150,.55); }
-    .card-enter { animation: fadeUp .35s ease both; }
+
+    .card-enter { animation: fadeUp .45s cubic-bezier(.22,1,.36,1) both; }
     .accordion-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
     .accordion-body.open { grid-template-rows: 1fr; }
     .accordion-inner { overflow: hidden; }
-    .ring-track { stroke: rgba(148,163,184,.25); }
+    .ring-track { stroke: rgba(148,163,184,.2); }
     details > summary { list-style: none; }
     details > summary::-webkit-details-marker { display: none; }
-    .glass { backdrop-filter: blur(12px); }
+    .glass { backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4); }
+
+    /* Gradient hover ring on cards */
+    .topic-card { position: relative; transition: transform .3s cubic-bezier(.22,1,.36,1), box-shadow .3s; }
+    .topic-card::before { content:''; position:absolute; inset:0; border-radius:1.25rem; padding:1px;
+      background: linear-gradient(135deg, rgba(91,124,250,.6), rgba(34,211,238,.5) 60%, transparent);
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; opacity:0; transition: opacity .3s; pointer-events:none; }
+    .topic-card:hover { transform: translateY(-4px); }
+    .topic-card:hover::before { opacity:1; }
+
+    .metric-card { transition: transform .3s cubic-bezier(.22,1,.36,1), box-shadow .3s; }
+    .metric-card:hover { transform: translateY(-3px); }
+
+    .gradient-text { background: linear-gradient(120deg, #3a5bef, #22d3ee 55%, #a855f7); -webkit-background-clip: text; background-clip: text; color: transparent; }
   </style>
 </head>
 
-<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 min-h-screen">
+<body class="bg-slate-50 text-slate-800 dark:bg-[#0a0e1f] dark:text-slate-100 transition-colors duration-300 min-h-screen font-sans">
+
+  <!-- background layers -->
+  <div class="aurora"><span class="b1"></span><span class="b2"></span><span class="b3"></span></div>
+  <div class="grain"></div>
 
   <!-- ============ HEADER ============ -->
-  <header class="sticky top-0 z-40 glass bg-white/80 dark:bg-slate-900/70 border-b border-slate-200/70 dark:border-slate-800">
+  <header class="sticky top-0 z-40 glass bg-white/70 dark:bg-[#0a0e1f]/70 border-b border-slate-200/60 dark:border-white/5">
     <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
       <div class="flex items-center justify-between gap-4 flex-wrap">
-        <div class="flex items-center gap-3">
-          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-lg shadow-lg shadow-brand-600/30">HG</div>
+        <div class="flex items-center gap-3.5">
+          <div class="relative h-12 w-12 rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-lg shadow-lg shadow-brand-500/40 ring-1 ring-white/20">
+            HG
+            <span class="absolute -inset-1 rounded-2xl bg-brand-500/30 blur-md -z-10"></span>
+          </div>
           <div>
-            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight">Welcome back, Himanshi! 👋</h1>
-            <div class="flex items-center gap-2 mt-1 flex-wrap">
-              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-brand-800">
+            <h1 class="font-display text-xl sm:text-2xl font-extrabold tracking-tight">Welcome back, <span class="gradient-text">Himanshi</span> 👋</h1>
+            <div class="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-500/10 to-cyan-400/10 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/30">
                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"/></svg>
                 Big 4 GDC Gurgaon · Audit
               </span>
@@ -67,20 +108,20 @@
 
         <div class="flex items-center gap-4">
           <!-- Progress ring -->
-          <div class="relative h-16 w-16">
-            <svg class="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
-              <circle class="ring-track" cx="18" cy="18" r="15.5" fill="none" stroke-width="3.5"/>
+          <div class="relative h-16 w-16 shrink-0">
+            <svg class="h-16 w-16 -rotate-90 drop-shadow-[0_0_6px_rgba(58,91,239,.4)]" viewBox="0 0 36 36">
+              <circle class="ring-track" cx="18" cy="18" r="15.5" fill="none" stroke-width="3"/>
               <circle id="ringProgress" cx="18" cy="18" r="15.5" fill="none" stroke="url(#grad)" stroke-width="3.5"
-                stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="97.4" style="transition:stroke-dashoffset .6s ease"/>
+                stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="97.4" style="transition:stroke-dashoffset .7s cubic-bezier(.22,1,.36,1)"/>
               <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
-                <stop offset="0%" stop-color="#59b0ff"/><stop offset="100%" stop-color="#1458e1"/>
+                <stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/>
               </linearGradient></defs>
             </svg>
             <div class="absolute inset-0 grid place-items-center">
-              <span id="ringPct" class="text-sm font-extrabold">0%</span>
+              <span id="ringPct" class="text-sm font-extrabold font-display">0%</span>
             </div>
           </div>
-          <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+          <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
             <svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
             <svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg>
           </button>
@@ -89,12 +130,12 @@
 
       <!-- Overall progress bar -->
       <div class="mt-4">
-        <div class="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
-          <span>Overall preparation progress</span>
-          <span id="barPctLabel">0% complete</span>
+        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1.5">
+          <span class="uppercase tracking-wider">Overall preparation progress</span>
+          <span id="barPctLabel" class="font-display text-brand-600 dark:text-brand-300">0% complete</span>
         </div>
-        <div class="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-          <div id="progressBar" class="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-700 transition-all duration-700" style="width:0%"></div>
+        <div class="h-2.5 w-full rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
+          <div id="progressBar" class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500 transition-all duration-700 shadow-[0_0_12px_rgba(58,91,239,.5)]" style="width:0%"></div>
         </div>
       </div>
     </div>
@@ -104,33 +145,37 @@
 
     <!-- ============ METRICS BAR ============ -->
     <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="metric-card relative overflow-hidden rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-xl hover:shadow-brand-500/10">
+        <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-brand-400 to-brand-600"></div>
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Topics</span>
-          <span class="h-8 w-8 grid place-items-center rounded-lg bg-slate-100 dark:bg-slate-800">📚</span>
+          <span class="h-9 w-9 grid place-items-center rounded-xl bg-brand-500/10 ring-1 ring-brand-400/20 text-lg">📚</span>
         </div>
-        <p id="mTotal" class="text-3xl font-extrabold mt-2">0</p>
+        <p id="mTotal" class="font-display text-4xl font-extrabold mt-2">0</p>
       </div>
-      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="metric-card relative overflow-hidden rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-xl hover:shadow-emerald-500/10">
+        <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-400 to-emerald-600"></div>
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Mastered</span>
-          <span class="h-8 w-8 grid place-items-center rounded-lg bg-emerald-100 dark:bg-emerald-950/60">✅</span>
+          <span class="h-9 w-9 grid place-items-center rounded-xl bg-emerald-500/10 ring-1 ring-emerald-400/20 text-lg">✅</span>
         </div>
-        <p id="mMastered" class="text-3xl font-extrabold mt-2 text-emerald-600 dark:text-emerald-400">0</p>
+        <p id="mMastered" class="font-display text-4xl font-extrabold mt-2 text-emerald-600 dark:text-emerald-400">0</p>
       </div>
-      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="metric-card relative overflow-hidden rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-xl hover:shadow-amber-500/10">
+        <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-amber-400 to-amber-600"></div>
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">In Review</span>
-          <span class="h-8 w-8 grid place-items-center rounded-lg bg-amber-100 dark:bg-amber-950/60">🔄</span>
+          <span class="h-9 w-9 grid place-items-center rounded-xl bg-amber-500/10 ring-1 ring-amber-400/20 text-lg">🔄</span>
         </div>
-        <p id="mReview" class="text-3xl font-extrabold mt-2 text-amber-600 dark:text-amber-400">0</p>
+        <p id="mReview" class="font-display text-4xl font-extrabold mt-2 text-amber-600 dark:text-amber-400">0</p>
       </div>
-      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+      <div class="metric-card relative overflow-hidden rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-xl hover:shadow-rose-500/10">
+        <div class="absolute top-0 left-0 h-1 w-full bg-gradient-to-r from-rose-400 to-rose-600"></div>
         <div class="flex items-center justify-between">
           <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Needs Practice</span>
-          <span class="h-8 w-8 grid place-items-center rounded-lg bg-rose-100 dark:bg-rose-950/60">🎯</span>
+          <span class="h-9 w-9 grid place-items-center rounded-xl bg-rose-500/10 ring-1 ring-rose-400/20 text-lg">🎯</span>
         </div>
-        <p id="mNotStarted" class="text-3xl font-extrabold mt-2 text-rose-600 dark:text-rose-400">0</p>
+        <p id="mNotStarted" class="font-display text-4xl font-extrabold mt-2 text-rose-600 dark:text-rose-400">0</p>
       </div>
     </section>
 
@@ -140,29 +185,30 @@
 
       <div class="flex flex-col sm:flex-row gap-3">
         <div class="relative flex-1">
-          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
           <input id="searchInput" type="text" placeholder="Search topics (e.g. Revenue, ECL, Fraud, Truva)…"
-            class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none text-sm transition" />
+            class="w-full pl-10 pr-3 py-2.5 rounded-xl bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none text-sm transition shadow-sm" />
         </div>
         <div class="flex gap-2" id="statusFilter">
-          <button data-filter="all" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-brand-600 text-white">All</button>
-          <button data-filter="not-started" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">Needs Practice</button>
-          <button data-filter="in-review" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">In Review</button>
-          <button data-filter="mastered" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">Mastered</button>
+          <button data-filter="all" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-transparent bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/30">All</button>
+          <button data-filter="not-started" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 glass">Needs Practice</button>
+          <button data-filter="in-review" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 glass">In Review</button>
+          <button data-filter="mastered" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 glass">Mastered</button>
         </div>
       </div>
     </section>
 
     <!-- ============ TOPICS GRID ============ -->
-    <section id="topicGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></section>
+    <section id="topicGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-5"></section>
     <div id="emptyState" class="hidden text-center py-16 text-slate-400">
       <p class="text-4xl mb-3">🔍</p>
       <p class="font-semibold">No topics match your filters.</p>
       <p class="text-sm">Try a different search term or status.</p>
     </div>
 
-    <footer class="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
-      <p>Built for interview success · Progress & notes saved locally in your browser.
+    <footer class="mt-12 pt-6 border-t border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
+      <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · You've got this, Himanshi 🚀</p>
+      <p>Built for interview success · Progress &amp; notes saved locally in your browser.
         <button id="resetBtn" class="underline hover:text-rose-500 ml-1">Reset all data</button>
       </p>
     </footer>
@@ -178,6 +224,14 @@
     { id: 'gdc',        label: 'GDC Specifics',            icon: '🌐' },
     { id: 'behavioral', label: 'Behavioral & Pitch',       icon: '🎤' },
   ];
+
+  /* Per-module accent palette for cards */
+  const MODULE_ACCENT = {
+    indas:      { text:'text-brand-600 dark:text-brand-300',   soft:'bg-brand-500/10',   ring:'ring-brand-400/20',   border:'border-brand-400/50' },
+    standards:  { text:'text-cyan-600 dark:text-cyan-300',     soft:'bg-cyan-500/10',    ring:'ring-cyan-400/20',    border:'border-cyan-400/50' },
+    gdc:        { text:'text-violet-600 dark:text-violet-300', soft:'bg-violet-500/10',  ring:'ring-violet-400/20',  border:'border-violet-400/50' },
+    behavioral: { text:'text-amber-600 dark:text-amber-300',   soft:'bg-amber-500/10',   ring:'ring-amber-400/20',   border:'border-amber-400/50' }
+  };
 
   const TOPICS = [
     /* ---------- MODULE 1: Ind AS / IFRS ---------- */
@@ -383,8 +437,8 @@
     bar.innerHTML = tabs.map(t => {
       const active = activeTab === t.id;
       return `<button data-tab="${t.id}" class="tab-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold border transition
-        ${active ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/25'
-                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-brand-400 hover:text-brand-600'}">
+        ${active ? 'bg-gradient-to-r from-brand-500 to-brand-600 text-white border-transparent shadow-lg shadow-brand-500/30 scale-[1.02]'
+                 : 'bg-white/60 dark:bg-white/5 glass border-slate-200/70 dark:border-white/10 hover:border-brand-400 hover:text-brand-600 dark:hover:text-brand-300'}">
         <span class="mr-1">${t.icon}</span>${t.label}</button>`;
     }).join('');
     bar.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
@@ -397,10 +451,8 @@
     activeFilter = b.dataset.filter;
     document.querySelectorAll('.filter-btn').forEach(x => {
       const on = x.dataset.filter === activeFilter;
-      x.classList.toggle('bg-brand-600', on);
-      x.classList.toggle('text-white', on);
-      x.classList.toggle('bg-white', !on);
-      x.classList.toggle('dark:bg-slate-900', !on);
+      ['bg-gradient-to-r','from-brand-500','to-brand-600','text-white','border-transparent','shadow-lg','shadow-brand-500/30'].forEach(c => x.classList.toggle(c, on));
+      ['bg-white/60','dark:bg-white/5','glass'].forEach(c => x.classList.toggle(c, !on));
     });
     renderTopics();
   }));
@@ -448,18 +500,19 @@
       const s = STATUSES[cur];
       const mod = MODULES.find(m => m.id === t.module);
       const note = state.notes[t.id] || '';
+      const accent = MODULE_ACCENT[t.module] || MODULE_ACCENT.indas;
       const qHtml = t.questions.map((q, qi) => `
-        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <button class="q-toggle w-full text-left px-3.5 py-3 flex items-start gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition" data-acc="${t.id}-${qi}">
-            <span class="mt-0.5 text-brand-500 shrink-0">
-              <svg class="w-4 h-4 chevron transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+        <div class="rounded-xl border border-slate-200/80 dark:border-white/10 overflow-hidden bg-slate-50/50 dark:bg-white/[.02]">
+          <button class="q-toggle w-full text-left px-3.5 py-3 flex items-start gap-2.5 hover:bg-white dark:hover:bg-white/5 transition" data-acc="${t.id}-${qi}">
+            <span class="mt-0.5 grid place-items-center h-5 w-5 rounded-md ${accent.soft} shrink-0">
+              <svg class="w-3.5 h-3.5 chevron transition-transform ${accent.text}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
             </span>
             <span class="text-sm font-semibold leading-snug">${q.q}</span>
           </button>
           <div class="accordion-body" id="acc-${t.id}-${qi}">
             <div class="accordion-inner">
-              <div class="px-3.5 pb-3.5 pt-0.5 pl-10">
-                <p class="text-xs font-bold uppercase tracking-wide text-brand-500 mb-1.5">Model answer / talking points</p>
+              <div class="mx-3.5 mb-3.5 ml-10 pl-3.5 border-l-2 ${accent.border}">
+                <p class="text-[11px] font-bold uppercase tracking-wider ${accent.text} mb-1">Model answer · talking points</p>
                 <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${q.a}</p>
               </div>
             </div>
@@ -467,19 +520,19 @@
         </div>`).join('');
 
       return `
-      <article class="card-enter rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow" style="animation-delay:${i*30}ms">
-        <div class="p-4 sm:p-5">
+      <article class="card-enter topic-card rounded-[1.25rem] bg-white/80 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-2xl hover:shadow-brand-500/10" style="animation-delay:${i*40}ms">
+        <div class="p-5 sm:p-6">
           <div class="flex items-start justify-between gap-3">
             <div class="min-w-0">
-              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">${mod.icon} ${mod.label}</span>
-                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-300">${t.tag}</span>
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-md ${accent.soft} ${accent.text} ring-1 ${accent.ring}">${mod.icon} ${mod.label}</span>
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400">${t.tag}</span>
               </div>
-              <h3 class="font-bold text-base leading-snug">${t.title}</h3>
+              <h3 class="font-display font-bold text-[1.05rem] leading-snug">${t.title}</h3>
               <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${t.summary}</p>
             </div>
             <span class="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${s.badge}">
-              <span class="h-1.5 w-1.5 rounded-full ${s.dot}"></span>${s.short}
+              <span class="h-1.5 w-1.5 rounded-full ${s.dot} animate-pulse"></span>${s.short}
             </span>
           </div>
 
@@ -487,19 +540,22 @@
           <div class="flex flex-wrap gap-1.5 mt-4">${statusButtons(t)}</div>
 
           <!-- mock questions -->
-          <div class="mt-4 space-y-2">
-            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">🎯 Mock Questions (${t.questions.length})</p>
+          <div class="mt-5 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+              <span>🎯 Mock Questions</span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded-full ${accent.soft} ${accent.text}">${t.questions.length}</span>
+            </p>
             ${qHtml}
           </div>
 
           <!-- notes -->
           <details class="mt-4 group" ${note ? 'open' : ''}>
-            <summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 select-none">
+            <summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 select-none hover:text-brand-600 dark:hover:text-brand-300 transition">
               <svg class="w-4 h-4 transition-transform group-open:rotate-90 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
-              📝 My Notes ${note ? '<span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-950 text-brand-600 dark:text-brand-300">saved</span>' : ''}
+              📝 My Notes ${note ? '<span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-500/15 text-brand-600 dark:text-brand-300">saved</span>' : ''}
             </summary>
             <textarea data-note="${t.id}" rows="3" placeholder="Jot down key points, formulas, or your STAR story…"
-              class="note-area mt-2 w-full text-sm rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none resize-y transition">${note.replace(/</g,'&lt;')}</textarea>
+              class="note-area mt-2 w-full text-sm rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-3 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none resize-y transition">${note.replace(/</g,'&lt;')}</textarea>
           </details>
         </div>
       </article>`;
