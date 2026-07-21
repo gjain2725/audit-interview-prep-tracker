@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Audit Interview Prep Tracker — Himanshi Garg</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          colors: {
+            brand: {
+              50:'#eef7ff',100:'#d9edff',200:'#bce0ff',300:'#8ecdff',400:'#59b0ff',
+              500:'#328fff',600:'#1b6ff5',700:'#1458e1',800:'#1748b6',900:'#193f8f',950:'#142657'
+            }
+          },
+          keyframes: {
+            fadeUp: { '0%': { opacity:0, transform:'translateY(8px)' }, '100%': { opacity:1, transform:'translateY(0)' } },
+            pop: { '0%': { transform:'scale(.96)' }, '50%': { transform:'scale(1.03)' }, '100%': { transform:'scale(1)' } }
+          },
+          animation: { fadeUp: 'fadeUp .4s ease both', pop: 'pop .25s ease' }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-feature-settings: "cv02","cv03","cv04","cv11"; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: rgba(120,130,150,.35); border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(120,130,150,.55); }
+    .card-enter { animation: fadeUp .35s ease both; }
+    .accordion-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s ease; }
+    .accordion-body.open { grid-template-rows: 1fr; }
+    .accordion-inner { overflow: hidden; }
+    .ring-track { stroke: rgba(148,163,184,.25); }
+    details > summary { list-style: none; }
+    details > summary::-webkit-details-marker { display: none; }
+    .glass { backdrop-filter: blur(12px); }
+  </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300 min-h-screen">
+
+  <!-- ============ HEADER ============ -->
+  <header class="sticky top-0 z-40 glass bg-white/80 dark:bg-slate-900/70 border-b border-slate-200/70 dark:border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+      <div class="flex items-center justify-between gap-4 flex-wrap">
+        <div class="flex items-center gap-3">
+          <div class="h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-lg shadow-lg shadow-brand-600/30">HG</div>
+          <div>
+            <h1 class="text-lg sm:text-xl font-extrabold tracking-tight">Welcome back, Himanshi! 👋</h1>
+            <div class="flex items-center gap-2 mt-1 flex-wrap">
+              <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-brand-50 text-brand-700 dark:bg-brand-950 dark:text-brand-300 ring-1 ring-brand-200/60 dark:ring-brand-800">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 5v6c0 5 3.4 8.5 8 11 4.6-2.5 8-6 8-11V5l-8-3Z"/></svg>
+                Big 4 GDC Gurgaon · Audit
+              </span>
+              <span class="text-xs text-slate-500 dark:text-slate-400">CA · 8 months @ Truva, Mumbai</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-4">
+          <!-- Progress ring -->
+          <div class="relative h-16 w-16">
+            <svg class="h-16 w-16 -rotate-90" viewBox="0 0 36 36">
+              <circle class="ring-track" cx="18" cy="18" r="15.5" fill="none" stroke-width="3.5"/>
+              <circle id="ringProgress" cx="18" cy="18" r="15.5" fill="none" stroke="url(#grad)" stroke-width="3.5"
+                stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="97.4" style="transition:stroke-dashoffset .6s ease"/>
+              <defs><linearGradient id="grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#59b0ff"/><stop offset="100%" stop-color="#1458e1"/>
+              </linearGradient></defs>
+            </svg>
+            <div class="absolute inset-0 grid place-items-center">
+              <span id="ringPct" class="text-sm font-extrabold">0%</span>
+            </div>
+          </div>
+          <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition">
+            <svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
+            <svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Overall progress bar -->
+      <div class="mt-4">
+        <div class="flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400 mb-1.5">
+          <span>Overall preparation progress</span>
+          <span id="barPctLabel">0% complete</span>
+        </div>
+        <div class="h-2.5 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+          <div id="progressBar" class="h-full rounded-full bg-gradient-to-r from-brand-400 to-brand-700 transition-all duration-700" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6">
+
+    <!-- ============ METRICS BAR ============ -->
+    <section class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Total Topics</span>
+          <span class="h-8 w-8 grid place-items-center rounded-lg bg-slate-100 dark:bg-slate-800">📚</span>
+        </div>
+        <p id="mTotal" class="text-3xl font-extrabold mt-2">0</p>
+      </div>
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Mastered</span>
+          <span class="h-8 w-8 grid place-items-center rounded-lg bg-emerald-100 dark:bg-emerald-950/60">✅</span>
+        </div>
+        <p id="mMastered" class="text-3xl font-extrabold mt-2 text-emerald-600 dark:text-emerald-400">0</p>
+      </div>
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">In Review</span>
+          <span class="h-8 w-8 grid place-items-center rounded-lg bg-amber-100 dark:bg-amber-950/60">🔄</span>
+        </div>
+        <p id="mReview" class="text-3xl font-extrabold mt-2 text-amber-600 dark:text-amber-400">0</p>
+      </div>
+      <div class="rounded-2xl p-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Needs Practice</span>
+          <span class="h-8 w-8 grid place-items-center rounded-lg bg-rose-100 dark:bg-rose-950/60">🎯</span>
+        </div>
+        <p id="mNotStarted" class="text-3xl font-extrabold mt-2 text-rose-600 dark:text-rose-400">0</p>
+      </div>
+    </section>
+
+    <!-- ============ CONTROLS: tabs + search + filter ============ -->
+    <section class="mb-6 space-y-4">
+      <div id="tabBar" class="flex gap-2 overflow-x-auto pb-1 -mb-1"></div>
+
+      <div class="flex flex-col sm:flex-row gap-3">
+        <div class="relative flex-1">
+          <svg class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          <input id="searchInput" type="text" placeholder="Search topics (e.g. Revenue, ECL, Fraud, Truva)…"
+            class="w-full pl-9 pr-3 py-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none text-sm transition" />
+        </div>
+        <div class="flex gap-2" id="statusFilter">
+          <button data-filter="all" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-brand-600 text-white">All</button>
+          <button data-filter="not-started" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">Needs Practice</button>
+          <button data-filter="in-review" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">In Review</button>
+          <button data-filter="mastered" class="filter-btn px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">Mastered</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ TOPICS GRID ============ -->
+    <section id="topicGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-4"></section>
+    <div id="emptyState" class="hidden text-center py-16 text-slate-400">
+      <p class="text-4xl mb-3">🔍</p>
+      <p class="font-semibold">No topics match your filters.</p>
+      <p class="text-sm">Try a different search term or status.</p>
+    </div>
+
+    <footer class="mt-10 pt-6 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-400">
+      <p>Built for interview success · Progress & notes saved locally in your browser.
+        <button id="resetBtn" class="underline hover:text-rose-500 ml-1">Reset all data</button>
+      </p>
+    </footer>
+  </main>
+
+  <script>
+  /* ============================================================
+     DATA MODEL — pre-populated high-yield topics
+     ============================================================ */
+  const MODULES = [
+    { id: 'indas',      label: 'Ind AS / IFRS Core',      icon: '📘' },
+    { id: 'standards',  label: 'Audit Standards (SA/ISA)', icon: '📋' },
+    { id: 'gdc',        label: 'GDC Specifics',            icon: '🌐' },
+    { id: 'behavioral', label: 'Behavioral & Pitch',       icon: '🎤' },
+  ];
+
+  const TOPICS = [
+    /* ---------- MODULE 1: Ind AS / IFRS ---------- */
+    {
+      id: 'indas-115', module: 'indas', title: 'Ind AS 115 — Revenue Recognition',
+      tag: '5-Step Model', summary: 'Core standard for revenue from contracts with customers; converged with IFRS 15.',
+      questions: [
+        { q: 'Walk me through the 5-step model of Ind AS 115.', a: '1) Identify the contract with the customer. 2) Identify the distinct performance obligations. 3) Determine the transaction price (incl. variable consideration, significant financing, non-cash). 4) Allocate the transaction price to each obligation on a relative stand-alone selling price basis. 5) Recognise revenue when (point in time) or as (over time) each obligation is satisfied — i.e., when control transfers.' },
+        { q: 'When is revenue recognised over time vs. at a point in time?', a: 'Over time if any one criterion is met: (a) customer simultaneously receives & consumes benefits; (b) the entity creates/enhances an asset the customer controls; (c) the asset has no alternative use AND the entity has an enforceable right to payment for work done to date. Otherwise, at the point in time control transfers (indicators: right to payment, legal title, physical possession, risks & rewards, customer acceptance).' },
+        { q: 'How would you audit revenue under Ind AS 115?', a: 'Revenue is a presumed fraud risk (SA 240). Read key contracts, test the POB identification and cut-off, recompute transaction-price allocation, test variable consideration estimates and constraints, vouch to shipping/POD/milestone evidence, and perform analytical/flux review on margins. Focus on management estimates and manual journal entries near period-end.' },
+        { q: 'How do you identify whether goods/services in a contract are distinct performance obligations?', a: 'A good/service is distinct if BOTH: (a) the customer can benefit from it on its own or with readily available resources (capable of being distinct); AND (b) it is separately identifiable from other promises in the contract (distinct within the context of the contract). Factors against separability: significant integration service, high customisation/modification, or high interdependence. If not distinct, bundle with other goods/services until a distinct bundle is formed. Example: sale of equipment + routine maintenance is usually two POBs; construction of a bespoke asset with integrated design + build is one.' },
+        { q: 'How is variable consideration estimated and constrained?', a: 'Estimate using either the expected value (probability-weighted — better for many similar contracts) or the most likely amount (single most likely outcome — better for binary outcomes like a performance bonus). Then apply the constraint: include variable consideration only to the extent it is highly probable a significant revenue reversal will not occur when the uncertainty resolves. Common variable elements: discounts, rebates, refunds, penalties, price concessions, performance bonuses, rights of return. Reassess at each reporting date.' },
+        { q: 'How do you account for a significant financing component?', a: 'If the timing of payments gives the customer or entity a significant financing benefit (typically payment terms > 12 months), adjust the transaction price for the time value of money using the discount rate that reflects the customer\'s credit characteristics at contract inception. Present interest income/expense separately from revenue. Practical expedient: no adjustment needed if the gap between transfer of goods and payment is one year or less.' },
+        { q: 'How is the transaction price allocated when there are multiple performance obligations?', a: 'Allocate on a relative stand-alone selling price (SSP) basis. Determine SSP for each POB — the observable price at which the entity sells it separately. If not observable, estimate using the adjusted market assessment approach, expected cost plus a margin, or (only for a residual estimate in limited cases) the residual approach. A discount is generally allocated proportionately to all POBs unless observable evidence shows it relates to specific obligations.' },
+        { q: 'Principal vs agent — how do you determine gross vs net revenue?', a: 'The key is who controls the good/service before transfer to the customer. A principal controls the specified good/service before it is transferred and recognises gross revenue. An agent arranges for another party to provide the good/service and recognises only the net fee/commission. Indicators of principal: primary responsibility for fulfilment, inventory/fulfilment risk, and discretion in setting prices. This is a high-judgment area for e-commerce, marketplaces and distributors.' },
+        { q: 'How do you measure progress for revenue recognised over time?', a: 'Use a single method applied consistently: output methods (surveys of performance completed, milestones, units delivered, appraisals of results achieved) or input methods (costs incurred vs total expected costs — the "cost-to-cost" method, labour hours, machine hours). Under the cost-to-cost input method, exclude costs that don\'t depict progress (e.g., wasted materials, uninstalled goods). If progress cannot be reasonably measured but costs are recoverable, recognise revenue only to the extent of costs incurred (zero-margin approach).' },
+        { q: 'What are contract assets and contract liabilities?', a: 'A contract asset is the entity\'s right to consideration for goods/services already transferred, conditional on something other than the passage of time (e.g., completing another obligation) — distinct from a receivable, which is an unconditional right. A contract liability (deferred/unearned revenue) is the obligation to transfer goods/services for which the entity has already received (or has an unconditional right to) consideration. These are presented net per contract on the balance sheet.' },
+        { q: 'How do you account for contract modifications?', a: 'Three routes: (1) Treat as a SEPARATE contract if it adds distinct goods/services priced at their stand-alone selling price. (2) If not separate and remaining goods are distinct from those already transferred, account PROSPECTIVELY (terminate the old, create a new contract with the remaining consideration). (3) If remaining goods are NOT distinct (part of a single POB), account on a CUMULATIVE CATCH-UP basis — remeasure progress and adjust revenue at the modification date.' },
+        { q: 'How are warranties treated under Ind AS 115?', a: 'Distinguish two types. An assurance-type warranty (product will function as promised) is not a separate POB — provide for it under Ind AS 37. A service-type warranty (an additional service, e.g., extended cover the customer can buy separately) IS a distinct performance obligation — allocate part of the transaction price to it and recognise over the warranty period. If the customer has the option to purchase the warranty separately, it is always service-type.' },
+        { q: 'What are the key disclosure requirements under Ind AS 115?', a: 'Disaggregation of revenue (by product line, geography, timing of transfer, contract type, etc.), information about contract balances (opening/closing receivables, contract assets and liabilities, and revenue recognised from prior-period contract liabilities), performance obligations (nature, timing of satisfaction, remaining performance obligations / backlog), and the significant judgments made (determining timing of satisfaction, transaction price and amounts allocated). The aim is to help users understand the nature, amount, timing and uncertainty of revenue and cash flows.' },
+        { q: 'How do incremental costs of obtaining a contract and costs to fulfil a contract get treated?', a: 'Incremental costs of obtaining a contract (e.g., sales commissions that would not have been incurred if the contract were not won) are capitalised as an asset if the entity expects to recover them — with a practical expedient to expense them if the amortisation period would be one year or less. Costs to fulfil a contract are capitalised if they relate directly to the contract, generate/enhance resources used to satisfy it, and are expected to be recovered. Both are amortised on a systematic basis consistent with the transfer of the related goods/services and tested for impairment.' }
+      ]
+    },
+    {
+      id: 'indas-116', module: 'indas', title: 'Ind AS 116 — Leases',
+      tag: 'ROU & Lease Liability', summary: 'Single lessee model — recognise a Right-of-Use asset and a lease liability.',
+      questions: [
+        { q: 'How does a lessee account for a lease under Ind AS 116?', a: 'At commencement, recognise a lease liability at the PV of future lease payments discounted at the rate implicit in the lease (or the incremental borrowing rate). Recognise a ROU asset = liability + initial direct costs + prepayments + dismantling estimate − lease incentives. Subsequently: unwind interest on the liability (finance cost) and depreciate the ROU asset (usually straight-line over the shorter of lease term / useful life).' },
+        { q: 'What are the recognition exemptions?', a: 'Short-term leases (≤12 months with no purchase option) and leases of low-value assets (e.g., laptops, small IT items). For these, payments are expensed straight-line — no ROU/liability.' },
+        { q: 'How do you audit the ROU asset and discount rate?', a: 'Obtain the lease register, test completeness against rent GL and contracts, recompute PV using the IBR, challenge the IBR (benchmark to borrowing cost/tenor), verify lease term including renewal/termination options reasonably certain to be exercised, and test the depreciation and interest unwind.' }
+      ]
+    },
+    {
+      id: 'indas-109', module: 'indas', title: 'Ind AS 109 & 32 — Financial Instruments',
+      tag: 'ECL Model', summary: 'Classification, measurement and the Expected Credit Loss impairment model.',
+      questions: [
+        { q: 'Explain the Expected Credit Loss (ECL) model.', a: 'A forward-looking impairment model. Stage 1: 12-month ECL for performing assets. Stage 2: lifetime ECL if credit risk has increased significantly since initial recognition (SICR). Stage 3: lifetime ECL for credit-impaired assets, with interest on net carrying amount. ECL = PD × LGD × EAD, incorporating forward-looking macro scenarios. For trade receivables, a simplified provision-matrix (lifetime ECL) approach is common.' },
+        { q: 'How are financial assets classified under Ind AS 109?', a: 'Based on the business model + SPPI (solely payments of principal & interest) test: (a) Amortised cost — hold to collect & SPPI passes; (b) FVOCI — hold to collect and sell & SPPI passes; (c) FVTPL — everything else (trading, or SPPI fails).' },
+        { q: 'What is the difference between Ind AS 32 and 109?', a: 'Ind AS 32 deals with presentation — classifying instruments as financial liability vs. equity (substance over form) and offsetting. Ind AS 109 deals with recognition & measurement (classification, ECL, hedge accounting). Ind AS 107 covers disclosures.' }
+      ]
+    },
+    {
+      id: 'indas-2-16-36', module: 'indas', title: 'Ind AS 2, 16 & 36 — Inventory, PPE, Impairment',
+      tag: 'Measurement', summary: 'Inventory valuation, PPE capitalisation and impairment testing of assets.',
+      questions: [
+        { q: 'How is inventory valued under Ind AS 2?', a: 'At the lower of cost and net realisable value (NRV). Cost includes purchase cost, conversion costs and costs to bring inventory to present location/condition; excludes abnormal waste, storage (unless part of production), and selling costs. NRV = estimated selling price − costs to complete − costs to sell. Cost formulas: FIFO or weighted average (LIFO is prohibited).' },
+        { q: 'Explain impairment testing under Ind AS 36.', a: 'If there is an indicator of impairment (or annually for goodwill/indefinite-life intangibles), compare carrying amount with recoverable amount = higher of (fair value less costs of disposal) and (value in use = PV of future cash flows). Impairment loss = carrying − recoverable, charged to P&L (or against revaluation surplus). Test at the Cash-Generating Unit level where an asset does not generate independent cash flows.' },
+        { q: 'When can an impairment loss be reversed?', a: 'For assets other than goodwill, reverse if the recoverable amount recovers — but only up to the carrying amount that would have existed (net of depreciation) had no impairment been recognised. Goodwill impairment is never reversed.' }
+      ]
+    },
+    {
+      id: 'indas-10', module: 'indas', title: 'Ind AS 10 — Events After Reporting, Contingencies & Going Concern',
+      tag: 'Subsequent Events', summary: 'Adjusting vs non-adjusting events, provisions/contingencies and going concern.',
+      questions: [
+        { q: 'Distinguish adjusting and non-adjusting subsequent events.', a: 'Adjusting events provide evidence of conditions that existed at the balance-sheet date (e.g., settlement of a court case, bankruptcy of a debtor, NRV evidence) — adjust the financials. Non-adjusting events arise after the date (e.g., a fire, a major acquisition, dividends declared) — disclose only if material. The cut-off is the date the financials are approved for issue.' },
+        { q: 'Provision vs contingent liability under Ind AS 37?', a: 'Provision: recognised when there is a present obligation from a past event, an outflow is probable (>50%), and it can be reliably estimated. Contingent liability: a possible obligation, or a present obligation where outflow is not probable / not reliably measurable — disclosed, not recognised. Contingent assets are disclosed only when inflow is probable.' },
+        { q: 'What are the auditor\'s going concern responsibilities (SA 570)?', a: 'Evaluate management\'s assessment (min. 12 months), identify events casting doubt (net losses, negative working capital, defaults), obtain evidence on mitigating plans, and conclude whether a material uncertainty exists. Depending on outcome: unmodified with a "Material Uncertainty Related to Going Concern" paragraph, qualified/adverse, or disclaimer.' }
+      ]
+    },
+    /* ---------- MODULE 2: Standards ---------- */
+    {
+      id: 'sa-240', module: 'standards', title: 'SA / ISA 240 — Fraud',
+      tag: 'Fraud Risk', summary: 'Auditor responsibilities relating to fraud in an audit of financial statements.',
+      questions: [
+        { q: 'What are the auditor\'s responsibilities regarding fraud?', a: 'Maintain professional skepticism throughout, identify and assess risks of material misstatement due to fraud, and design responses. Two presumed fraud risks: (1) revenue recognition and (2) management override of controls. Mandatory procedures for override: test journal entries (esp. manual/period-end/unusual), review accounting estimates for bias, and evaluate significant unusual transactions.' },
+        { q: 'What is the fraud triangle?', a: 'Three conditions generally present when fraud occurs: Incentive/Pressure (e.g., targets, bonuses), Opportunity (weak controls, ability to override), and Rationalisation/Attitude (justifying the act). Auditors use it to brainstorm fraud risks during the engagement team discussion.' },
+        { q: 'Fraud vs error — what is the distinction?', a: 'Both are misstatements; the distinguishing factor is intent. Fraud is intentional (fraudulent financial reporting or misappropriation of assets); error is unintentional. The auditor is responsible for reasonable assurance that the statements are free from material misstatement whether caused by fraud or error.' }
+      ]
+    },
+    {
+      id: 'sa-315-330', module: 'standards', title: 'SA 315 & 330 — Risk Assessment & Controls',
+      tag: 'TOC vs Substantive', summary: 'Understanding the entity, assessing risk, and designing audit responses.',
+      questions: [
+        { q: 'Difference between Test of Controls and Substantive procedures?', a: 'Test of Controls (TOC) evaluate the operating effectiveness of controls in preventing/detecting misstatements — you rely on controls to reduce substantive work. Substantive procedures detect misstatements at the assertion level and comprise (a) tests of details and (b) substantive analytical procedures. If controls are not tested/not effective, a fully substantive approach is required. Some substantive testing is always mandatory for material balances.' },
+        { q: 'What is the audit risk model?', a: 'Audit Risk = Inherent Risk × Control Risk × Detection Risk. IR and CR (together = Risk of Material Misstatement) are the entity\'s risks and are assessed, not controlled. The auditor manages Detection Risk — the higher the RMM, the lower the acceptable DR, so more/higher-quality evidence is gathered (e.g., larger samples, more experienced staff, timing at period-end).' },
+        { q: 'What are the five components of internal control (COSO)?', a: 'Control Environment, Risk Assessment, Control Activities, Information & Communication, and Monitoring Activities. SA 315 requires the auditor to obtain an understanding of each component relevant to the audit.' }
+      ]
+    },
+    {
+      id: 'materiality', module: 'standards', title: 'Materiality & Sampling',
+      tag: 'Overall vs Performance', summary: 'Setting materiality and selecting representative samples.',
+      questions: [
+        { q: 'Difference between overall and performance materiality?', a: 'Overall (planning) materiality is set at the financial-statement level, typically a benchmark × % (e.g., 5% of PBT, 0.5–1% of revenue or total assets). Performance materiality is a lower amount (often 50–75% of overall) set to reduce the aggregation risk that uncorrected + undetected misstatements exceed overall materiality. A separate lower "clearly trivial" threshold (~5% of overall) is used for accumulating misstatements.' },
+        { q: 'What sampling methods do you use?', a: 'Statistical (random, systematic, monetary-unit/PPS sampling — which biases toward higher-value items) and non-statistical (haphazard, judgmental). Sample size rises with expected error, required assurance and population variability, and falls with a stronger control environment. Results are projected to the population and compared with performance materiality.' },
+        { q: 'How do you treat an error found in a sample?', a: 'Understand its nature and cause, consider whether it is an isolated anomaly (rare — needs strong justification), project the misstatement to the population, and re-assess whether audit risk is still acceptable. Accumulate it on the summary of misstatements for evaluation against materiality.' }
+      ]
+    },
+    {
+      id: 'analytical', module: 'standards', title: 'Analytical Procedures',
+      tag: 'Ratio & Flux', summary: 'Ratio analysis and flux (variance) analysis across the audit.',
+      questions: [
+        { q: 'When are analytical procedures used in an audit?', a: 'Three points: (1) at planning/risk assessment (SA 315) to identify unusual relationships and risk areas; (2) as substantive analytical procedures during fieldwork (SA 520) for accounts with predictable relationships; and (3) mandatorily near the end (final review) to form an overall conclusion consistent with the auditor\'s understanding.' },
+        { q: 'What is flux analysis?', a: 'Fluctuation analysis — comparing current-period balances against prior period, budget, or expectation, and investigating variances that exceed a set threshold (absolute ₹ and %). Explanations are corroborated with independent evidence rather than accepting management\'s narrative at face value.' },
+        { q: 'How do you build an expectation for a substantive analytical?', a: 'Develop an independent, sufficiently precise expectation (e.g., interest expense = average borrowings × rate; payroll = headcount × average cost), define an acceptable difference tied to performance materiality, compare to actuals, and investigate & corroborate significant differences. Precision and data reliability drive how much assurance it provides.' }
+      ]
+    },
+    {
+      id: 'documentation', module: 'standards', title: 'Audit Documentation & Management Reps',
+      tag: 'SA 230 / 580', summary: 'Working papers and written representations from management.',
+      questions: [
+        { q: 'What is the standard for audit documentation?', a: 'SA 230: documentation should enable an experienced auditor, with no prior connection, to understand the nature, timing and extent of procedures, the results and evidence obtained, and significant judgments made. Assembly of the final file: within 60 days of the audit report. It supports the "who, what, when reviewed" — WP should record preparer, reviewer and dates.' },
+        { q: 'Why obtain a Management Representation Letter (SA 580)?', a: 'Written representations are audit evidence that management has fulfilled its responsibility for the financial statements and completeness of information. They complement — but never substitute for — other evidence. Dated as near as practicable to (but not after) the audit report date. If management refuses, it may lead to a disclaimer.' },
+        { q: 'What makes audit evidence "sufficient and appropriate"?', a: 'Sufficiency = quantity (driven by RMM and evidence quality). Appropriateness = quality — relevance (to the assertion) and reliability. Reliability hierarchy: external > internal, auditor-obtained > entity-provided, original documents > photocopies, effective controls enhance reliability.' }
+      ]
+    },
+    /* ---------- MODULE 3: GDC ---------- */
+    {
+      id: 'gdc-model', module: 'gdc', title: 'Offshore Delivery Model',
+      tag: 'Onshore-Offshore', summary: 'How a Global Delivery Centre supports onshore engagement teams.',
+      questions: [
+        { q: 'How does the onshore-offshore GDC model work?', a: 'The onshore engagement team (e.g., EY US/UK) owns the client relationship, scoping, risk assessment and the opinion. The GDC (e.g., EY GDS Gurgaon) executes defined sections — substantive testing, confirmations, roll-forwards, documentation — to the onshore team\'s instructions and standards, communicating via secure audit platforms, calls and time-zone-aware handoffs. Quality, independence and confidentiality protocols are identical to onshore.' },
+        { q: 'How do you handle time-zone and communication challenges?', a: 'Plan around overlap hours, keep crisp written status trackers and query logs, clarify instructions upfront to avoid rework, flag blockers early rather than at deadline, and use standardised templates. Over-communication in writing beats assumptions when the reviewer is 10+ hours away.' },
+        { q: 'What quality/independence considerations are specific to a GDC?', a: 'Strict data confidentiality (clean-desk, secure VDI, no local downloads), independence confirmations covering the client, and adherence to the group auditor\'s methodology and archiving rules. The onshore team remains responsible for direction, supervision and review of GDC work (relevant under SA 600 / group audit standards).' }
+      ]
+    },
+    {
+      id: 'gdc-tools', module: 'gdc', title: 'Audit Management Software',
+      tag: 'Canvas / eAudIT', summary: 'Firm audit platforms used to document and manage engagements.',
+      questions: [
+        { q: 'Which audit tools are you familiar with?', a: 'Firm platforms: EY Canvas (EY), KPMG Clara / eAudIT (KPMG), PwC Aura / Connect, Deloitte Omnia / EMS (Engagement). Frame your answer around the workflow — risk assessment, linking procedures to assertions, documenting testing, review notes and sign-offs, and PBC/client-request trackers — even if you name the specific tool you used at Truva. Emphasise adaptability: methodologies are similar across tools.' },
+        { q: 'How do these tools improve audit quality?', a: 'They enforce methodology (can\'t sign off without required steps), link risks → assertions → procedures → evidence, centralise review notes and coaching, standardise documentation, enable real-time status visibility for onshore reviewers, and maintain a secure audit trail for archiving and inspection.' }
+      ]
+    },
+    {
+      id: 'gdc-tod-toe', module: 'gdc', title: 'Walkthroughs, TOD & TOE',
+      tag: 'PCAOB Controls', summary: 'Controls testing terminology used under PCAOB/international engagements.',
+      questions: [
+        { q: 'Explain Walkthrough, Test of Design and Test of Operating Effectiveness.', a: 'Walkthrough: trace one transaction end-to-end through the process to confirm your understanding and that controls are placed in operation. Test of Design (TOD): evaluate whether a control, if operating as described, would prevent or detect a material misstatement. Test of Operating Effectiveness (TOE): test whether the control actually operated consistently over the period (attribute sampling, inquiry + inspection + re-performance). A well-designed control still must be tested for operation before reliance.' },
+        { q: 'What is an integrated audit under PCAOB AS 2201?', a: 'For SEC issuers, the auditor opines on both the financial statements and Internal Control over Financial Reporting (ICFR). It follows a top-down, risk-based approach: entity-level controls → significant accounts/disclosures → relevant assertions → identify and test controls (including ITGCs) that address the risks. Deficiencies are classified as control deficiency, significant deficiency, or material weakness.' },
+        { q: 'How do sample sizes for control testing usually work?', a: 'Driven by control frequency: e.g., typical guidance — annual controls test 1, quarterly ~2, monthly ~2–5, weekly ~5–15, daily ~20–40, and many-times-per-day / automated ~25 (or 1 for a fully automated control with effective ITGCs). Automated controls with strong IT General Controls can be tested with a single instance plus ITGC reliance.' }
+      ]
+    },
+    /* ---------- MODULE 4: Behavioral ---------- */
+    {
+      id: 'beh-pitch', module: 'behavioral', title: 'Your Truva Story — Elevator Pitch',
+      tag: 'Self Intro', summary: 'The "tell me about yourself / your 8 months at Truva" opener.',
+      questions: [
+        { q: 'Tell me about yourself and your 8 months at Truva, Mumbai.', a: 'Structure (Present → Past → Future): "I\'m a Chartered Accountant with 8 months of post-qualification audit experience at Truva in Mumbai, where I worked on statutory audits across [industries]. I owned areas like revenue, receivables and expenses end-to-end — from executing substantive testing and controls walkthroughs to preparing documentation and clearing review comments. During busy season I managed multiple clients under tight deadlines. I\'m now looking to bring that ownership and technical grounding to a global delivery environment like [firm] GDC, working with international engagement teams and larger, more complex clients." Keep it ~60–90 seconds; end with why this role.' },
+        { q: 'What was your biggest contribution / learning at Truva?', a: 'Pick one concrete story (STAR): a section you owned, an issue you identified (e.g., a cut-off error or an unreconciled balance), the procedure you performed, and the outcome. Tie the learning to ownership, attention to detail, and stakeholder communication — the traits a GDC values.' }
+      ]
+    },
+    {
+      id: 'beh-conflict', module: 'behavioral', title: 'Conflict with Onshore / Clients',
+      tag: 'STAR Method', summary: 'Handling disagreements with reviewers, onshore teams or client staff.',
+      questions: [
+        { q: 'Describe a conflict with a client or senior and how you resolved it.', a: 'Use STAR. Situation: e.g., a client contact was slow providing PBCs, threatening the deadline. Task: I needed the evidence to complete testing. Action: I sent a clear, prioritised request list, escalated professionally through my senior with a status tracker, and offered flexible call times. Result: received the data, met the deadline, and the client relationship stayed positive. Emphasise staying professional, evidence-based and solution-oriented — never blame.' },
+        { q: 'How do you handle disagreement with a reviewer\'s comment?', a: 'Listen fully, understand the rationale, and check the standard/working paper. If I still disagree, I present my evidence and reasoning respectfully; if the reviewer has more context or a firm policy, I accept and learn. The financial statements\' accuracy and firm methodology come before ego.' }
+      ]
+    },
+    {
+      id: 'beh-deadlines', module: 'behavioral', title: 'Managing Busy-Season Deadlines',
+      tag: 'Prioritisation', summary: 'Working under pressure across multiple engagements.',
+      questions: [
+        { q: 'How do you manage tight deadlines during busy season?', a: 'Prioritise by risk and dependency (materiality-driven, blockers first), maintain a daily task tracker, communicate realistic timelines and flag slippage early, batch similar tasks, and keep documentation current instead of leaving it to the end. In a GDC, I\'d also align handoffs with onshore overlap hours so review cycles don\'t stall overnight.' },
+        { q: 'Tell me about a time you were overloaded — what did you do?', a: 'STAR: multiple clients closing the same week. I listed deliverables, negotiated realistic dates with my senior, focused first on high-risk/high-materiality areas, and asked for help on the lower-risk tasks. All engagements were delivered on time. Shows prioritisation, communication and teamwork — not just working longer hours.' },
+        { q: 'Why do you want to work in a Big 4 GDC in Gurgaon?', a: 'Exposure to large global clients and international standards (US GAAP/IFRS, PCAOB), structured training and clear career progression, and the chance to specialise while working with onshore teams worldwide. Connect it to your goal of building deep technical expertise and global audit experience.' }
+      ]
+    }
+  ];
+
+  /* ============================================================
+     STATE — persisted to localStorage
+     ============================================================ */
+  const STORE_KEY = 'himanshi_audit_tracker_v1';
+  const STATUSES = {
+    'not-started': { label: 'Not Started', short:'Needs Practice', badge:'bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300', dot:'bg-rose-500', btn:'bg-rose-600 text-white' },
+    'in-review':   { label: 'In Review',   short:'In Review',      badge:'bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300', dot:'bg-amber-500', btn:'bg-amber-500 text-white' },
+    'mastered':    { label: 'Mastered',    short:'Mastered',       badge:'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300', dot:'bg-emerald-500', btn:'bg-emerald-600 text-white' }
+  };
+
+  let state = load();
+  function load() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORE_KEY)) || {};
+      return { status: raw.status || {}, notes: raw.notes || {}, theme: raw.theme || 'dark' };
+    } catch { return { status:{}, notes:{}, theme:'dark' }; }
+  }
+  function save() { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }
+  function getStatus(id) { return state.status[id] || 'not-started'; }
+
+  /* ============================================================
+     UI STATE
+     ============================================================ */
+  let activeTab = 'all';
+  let activeFilter = 'all';
+  let searchTerm = '';
+
+  /* ---- Theme ---- */
+  function applyTheme() {
+    const dark = state.theme === 'dark';
+    document.documentElement.classList.toggle('dark', dark);
+    document.getElementById('iconSun').classList.toggle('hidden', !dark);
+    document.getElementById('iconMoon').classList.toggle('hidden', dark);
+  }
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    state.theme = state.theme === 'dark' ? 'light' : 'dark'; save(); applyTheme();
+  });
+
+  /* ---- Tabs ---- */
+  function renderTabs() {
+    const bar = document.getElementById('tabBar');
+    const tabs = [{ id:'all', label:'All Modules', icon:'🗂️' }, ...MODULES];
+    bar.innerHTML = tabs.map(t => {
+      const active = activeTab === t.id;
+      return `<button data-tab="${t.id}" class="tab-btn whitespace-nowrap px-4 py-2.5 rounded-xl text-sm font-semibold border transition
+        ${active ? 'bg-brand-600 text-white border-brand-600 shadow-md shadow-brand-600/25'
+                 : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-brand-400 hover:text-brand-600'}">
+        <span class="mr-1">${t.icon}</span>${t.label}</button>`;
+    }).join('');
+    bar.querySelectorAll('.tab-btn').forEach(b => b.addEventListener('click', () => {
+      activeTab = b.dataset.tab; renderTabs(); renderTopics();
+    }));
+  }
+
+  /* ---- Filter buttons ---- */
+  document.querySelectorAll('.filter-btn').forEach(b => b.addEventListener('click', () => {
+    activeFilter = b.dataset.filter;
+    document.querySelectorAll('.filter-btn').forEach(x => {
+      const on = x.dataset.filter === activeFilter;
+      x.classList.toggle('bg-brand-600', on);
+      x.classList.toggle('text-white', on);
+      x.classList.toggle('bg-white', !on);
+      x.classList.toggle('dark:bg-slate-900', !on);
+    });
+    renderTopics();
+  }));
+
+  /* ---- Search ---- */
+  document.getElementById('searchInput').addEventListener('input', e => {
+    searchTerm = e.target.value.trim().toLowerCase(); renderTopics();
+  });
+
+  /* ============================================================
+     RENDER TOPICS
+     ============================================================ */
+  function filteredTopics() {
+    return TOPICS.filter(t => {
+      if (activeTab !== 'all' && t.module !== activeTab) return false;
+      if (activeFilter !== 'all' && getStatus(t.id) !== activeFilter) return false;
+      if (searchTerm) {
+        const hay = (t.title + ' ' + t.tag + ' ' + t.summary + ' ' +
+          t.questions.map(q => q.q + ' ' + q.a).join(' ')).toLowerCase();
+        if (!hay.includes(searchTerm)) return false;
+      }
+      return true;
+    });
+  }
+
+  function statusButtons(topic) {
+    const cur = getStatus(topic.id);
+    return Object.keys(STATUSES).map(key => {
+      const s = STATUSES[key];
+      const on = cur === key;
+      return `<button data-status-set="${key}" data-topic="${topic.id}"
+        class="status-set px-2.5 py-1.5 rounded-lg text-xs font-semibold border transition
+        ${on ? s.btn + ' border-transparent shadow-sm' : 'bg-transparent border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-400'}">
+        ${s.label}</button>`;
+    }).join('');
+  }
+
+  function renderTopics() {
+    const grid = document.getElementById('topicGrid');
+    const list = filteredTopics();
+    document.getElementById('emptyState').classList.toggle('hidden', list.length > 0);
+
+    grid.innerHTML = list.map((t, i) => {
+      const cur = getStatus(t.id);
+      const s = STATUSES[cur];
+      const mod = MODULES.find(m => m.id === t.module);
+      const note = state.notes[t.id] || '';
+      const qHtml = t.questions.map((q, qi) => `
+        <div class="rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <button class="q-toggle w-full text-left px-3.5 py-3 flex items-start gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition" data-acc="${t.id}-${qi}">
+            <span class="mt-0.5 text-brand-500 shrink-0">
+              <svg class="w-4 h-4 chevron transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+            </span>
+            <span class="text-sm font-semibold leading-snug">${q.q}</span>
+          </button>
+          <div class="accordion-body" id="acc-${t.id}-${qi}">
+            <div class="accordion-inner">
+              <div class="px-3.5 pb-3.5 pt-0.5 pl-10">
+                <p class="text-xs font-bold uppercase tracking-wide text-brand-500 mb-1.5">Model answer / talking points</p>
+                <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${q.a}</p>
+              </div>
+            </div>
+          </div>
+        </div>`).join('');
+
+      return `
+      <article class="card-enter rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow" style="animation-delay:${i*30}ms">
+        <div class="p-4 sm:p-5">
+          <div class="flex items-start justify-between gap-3">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">${mod.icon} ${mod.label}</span>
+                <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-brand-50 dark:bg-brand-950/50 text-brand-600 dark:text-brand-300">${t.tag}</span>
+              </div>
+              <h3 class="font-bold text-base leading-snug">${t.title}</h3>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${t.summary}</p>
+            </div>
+            <span class="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full ${s.badge}">
+              <span class="h-1.5 w-1.5 rounded-full ${s.dot}"></span>${s.short}
+            </span>
+          </div>
+
+          <!-- status toggles -->
+          <div class="flex flex-wrap gap-1.5 mt-4">${statusButtons(t)}</div>
+
+          <!-- mock questions -->
+          <div class="mt-4 space-y-2">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-400">🎯 Mock Questions (${t.questions.length})</p>
+            ${qHtml}
+          </div>
+
+          <!-- notes -->
+          <details class="mt-4 group" ${note ? 'open' : ''}>
+            <summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 select-none">
+              <svg class="w-4 h-4 transition-transform group-open:rotate-90 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
+              📝 My Notes ${note ? '<span class="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-brand-100 dark:bg-brand-950 text-brand-600 dark:text-brand-300">saved</span>' : ''}
+            </summary>
+            <textarea data-note="${t.id}" rows="3" placeholder="Jot down key points, formulas, or your STAR story…"
+              class="note-area mt-2 w-full text-sm rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 focus:ring-2 focus:ring-brand-400 focus:border-brand-400 outline-none resize-y transition">${note.replace(/</g,'&lt;')}</textarea>
+          </details>
+        </div>
+      </article>`;
+    }).join('');
+
+    /* wire accordions */
+    grid.querySelectorAll('.q-toggle').forEach(btn => btn.addEventListener('click', () => {
+      const body = document.getElementById('acc-' + btn.dataset.acc);
+      const chev = btn.querySelector('.chevron');
+      const open = body.classList.toggle('open');
+      chev.style.transform = open ? 'rotate(90deg)' : 'rotate(0deg)';
+    }));
+
+    /* wire status buttons */
+    grid.querySelectorAll('.status-set').forEach(btn => btn.addEventListener('click', () => {
+      state.status[btn.dataset.topic] = btn.dataset.statusSet;
+      save(); renderTopics(); renderMetrics();
+    }));
+
+    /* wire notes (debounced save) */
+    grid.querySelectorAll('.note-area').forEach(area => {
+      let t;
+      area.addEventListener('input', () => {
+        clearTimeout(t);
+        t = setTimeout(() => { state.notes[area.dataset.note] = area.value; save(); }, 400);
+      });
+    });
+  }
+
+  /* ============================================================
+     METRICS + PROGRESS
+     ============================================================ */
+  function renderMetrics() {
+    const total = TOPICS.length;
+    let mastered = 0, review = 0, notStarted = 0;
+    TOPICS.forEach(t => {
+      const s = getStatus(t.id);
+      if (s === 'mastered') mastered++;
+      else if (s === 'in-review') review++;
+      else notStarted++;
+    });
+    document.getElementById('mTotal').textContent = total;
+    document.getElementById('mMastered').textContent = mastered;
+    document.getElementById('mReview').textContent = review;
+    document.getElementById('mNotStarted').textContent = notStarted;
+
+    // weighted progress: mastered = 100%, in-review = 50%
+    const pct = Math.round(((mastered + review * 0.5) / total) * 100);
+    document.getElementById('progressBar').style.width = pct + '%';
+    document.getElementById('barPctLabel').textContent = pct + '% complete';
+    document.getElementById('ringPct').textContent = pct + '%';
+    const circ = 2 * Math.PI * 15.5; // ≈ 97.4
+    document.getElementById('ringProgress').style.strokeDashoffset = circ * (1 - pct / 100);
+  }
+
+  /* ---- Reset ---- */
+  document.getElementById('resetBtn').addEventListener('click', () => {
+    if (confirm('Reset all progress and notes? This cannot be undone.')) {
+      state = { status:{}, notes:{}, theme: state.theme };
+      save(); renderTopics(); renderMetrics();
+    }
+  });
+
+  /* ============================================================
+     INIT
+     ============================================================ */
+  applyTheme();
+  renderTabs();
+  renderTopics();
+  renderMetrics();
+  </script>
+</body>
+</html>
