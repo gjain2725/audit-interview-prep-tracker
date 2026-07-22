@@ -96,6 +96,11 @@
               <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
             </svg>
           </div>
+          <button id="syncBtn" title="Cloud sync across devices" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
+            <span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a5 5 0 0 1-.5-9.98 7 7 0 0 1 13.4 2A4.5 4.5 0 0 1 18.5 18H7Z"/></svg>
+            <span id="syncStatus" class="hidden sm:inline text-xs font-semibold text-slate-400">Local</span>
+          </button>
           <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
             <svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
             <svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg>
@@ -461,10 +466,10 @@ let store = load();
 function load(){
   try {
     const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { q: raw.q || {}, custom: raw.custom || {}, order: raw.order || {}, theme: raw.theme || 'dark' };
-  } catch { return { q:{}, custom:{}, order:{}, theme:'dark' }; }
+    return { q: raw.q || {}, custom: raw.custom || {}, order: raw.order || {}, attach: raw.attach || {}, theme: raw.theme || 'dark' };
+  } catch { return { q:{}, custom:{}, order:{}, attach:{}, theme:'dark' }; }
 }
-function save(){ localStorage.setItem(KEY, JSON.stringify(store)); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(store)); scheduleSync(); }
 function qs(id){ return store.q[id] || (store.q[id] = {}); }
 
 /* All questions incl. custom, for a given area */
@@ -529,57 +534,126 @@ function setHeaderProgress(){
 }
 
 /* ============================================================
-   ATTACHMENTS (files stored in IndexedDB; metadata cached in memory)
-   Slot keys:  <qid>::q  (question) | <qid>::a (answer) | <qid>::e:<exId> (example)
+   CLOUD SYNC (Netlify Functions + Blobs) + ATTACHMENTS
+   State (flags/notes/edits/order/attachment-metadata) syncs as one JSON blob
+   keyed by a private sync code. Attachment files live in Netlify Blobs.
+   Slot keys:  <qid>::q (question) | <qid>::a (answer) | <qid>::e:<exId> (example)
    ============================================================ */
-const DB_NAME='himanshi_audit_files', DB_STORE='attachments';
-let _db=null, idbOK=true;
-let ATTACH={};                 // slot -> [{id,name,type,size}]
-let pendingSlot=null, pendingQid=null;
+const SYNC_URL='/.netlify/functions/sync';
+const FILES_URL='/.netlify/functions/files';
+const CODE_KEY='mb4_code', TS_KEY='mb4_ts';
+const SYNC_ON = location.protocol==='http:' || location.protocol==='https:';
+let syncCode=null, pendingSlot=null, pendingQid=null;
+let _syncTimer=null, _lastPayload=null;
 
+/* legacy IndexedDB (read-only) — only used to migrate pre-cloud attachments up */
+const DB_NAME='himanshi_audit_files', DB_STORE='attachments';
+let _db=null;
 function openDB(){
   return new Promise((res,rej)=>{
     if(_db) return res(_db);
     if(!('indexedDB' in window)) return rej(new Error('no-idb'));
     const r=indexedDB.open(DB_NAME,1);
-    r.onupgradeneeded=e=>{
-      const db=e.target.result;
-      if(!db.objectStoreNames.contains(DB_STORE)){
-        const os=db.createObjectStore(DB_STORE,{keyPath:'id'});
-        os.createIndex('slot','slot',{unique:false});
-      }
-    };
+    r.onupgradeneeded=e=>{ const db=e.target.result; if(!db.objectStoreNames.contains(DB_STORE)){ const os=db.createObjectStore(DB_STORE,{keyPath:'id'}); os.createIndex('slot','slot',{unique:false}); } };
     r.onsuccess=e=>{ _db=e.target.result; res(_db); };
     r.onerror=e=>rej(e.target.error);
   });
 }
-function idbOp(mode,fn){
-  return openDB().then(db=>new Promise((res,rej)=>{
-    const os=db.transaction(DB_STORE,mode).objectStore(DB_STORE);
-    const rq=fn(os); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
-  }));
-}
-const idbAll=()=>idbOp('readonly',os=>os.getAll());
-const idbGet=id=>idbOp('readonly',os=>os.get(id));
-const idbPut=rec=>idbOp('readwrite',os=>os.put(rec));
-const idbDel=id=>idbOp('readwrite',os=>os.delete(id));
+const idbAll=()=>openDB().then(db=>new Promise((res,rej)=>{ const rq=db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }));
 
-function loadAttachMeta(){
-  return idbAll().then(list=>{
-    ATTACH={};
-    (list||[]).forEach(r=>{ (ATTACH[r.slot]||(ATTACH[r.slot]=[])).push({id:r.id,name:r.name,type:r.type,size:r.size}); });
-  }).catch(()=>{ idbOK=false; });
+/* ---- sync code ---- */
+function genCode(){
+  const bytes=new Uint8Array(12);
+  if(window.crypto&&crypto.getRandomValues) crypto.getRandomValues(bytes); else for(let i=0;i<12;i++) bytes[i]=Math.floor(Math.random()*256);
+  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s='';
+  for(const b of bytes) s+=chars[b%chars.length];
+  return s.replace(/(.{4})(.{4})(.{4})/,'$1-$2-$3');
 }
-function attListFor(slot){ return ATTACH[slot]||[]; }
+function ensureCode(){ syncCode=localStorage.getItem(CODE_KEY); if(!syncCode){ syncCode=genCode(); localStorage.setItem(CODE_KEY,syncCode); } return syncCode; }
 
+/* ---- sync status pill ---- */
+function setSyncStatus(state){
+  const el=document.getElementById('syncStatus'); if(!el) return;
+  const map={ saved:['Synced','text-emerald-500'], syncing:['Syncing…','text-amber-500'], offline:['Offline','text-rose-500'], local:['Local','text-slate-400'] };
+  const [txt,cls]=map[state]||map.local;
+  el.textContent=txt; el.className='hidden sm:inline '+cls;
+  const dot=document.getElementById('syncDot'); if(dot) dot.className='h-2 w-2 rounded-full '+cls.replace('text-','bg-');
+}
+
+/* ---- payload build / adopt ---- */
+function syncPayload(){
+  const q={};
+  for(const k in store.q){ const s=Object.assign({},store.q[k]); delete s._open; delete s._editing; if(Object.keys(s).length) q[k]=s; }
+  return { v:2, q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, theme:store.theme };
+}
+function adopt(data){
+  if(!data) return;
+  store.q=data.q||{}; store.custom=data.custom||{}; store.order=data.order||{}; store.attach=data.attach||{};
+  if(data.theme) store.theme=data.theme;
+  localStorage.setItem(KEY, JSON.stringify(store));   // direct write — don't trigger a push
+  _lastPayload=JSON.stringify(syncPayload());
+  applyTheme();
+}
+
+/* ---- push (debounced, deduped) / pull ---- */
+function scheduleSync(){ if(!SYNC_ON||!syncCode) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(pushNow,1000); }
+function pushNow(){
+  if(!SYNC_ON||!syncCode) return Promise.resolve();
+  const payload=syncPayload(); const str=JSON.stringify(payload);
+  if(str===_lastPayload) return Promise.resolve();
+  _lastPayload=str; setSyncStatus('syncing');
+  return fetch(SYNC_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:syncCode,data:payload})})
+    .then(r=>r.json()).then(r=>{ if(r&&r.updated_at) localStorage.setItem(TS_KEY,Date.parse(r.updated_at)); setSyncStatus('saved'); })
+    .catch(()=>{ _lastPayload=null; setSyncStatus('offline'); });
+}
+function pullAndMerge(){
+  if(!SYNC_ON){ setSyncStatus('local'); return Promise.resolve(); }
+  setSyncStatus('syncing');
+  return fetch(SYNC_URL+'?code='+encodeURIComponent(syncCode)).then(r=>r.json()).then(async remote=>{
+    if(remote && remote.data){
+      const remoteTs=Date.parse(remote.updated_at||0), localTs=+(localStorage.getItem(TS_KEY)||0);
+      if(remoteTs>=localTs){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); setSyncStatus('saved'); }
+      else { await migrateLocal(); await pushNow(); refresh(); }
+    } else { await migrateLocal(); await pushNow(); refresh(); }   // seed a brand-new code
+  }).catch(()=>setSyncStatus('offline'));
+}
+
+/* ---- migrate any pre-cloud IndexedDB files up to the cloud (one-time) ---- */
+async function migrateLocal(){
+  let list=[]; try{ list=await idbAll(); }catch{ return; }
+  if(!store.attach) store.attach={};
+  for(const rec of list){
+    if(!rec||!rec.slot||!rec.blob) continue;
+    const arr=store.attach[rec.slot]||[];
+    if(arr.some(a=>a.id===rec.id)) continue;
+    try{
+      await fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':rec.id,'x-file-name':encodeURIComponent(rec.name||'file'),'x-file-type':rec.type||'application/octet-stream'},body:rec.blob});
+      (store.attach[rec.slot]||(store.attach[rec.slot]=[])).push({id:rec.id,name:rec.name,type:rec.type,size:rec.size});
+    }catch{}
+  }
+  localStorage.setItem(KEY, JSON.stringify(store));
+}
+
+/* ---- link this device to an existing code (used on the phone) ---- */
+function linkDevice(code){
+  code=(code||'').trim().toUpperCase(); if(!code) return;
+  syncCode=code; localStorage.setItem(CODE_KEY,code); localStorage.setItem(TS_KEY,'0'); _lastPayload=null;
+  pullAndMerge();
+}
+
+/* ---- attachment file ops (cloud) ---- */
+function fileViewUrl(id,dl){ return FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id)+(dl?'&dl=1':''); }
+function attListFor(slot){ return (store.attach&&store.attach[slot])||[]; }
 function attachTo(slot,qid,file){
   const id='att-'+Date.now()+'-'+Math.round(Math.random()*1e9);
   const type=file.type||'application/octet-stream';
-  const rec={id,slot,qid,name:file.name,type,size:file.size,blob:file,addedAt:Date.now()};
-  return idbPut(rec).then(()=>{ (ATTACH[slot]||(ATTACH[slot]=[])).push({id,name:file.name,type,size:file.size}); });
+  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
+    .then(r=>{ if(!r.ok) throw new Error('upload failed'); return r.json(); })
+    .then(()=>{ if(!store.attach) store.attach={}; (store.attach[slot]||(store.attach[slot]=[])).push({id,name:file.name,type,size:file.size}); save(); });
 }
 function removeAttach(id,slot){
-  return idbDel(id).then(()=>{ ATTACH[slot]=(ATTACH[slot]||[]).filter(a=>a.id!==id); });
+  const u=FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id);
+  return fetch(u,{method:'DELETE'}).catch(()=>{}).then(()=>{ if(store.attach&&store.attach[slot]) store.attach[slot]=store.attach[slot].filter(a=>a.id!==id); save(); });
 }
 
 function fileIcon(t){ t=t||''; if(t.includes('pdf'))return '📄'; if(t.startsWith('image/'))return '🖼️'; if(t.includes('word')||t.includes('document'))return '📝'; if(t.includes('sheet')||t.includes('excel')||t.includes('csv'))return '📊'; return '📎'; }
@@ -587,7 +661,7 @@ function humanSize(n){ if(n<1024)return n+' B'; if(n<1048576)return Math.round(n
 
 /* Compact attach zone for a slot */
 function attachBlockHTML(slot,qid,a,label){
-  if(!idbOK) return `<div class="mt-2 text-[11px] text-slate-400">Attachments need a modern browser (IndexedDB unavailable).</div>`;
+  if(!SYNC_ON) return `<div class="mt-2 text-[11px] text-slate-400">Open the online site (missionbig4.netlify.app) to add attachments.</div>`;
   const items=attListFor(slot);
   const chips=items.map(f=>`<span class="inline-flex items-center gap-1.5 text-xs rounded-lg pl-2 pr-1 py-1 bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10">
     <button data-action="view-att" data-id="${f.id}" data-type="${esc(f.type)}" data-name="${esc(f.name)}" class="inline-flex items-center gap-1 hover:${a.text.split(' ')[0]} max-w-[190px]" title="Open ${esc(f.name)}">${fileIcon(f.type)} <span class="truncate">${esc(f.name)}</span></button>
@@ -603,31 +677,61 @@ function attachBlockHTML(slot,qid,a,label){
   </div>`;
 }
 
-/* Full-screen live viewer — renders PDFs and images inline */
+/* Full-screen live viewer — streams the file live from the cloud */
 function openAttachment(id,type,name){
-  idbGet(id).then(rec=>{
-    if(!rec){ alert('Attachment not found.'); return; }
-    const t=rec.type||type||''; const url=URL.createObjectURL(rec.blob);
-    let viewer;
-    if(t.includes('pdf')) viewer=`<iframe src="${url}" class="flex-1 w-full bg-white" title="${esc(name)}"></iframe>`;
-    else if(t.startsWith('image/')) viewer=`<div class="flex-1 grid place-items-center overflow-auto p-4"><img src="${url}" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="${esc(name)}"></div>`;
-    else viewer=`<div class="flex-1 grid place-items-center text-white text-center p-6"><div><p class="text-5xl mb-3">📎</p><p class="mb-3 text-sm opacity-80">No inline preview for this file type.</p><a href="${url}" download="${esc(name)}" class="underline text-sm">Download ${esc(name)}</a></div></div>`;
-    const wrap=document.createElement('div');
-    wrap.className='fixed inset-0 z-[60] flex flex-col bg-black/80 backdrop-blur-sm';
-    wrap.innerHTML=`<div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900 text-white shrink-0">
-        <span class="text-sm font-semibold truncate">${fileIcon(t)} ${esc(name)}</span>
-        <div class="flex items-center gap-2 shrink-0">
-          <a href="${url}" target="_blank" rel="noopener" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Open in new tab</a>
-          <a href="${url}" download="${esc(name)}" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Download</a>
-          <button data-close-viewer class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">✕ Close</button>
-        </div>
-      </div>${viewer}`;
-    document.body.appendChild(wrap);
-    const close=()=>{ URL.revokeObjectURL(url); wrap.remove(); document.removeEventListener('keydown',onKey); };
-    const onKey=e=>{ if(e.key==='Escape') close(); };
-    wrap.querySelector('[data-close-viewer]').onclick=close;
-    document.addEventListener('keydown',onKey);
-  }).catch(()=>alert('Could not open attachment.'));
+  const t=type||''; const url=fileViewUrl(id); const durl=fileViewUrl(id,true);
+  let viewer;
+  if(t.includes('pdf')) viewer=`<iframe src="${url}" class="flex-1 w-full bg-white" title="${esc(name)}"></iframe>`;
+  else if(t.startsWith('image/')) viewer=`<div class="flex-1 grid place-items-center overflow-auto p-4"><img src="${url}" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="${esc(name)}"></div>`;
+  else viewer=`<div class="flex-1 grid place-items-center text-white text-center p-6"><div><p class="text-5xl mb-3">📎</p><p class="mb-3 text-sm opacity-80">No inline preview for this file type.</p><a href="${durl}" class="underline text-sm">Download ${esc(name)}</a></div></div>`;
+  const wrap=document.createElement('div');
+  wrap.className='fixed inset-0 z-[60] flex flex-col bg-black/80 backdrop-blur-sm';
+  wrap.innerHTML=`<div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900 text-white shrink-0">
+      <span class="text-sm font-semibold truncate">${fileIcon(t)} ${esc(name)}</span>
+      <div class="flex items-center gap-2 shrink-0">
+        <a href="${url}" target="_blank" rel="noopener" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Open in new tab</a>
+        <a href="${durl}" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Download</a>
+        <button data-close-viewer class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">✕ Close</button>
+      </div>
+    </div>${viewer}`;
+  document.body.appendChild(wrap);
+  const close=()=>{ wrap.remove(); document.removeEventListener('keydown',onKey); };
+  const onKey=e=>{ if(e.key==='Escape') close(); };
+  wrap.querySelector('[data-close-viewer]').onclick=close;
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
+  document.addEventListener('keydown',onKey);
+}
+
+/* ---- sync modal (share/link devices) ---- */
+function openSyncModal(){
+  const code=ensureCode();
+  const wrap=document.createElement('div');
+  wrap.className='fixed inset-0 z-[70] grid place-items-center p-4 bg-black/50 backdrop-blur-sm';
+  wrap.innerHTML=`<div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
+    <h3 class="font-display font-extrabold text-lg mb-1">☁️ Cloud sync</h3>
+    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Your notes, flags, edits, ordering and attachments sync across every device that uses the same sync code.</p>
+    <label class="block text-xs font-semibold text-slate-500 mb-1">This device's sync code</label>
+    <div class="flex gap-2 mb-4">
+      <input id="syncCodeShow" readonly value="${esc(code)}" class="flex-1 font-mono text-sm tracking-wider rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none" />
+      <button id="syncCopy" class="px-3 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Copy</button>
+    </div>
+    <div class="rounded-xl bg-brand-500/5 border border-brand-400/20 p-3 mb-4 text-xs text-slate-600 dark:text-slate-300">
+      📱 <b>On your phone:</b> open <b>missionbig4.netlify.app</b>, tap <b>Sync</b>, paste this code below and Link.
+    </div>
+    <label class="block text-xs font-semibold text-slate-500 mb-1">Link this device to a code</label>
+    <div class="flex gap-2">
+      <input id="syncCodeIn" placeholder="XXXX-XXXX-XXXX" class="flex-1 font-mono text-sm tracking-wider rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+      <button id="syncLink" class="px-3 py-2.5 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Link</button>
+    </div>
+    <p class="text-[11px] text-slate-400 mt-2">Linking pulls that code's data onto this device (replacing what's here). Keep your code private — anyone with it can see your prep.</p>
+    <div class="flex justify-end mt-4"><button id="syncClose" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
+  wrap.querySelector('#syncClose').onclick=close;
+  wrap.querySelector('#syncCopy').onclick=()=>{ const i=wrap.querySelector('#syncCodeShow'); i.select(); try{navigator.clipboard.writeText(i.value);}catch(_){ document.execCommand('copy'); } const b=wrap.querySelector('#syncCopy'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy',1500); };
+  wrap.querySelector('#syncLink').onclick=()=>{ const v=wrap.querySelector('#syncCodeIn').value; if(!v.trim()) return; if(confirm('Link this device to code '+v.trim().toUpperCase()+'? Data currently on this device will be replaced by the linked data.')){ close(); linkDevice(v); } };
 }
 
 /* wire the shared file picker */
@@ -635,10 +739,12 @@ function openAttachment(id,type,name){
   const fi=document.getElementById('fileInput');
   fi.addEventListener('change',()=>{
     const files=[...fi.files]; if(!files.length||!pendingSlot) return;
+    setSyncStatus('syncing');
     Promise.all(files.map(f=>attachTo(pendingSlot,pendingQid,f)))
-      .then(()=>{ fi.value=''; refresh(); })
-      .catch(()=>{ alert('Sorry, saving the attachment failed.'); fi.value=''; });
+      .then(()=>{ fi.value=''; refresh(); pushNow(); })
+      .catch(()=>{ alert('Sorry, uploading the attachment failed. Check your connection and try again.'); fi.value=''; refresh(); });
   });
+  const sb=document.getElementById('syncBtn'); if(sb) sb.addEventListener('click',openSyncModal);
 })();
 
 /* ============================================================
@@ -1143,8 +1249,12 @@ function openAdd(areaId){
 /* ============================================================
    INIT
    ============================================================ */
+if(!store.attach) store.attach={};
+ensureCode();
 applyTheme();
-loadAttachMeta().finally(router);
+router();                 // render immediately from local cache
+setSyncStatus(SYNC_ON?'syncing':'local');
+if(SYNC_ON) pullAndMerge();   // then reconcile with the cloud
 </script>
 </body>
 </html>

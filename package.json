@@ -1,0 +1,10 @@
+{
+  "name": "missionbig4-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Audit interview prep tracker with Netlify Blobs cloud sync",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
