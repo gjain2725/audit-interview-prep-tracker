@@ -96,6 +96,10 @@
               <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
             </svg>
           </div>
+          <a href="#/vault" title="Attachment vault — all files" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
+            <span class="hidden sm:inline text-xs font-semibold">Files</span>
+          </a>
           <button id="syncBtn" title="Shared workspace — click to pull the latest changes" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
             <span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a5 5 0 0 1-.5-9.98 7 7 0 0 1 13.4 2A4.5 4.5 0 0 1 18.5 18H7Z"/></svg>
@@ -726,12 +730,181 @@ function openAttachment(id,type,name){
   document.addEventListener('keydown',onKey);
 }
 
+/* replace the underlying file of an existing attachment (keeps its id & slot) */
+function replaceAttach(id,slot,file){
+  const type=file.type||'application/octet-stream';
+  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
+    .then(r=>{ if(!r.ok) throw new Error('replace failed'); return r.json(); })
+    .then(()=>{ const arr=(store.attach&&store.attach[slot])||[]; const it=arr.find(a=>a.id===id); if(it){ it.name=file.name; it.type=type; it.size=file.size; } save(); });
+}
+
+/* ============================================================
+   ATTACHMENT VAULT  (see all files · bulk download/delete/replace)
+   ============================================================ */
+let vaultSel=new Set(), vaultSearch='', fileMode='attach', replaceTargets=[];
+
+function questionInfo(qid){
+  for(const a of AREAS){ const q=a.questions.find(x=>x.id===qid); if(q){ const ov=store.q[qid]&&store.q[qid].qOverride; return {areaId:a.id, areaTitle:a.title, areaIcon:a.icon, cat:a.cat, qTitle: ov||q.q}; } }
+  for(const areaId in (store.custom||{})){ const c=(store.custom[areaId]||[]).find(x=>x.id===qid); if(c){ const a=AREA_BY_ID[areaId]; return {areaId, areaTitle:a?a.title:areaId, areaIcon:a?a.icon:'📄', cat:a?a.cat:'', qTitle:c.q||qid}; } }
+  return {areaId:null, areaTitle:'(unknown)', areaIcon:'❓', cat:'', qTitle:qid};
+}
+function allAttachments(){
+  const out=[], at=store.attach||{};
+  for(const slot in at){
+    const idx=slot.indexOf('::'); const qid=idx>=0?slot.slice(0,idx):slot; const part=idx>=0?slot.slice(idx+2):'';
+    const info=questionInfo(qid);
+    const partLabel = part==='q'?'Question' : part==='a'?'Answer' : part.startsWith('e:')?'Example' : part;
+    (at[slot]||[]).forEach(f=> out.push(Object.assign({}, f, {slot, qid, part, partLabel}, info)) );
+  }
+  return out;
+}
+
+/* ---- minimal ZIP (store method) for bulk download / backup ---- */
+function _crc32(u8){
+  if(!_crc32.t){ const t=[]; for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1); t[n]=c>>>0; } _crc32.t=t; }
+  const t=_crc32.t; let crc=0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++) crc=t[(crc^u8[i])&0xFF]^(crc>>>8);
+  return (crc^0xFFFFFFFF)>>>0;
+}
+const _u16=n=>[n&0xFF,(n>>>8)&0xFF];
+const _u32=n=>[n&0xFF,(n>>>8)&0xFF,(n>>>16)&0xFF,(n>>>24)&0xFF];
+function makeZip(files){ // files: [{name, data:Uint8Array}]
+  const enc=new TextEncoder(); const chunks=[]; const central=[]; let offset=0;
+  const push=arr=>{ const u=arr instanceof Uint8Array?arr:new Uint8Array(arr); chunks.push(u); offset+=u.length; };
+  for(const f of files){
+    const nameBytes=enc.encode(f.name); const crc=_crc32(f.data); const size=f.data.length; const localOffset=offset;
+    push([].concat(_u32(0x04034b50),_u16(20),_u16(0x0800),_u16(0),_u16(0),_u16(0),_u32(crc),_u32(size),_u32(size),_u16(nameBytes.length),_u16(0)));
+    push(nameBytes); push(f.data);
+    central.push({nameBytes,crc,size,localOffset});
+  }
+  const cdStart=offset;
+  for(const c of central){
+    push([].concat(_u32(0x02014b50),_u16(20),_u16(20),_u16(0x0800),_u16(0),_u16(0),_u16(0),_u32(c.crc),_u32(c.size),_u32(c.size),_u16(c.nameBytes.length),_u16(0),_u16(0),_u16(0),_u16(0),_u32(0),_u32(c.localOffset)));
+    push(c.nameBytes);
+  }
+  push([].concat(_u32(0x06054b50),_u16(0),_u16(0),_u16(central.length),_u16(central.length),_u32(offset-cdStart),_u32(cdStart),_u16(0)));
+  return new Blob(chunks,{type:'application/zip'});
+}
+function downloadBlob(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),8000); }
+function uniqueName(name,seen){ if(seen[name]==null){ seen[name]=0; return name; } seen[name]++; const d=name.lastIndexOf('.'); return d>0? name.slice(0,d)+' ('+seen[name]+')'+name.slice(d) : name+' ('+seen[name]+')'; }
+
+async function zipAttachments(list, prefix){
+  const seen={}, files=[];
+  for(const f of list){
+    const buf=new Uint8Array(await fetch(fileViewUrl(f.id,true)).then(r=>r.arrayBuffer()));
+    files.push({name:(prefix||'')+uniqueName(f.name,seen), data:buf});
+  }
+  return files;
+}
+async function vaultDownloadSelected(){
+  const list=allAttachments().filter(f=>vaultSel.has(f.id)); if(!list.length) return;
+  setSyncStatus('syncing');
+  try{ downloadBlob(makeZip(await zipAttachments(list,'')), 'mission-big4-files.zip'); setSyncStatus('saved'); }
+  catch(e){ alert('Download failed — check your connection and try again.'); setSyncStatus('offline'); }
+}
+async function vaultBackupAll(){
+  const list=allAttachments();
+  setSyncStatus('syncing');
+  try{
+    const files=await zipAttachments(list,'files/');
+    files.push({name:'tracker-data.json', data:new TextEncoder().encode(JSON.stringify(syncPayload(),null,2))});
+    downloadBlob(makeZip(files),'mission-big4-backup.zip'); setSyncStatus('saved');
+  }catch(e){ alert('Backup failed — check your connection and try again.'); setSyncStatus('offline'); }
+}
+async function vaultDeleteSelected(){
+  const list=allAttachments().filter(f=>vaultSel.has(f.id)); if(!list.length) return;
+  if(!confirm('Delete '+list.length+' file(s)? This permanently removes them from every device.')) return;
+  setSyncStatus('syncing');
+  for(const f of list){ await removeAttach(f.id,f.slot); }
+  vaultSel.clear(); await pushNow(); renderVault();
+}
+function vaultReplaceSelected(){
+  const list=allAttachments().filter(f=>vaultSel.has(f.id)); if(!list.length) return;
+  alert('Choose '+list.length+' file(s) to replace the selected item(s) — they map in the order shown in the list.');
+  replaceTargets=list.map(f=>({id:f.id,slot:f.slot}));
+  fileMode='replace';
+  const fi=document.getElementById('fileInput'); fi.multiple=true; fi.value=''; fi.click();
+}
+
+function renderVault(){
+  const app=document.getElementById('app');
+  let list=allAttachments();
+  const total=list.length, totalBytes=list.reduce((s,f)=>s+(f.size||0),0);
+  if(vaultSearch){ const s=vaultSearch; list=list.filter(f=>(f.name+' '+f.areaTitle+' '+f.qTitle).toLowerCase().includes(s)); }
+  const selN=vaultSel.size;
+  const btn=(action,label,cls)=>`<button data-action="${action}" ${selN?'':'disabled'} class="px-3 py-2 rounded-lg text-xs font-semibold transition ${selN?cls:'opacity-40 cursor-not-allowed border border-slate-200 dark:border-white/10'}">${label}</button>`;
+
+  const rows = list.map(f=>{
+    const acc = ACCENTS[(CAT_BY_ID[f.cat]||{}).accent] || ACCENTS.brand;
+    const on=vaultSel.has(f.id);
+    return `<div class="flex items-center gap-3 p-3 rounded-xl border ${on?'border-brand-400 bg-brand-500/5':'border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/[.03]'} glass">
+      <input type="checkbox" data-action="vault-sel" data-id="${f.id}" ${on?'checked':''} class="h-4 w-4 accent-brand-500 shrink-0 cursor-pointer">
+      <span class="text-xl shrink-0">${fileIcon(f.type)}</span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold truncate">${esc(f.name)}</p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 truncate">${humanSize(f.size)} · ${f.areaIcon} ${esc(f.areaTitle)} › ${esc((f.qTitle||'').slice(0,60))}${(f.qTitle||'').length>60?'…':''} <span class="${acc.text}">(${f.partLabel})</span></p>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button data-action="vault-view" data-id="${f.id}" data-type="${esc(f.type)}" data-name="${esc(f.name)}" title="View" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10">👁</button>
+        <button data-action="vault-dl1" data-id="${f.id}" title="Download" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10">⬇</button>
+        <button data-action="vault-rep1" data-id="${f.id}" data-slot="${esc(f.slot)}" title="Replace file" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10">🔁</button>
+        <button data-action="vault-del1" data-id="${f.id}" data-slot="${esc(f.slot)}" title="Delete" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10">🗑</button>
+      </div>
+    </div>`;
+  }).join('') || `<div class="text-center py-16 text-slate-400"><p class="text-4xl mb-3">📎</p><p class="font-semibold">${total?'No files match your search.':'No attachments yet.'}</p><p class="text-sm">${total?'':'Attach files on any question, then manage them all here.'}</p></div>`;
+
+  const allShownSelected = list.length>0 && list.every(f=>vaultSel.has(f.id));
+
+  app.innerHTML=`
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-brand-500 mb-4 transition">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to areas
+    </a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start gap-4">
+        <span class="h-14 w-14 grid place-items-center rounded-2xl bg-brand-500/10 ring-1 ring-brand-400/25 text-2xl shrink-0">📎</span>
+        <div class="flex-1 min-w-0">
+          <h1 class="font-display text-xl sm:text-2xl font-extrabold tracking-tight">Attachment Vault</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">${total} file${total===1?'':'s'} · ${humanSize(totalBytes)} total · view, download, replace or delete in bulk</p>
+          <button data-action="vault-backup" class="mt-3 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">⬇ Download full backup (all files + data)</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+      <div class="relative flex-1">
+        <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="vaultSearch" type="text" value="${esc(vaultSearch)}" placeholder="Search files…" class="w-full pl-10 pr-3 py-2.5 rounded-xl bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 focus:ring-2 focus:ring-brand-400 outline-none text-sm shadow-sm" />
+      </div>
+      <div class="flex gap-2 items-center flex-wrap">
+        <button data-action="vault-selall" class="px-3 py-2 rounded-lg text-xs font-semibold border border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/5 glass">${allShownSelected?'Clear':'Select all'}</button>
+        <span class="text-xs text-slate-400">${selN} selected</span>
+        ${btn('vault-dl','⬇ Download','border border-brand-400/40 text-brand-600 dark:text-brand-300 bg-brand-500/5')}
+        ${btn('vault-rep','🔁 Replace','border border-amber-400/40 text-amber-600 dark:text-amber-300 bg-amber-500/5')}
+        ${btn('vault-del','🗑 Delete','border border-rose-400/40 text-rose-600 dark:text-rose-300 bg-rose-500/5')}
+      </div>
+    </div>
+
+    <div class="space-y-2">${rows}</div>
+  `;
+  const vs=document.getElementById('vaultSearch');
+  vs.addEventListener('input',e=>{ vaultSearch=e.target.value.trim().toLowerCase(); const p=e.target.selectionStart; renderVault(); const n=document.getElementById('vaultSearch'); if(n){ n.focus(); n.setSelectionRange(p,p); } });
+}
+
 /* wire the shared file picker + manual refresh button */
 (function(){
   const fi=document.getElementById('fileInput');
   fi.addEventListener('change',()=>{
-    const files=[...fi.files]; if(!files.length||!pendingSlot) return;
+    const files=[...fi.files]; if(!files.length){ return; }
     setSyncStatus('syncing');
+    if(fileMode==='replace'){
+      const targets=replaceTargets.slice(); replaceTargets=[]; fileMode='attach';
+      const n=Math.min(files.length, targets.length);
+      Promise.all(targets.slice(0,n).map((t,i)=>replaceAttach(t.id,t.slot,files[i])))
+        .then(()=>{ fi.value=''; fi.multiple=true; refresh(); pushNow(); })
+        .catch(()=>{ alert('Replace failed. Check your connection and try again.'); fi.value=''; fi.multiple=true; refresh(); });
+      return;
+    }
+    if(!pendingSlot){ fi.value=''; return; }
     Promise.all(files.map(f=>attachTo(pendingSlot,pendingQid,f)))
       .then(()=>{ fi.value=''; refresh(); pushNow(); })
       .catch(()=>{ alert('Sorry, uploading the attachment failed. Check your connection and try again.'); fi.value=''; refresh(); });
@@ -747,7 +920,8 @@ function router(){
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/a\/([\w-]+)/);
   window.scrollTo({top:0});
-  if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
+  if (hash === '#/vault') { vaultSel=new Set(); renderVault(); }
+  else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
   setHeaderProgress();
 }
@@ -1112,9 +1286,20 @@ app.addEventListener('click', e => {
   if (act==='area-filter'){ const ar=btn.dataset.area; (areaFilter[ar]||(areaFilter[ar]={status:'all',search:''})).status=btn.dataset.status; renderArea(AREA_BY_ID[ar]); return; }
   if (act==='add-open'){ openAdd(btn.dataset.area); return; }
   if (act==='order-reset'){ const ar=btn.dataset.area; if(store.order) delete store.order[ar]; save(); renderArea(AREA_BY_ID[ar]); return; }
-  if (act==='attach'){ pendingSlot=btn.dataset.slot; pendingQid=btn.dataset.qid; const fi=document.getElementById('fileInput'); fi.value=''; fi.click(); return; }
-  if (act==='del-att'){ removeAttach(btn.dataset.id, btn.dataset.slot).then(refresh); return; }
+  if (act==='attach'){ fileMode='attach'; pendingSlot=btn.dataset.slot; pendingQid=btn.dataset.qid; const fi=document.getElementById('fileInput'); fi.multiple=true; fi.value=''; fi.click(); return; }
+  if (act==='del-att'){ removeAttach(btn.dataset.id, btn.dataset.slot).then(()=>{ refresh(); pushNow(); }); return; }
   if (act==='view-att'){ openAttachment(btn.dataset.id, btn.dataset.type, btn.dataset.name); return; }
+  // ---- vault ----
+  if (act==='vault-sel'){ const id=btn.dataset.id; if(vaultSel.has(id)) vaultSel.delete(id); else vaultSel.add(id); renderVault(); return; }
+  if (act==='vault-selall'){ const shown=allAttachments().filter(f=>!vaultSearch||(f.name+' '+f.areaTitle+' '+f.qTitle).toLowerCase().includes(vaultSearch)); const allOn=shown.length>0&&shown.every(f=>vaultSel.has(f.id)); if(allOn) shown.forEach(f=>vaultSel.delete(f.id)); else shown.forEach(f=>vaultSel.add(f.id)); renderVault(); return; }
+  if (act==='vault-dl'){ vaultDownloadSelected(); return; }
+  if (act==='vault-del'){ vaultDeleteSelected(); return; }
+  if (act==='vault-rep'){ vaultReplaceSelected(); return; }
+  if (act==='vault-backup'){ vaultBackupAll(); return; }
+  if (act==='vault-view'){ openAttachment(btn.dataset.id, btn.dataset.type, btn.dataset.name); return; }
+  if (act==='vault-dl1'){ const f=allAttachments().find(x=>x.id===btn.dataset.id); if(f){ const a=document.createElement('a'); a.href=fileViewUrl(f.id,true); a.download=f.name; document.body.appendChild(a); a.click(); a.remove(); } return; }
+  if (act==='vault-rep1'){ replaceTargets=[{id:btn.dataset.id, slot:btn.dataset.slot}]; fileMode='replace'; const fi=document.getElementById('fileInput'); fi.multiple=false; fi.value=''; fi.click(); return; }
+  if (act==='vault-del1'){ if(confirm('Delete this file permanently?')){ removeAttach(btn.dataset.id, btn.dataset.slot).then(()=>{ vaultSel.delete(btn.dataset.id); pushNow(); renderVault(); }); } return; }
   if (act==='delete-custom'){
     const ar=btn.dataset.area;
     if (confirm('Delete this custom question?')){
@@ -1137,6 +1322,7 @@ app.addEventListener('input', e => {
 
 function refresh(){
   const hash = location.hash||'#/';
+  if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
   const m = hash.match(/^#\/a\/([\w-]+)/);
   if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]); else renderHome();
   setHeaderProgress();
