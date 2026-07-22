@@ -517,7 +517,9 @@ document.getElementById('themeToggle').addEventListener('click', () => {
    HELPERS
    ============================================================ */
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function fmt(s){ return esc(s).replace(/\n/g,'<br>'); }
+/* Just escape — newlines/spacing are preserved by `whitespace-pre-wrap` on the container,
+   so pasted paragraphs, blank lines and indentation render exactly as entered. */
+function fmt(s){ return esc(s); }
 function setHeaderProgress(){
   const m = metrics(allQuestions());
   document.getElementById('hdrPct').textContent = m.pct + '%';
@@ -802,7 +804,7 @@ function qCard(area, q, a, i, reorderAllowed){
           <span class="mt-0.5 grid place-items-center h-6 w-6 rounded-lg ${a.soft} shrink-0">
             <svg class="w-4 h-4 chevron transition-transform ${a.text} ${s._open?'rotate-90':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
           </span>
-          <span class="text-[15px] font-semibold leading-snug ${s.done?'text-slate-400 line-through decoration-slate-300':''}">${fmt(qText)}</span>
+          <span class="text-[15px] font-semibold leading-snug whitespace-pre-wrap ${s.done?'text-slate-400 line-through decoration-slate-300':''}">${fmt(qText)}</span>
         </button>
         <div class="flex items-center gap-1 shrink-0">
           <button data-action="flag" data-id="${q.id}" title="Flag for revision" class="h-8 w-8 grid place-items-center rounded-lg transition ${s.flag?'bg-amber-400/20 text-amber-500':'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}">
@@ -818,13 +820,13 @@ function qCard(area, q, a, i, reorderAllowed){
         <div class="accordion-inner">
           <div class="pl-8 pr-1 pt-3">
             <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1">Model answer · practical</p>
-            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${fmt(aText)}</p>
+            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmt(aText)}</p>
             ${getExamples(q).map(ex=>`<div class="mt-3 rounded-xl ${a.soft} border-l-2 border-current ${a.text} px-3.5 py-2.5">
               <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-0.5">${esc(ex.label||'Example')}</p>
-              <p class="text-sm text-slate-600 dark:text-slate-200">${fmt(ex.text)}</p></div>`).join('')}
+              <p class="text-sm text-slate-600 dark:text-slate-200 whitespace-pre-wrap">${fmt(ex.text)}</p></div>`).join('')}
             ${q.tip?`<div class="mt-2.5 rounded-xl bg-slate-500/5 border border-slate-300/40 dark:border-white/10 px-3.5 py-2.5">
               <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
-              <p class="text-sm text-slate-600 dark:text-slate-300 italic">${fmt(q.tip)}</p></div>`:''}
+              <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
 
             <div class="mt-3 flex items-center gap-3 text-xs">
               <button data-action="edit-open" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold text-slate-500 hover:${a.text.split(' ')[0]} transition">
