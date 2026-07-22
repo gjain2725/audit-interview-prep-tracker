@@ -106,6 +106,7 @@
   </header>
 
   <main id="app" class="max-w-6xl mx-auto px-4 sm:px-6 py-6"></main>
+  <input type="file" id="fileInput" multiple class="hidden" />
 
   <footer class="max-w-6xl mx-auto px-4 sm:px-6 mt-8 mb-10 pt-6 border-t border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
     <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · You've got this, Himanshi 🚀</p>
@@ -528,6 +529,119 @@ function setHeaderProgress(){
 }
 
 /* ============================================================
+   ATTACHMENTS (files stored in IndexedDB; metadata cached in memory)
+   Slot keys:  <qid>::q  (question) | <qid>::a (answer) | <qid>::e:<exId> (example)
+   ============================================================ */
+const DB_NAME='himanshi_audit_files', DB_STORE='attachments';
+let _db=null, idbOK=true;
+let ATTACH={};                 // slot -> [{id,name,type,size}]
+let pendingSlot=null, pendingQid=null;
+
+function openDB(){
+  return new Promise((res,rej)=>{
+    if(_db) return res(_db);
+    if(!('indexedDB' in window)) return rej(new Error('no-idb'));
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=e=>{
+      const db=e.target.result;
+      if(!db.objectStoreNames.contains(DB_STORE)){
+        const os=db.createObjectStore(DB_STORE,{keyPath:'id'});
+        os.createIndex('slot','slot',{unique:false});
+      }
+    };
+    r.onsuccess=e=>{ _db=e.target.result; res(_db); };
+    r.onerror=e=>rej(e.target.error);
+  });
+}
+function idbOp(mode,fn){
+  return openDB().then(db=>new Promise((res,rej)=>{
+    const os=db.transaction(DB_STORE,mode).objectStore(DB_STORE);
+    const rq=fn(os); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+  }));
+}
+const idbAll=()=>idbOp('readonly',os=>os.getAll());
+const idbGet=id=>idbOp('readonly',os=>os.get(id));
+const idbPut=rec=>idbOp('readwrite',os=>os.put(rec));
+const idbDel=id=>idbOp('readwrite',os=>os.delete(id));
+
+function loadAttachMeta(){
+  return idbAll().then(list=>{
+    ATTACH={};
+    (list||[]).forEach(r=>{ (ATTACH[r.slot]||(ATTACH[r.slot]=[])).push({id:r.id,name:r.name,type:r.type,size:r.size}); });
+  }).catch(()=>{ idbOK=false; });
+}
+function attListFor(slot){ return ATTACH[slot]||[]; }
+
+function attachTo(slot,qid,file){
+  const id='att-'+Date.now()+'-'+Math.round(Math.random()*1e9);
+  const type=file.type||'application/octet-stream';
+  const rec={id,slot,qid,name:file.name,type,size:file.size,blob:file,addedAt:Date.now()};
+  return idbPut(rec).then(()=>{ (ATTACH[slot]||(ATTACH[slot]=[])).push({id,name:file.name,type,size:file.size}); });
+}
+function removeAttach(id,slot){
+  return idbDel(id).then(()=>{ ATTACH[slot]=(ATTACH[slot]||[]).filter(a=>a.id!==id); });
+}
+
+function fileIcon(t){ t=t||''; if(t.includes('pdf'))return '📄'; if(t.startsWith('image/'))return '🖼️'; if(t.includes('word')||t.includes('document'))return '📝'; if(t.includes('sheet')||t.includes('excel')||t.includes('csv'))return '📊'; return '📎'; }
+function humanSize(n){ if(n<1024)return n+' B'; if(n<1048576)return Math.round(n/1024)+' KB'; return (n/1048576).toFixed(1)+' MB'; }
+
+/* Compact attach zone for a slot */
+function attachBlockHTML(slot,qid,a,label){
+  if(!idbOK) return `<div class="mt-2 text-[11px] text-slate-400">Attachments need a modern browser (IndexedDB unavailable).</div>`;
+  const items=attListFor(slot);
+  const chips=items.map(f=>`<span class="inline-flex items-center gap-1.5 text-xs rounded-lg pl-2 pr-1 py-1 bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10">
+    <button data-action="view-att" data-id="${f.id}" data-type="${esc(f.type)}" data-name="${esc(f.name)}" class="inline-flex items-center gap-1 hover:${a.text.split(' ')[0]} max-w-[190px]" title="Open ${esc(f.name)}">${fileIcon(f.type)} <span class="truncate">${esc(f.name)}</span></button>
+    <span class="text-[10px] text-slate-400 shrink-0">${humanSize(f.size)}</span>
+    <button data-action="del-att" data-id="${f.id}" data-slot="${esc(slot)}" title="Remove attachment" class="h-5 w-5 grid place-items-center rounded text-slate-400 hover:text-rose-500 shrink-0">✕</button>
+  </span>`).join('');
+  return `<div class="mt-2 flex flex-wrap items-center gap-1.5">
+    ${label?`<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">${label}</span>`:''}
+    ${chips}
+    <button data-action="attach" data-slot="${esc(slot)}" data-qid="${esc(qid)}" class="inline-flex items-center gap-1 text-xs font-semibold ${a.text} hover:underline">
+      <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg> Attach
+    </button>
+  </div>`;
+}
+
+/* Full-screen live viewer — renders PDFs and images inline */
+function openAttachment(id,type,name){
+  idbGet(id).then(rec=>{
+    if(!rec){ alert('Attachment not found.'); return; }
+    const t=rec.type||type||''; const url=URL.createObjectURL(rec.blob);
+    let viewer;
+    if(t.includes('pdf')) viewer=`<iframe src="${url}" class="flex-1 w-full bg-white" title="${esc(name)}"></iframe>`;
+    else if(t.startsWith('image/')) viewer=`<div class="flex-1 grid place-items-center overflow-auto p-4"><img src="${url}" class="max-w-full max-h-full rounded-lg shadow-2xl" alt="${esc(name)}"></div>`;
+    else viewer=`<div class="flex-1 grid place-items-center text-white text-center p-6"><div><p class="text-5xl mb-3">📎</p><p class="mb-3 text-sm opacity-80">No inline preview for this file type.</p><a href="${url}" download="${esc(name)}" class="underline text-sm">Download ${esc(name)}</a></div></div>`;
+    const wrap=document.createElement('div');
+    wrap.className='fixed inset-0 z-[60] flex flex-col bg-black/80 backdrop-blur-sm';
+    wrap.innerHTML=`<div class="flex items-center justify-between gap-3 px-4 py-3 bg-slate-900 text-white shrink-0">
+        <span class="text-sm font-semibold truncate">${fileIcon(t)} ${esc(name)}</span>
+        <div class="flex items-center gap-2 shrink-0">
+          <a href="${url}" target="_blank" rel="noopener" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Open in new tab</a>
+          <a href="${url}" download="${esc(name)}" class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">Download</a>
+          <button data-close-viewer class="text-xs px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 transition">✕ Close</button>
+        </div>
+      </div>${viewer}`;
+    document.body.appendChild(wrap);
+    const close=()=>{ URL.revokeObjectURL(url); wrap.remove(); document.removeEventListener('keydown',onKey); };
+    const onKey=e=>{ if(e.key==='Escape') close(); };
+    wrap.querySelector('[data-close-viewer]').onclick=close;
+    document.addEventListener('keydown',onKey);
+  }).catch(()=>alert('Could not open attachment.'));
+}
+
+/* wire the shared file picker */
+(function(){
+  const fi=document.getElementById('fileInput');
+  fi.addEventListener('change',()=>{
+    const files=[...fi.files]; if(!files.length||!pendingSlot) return;
+    Promise.all(files.map(f=>attachTo(pendingSlot,pendingQid,f)))
+      .then(()=>{ fi.value=''; refresh(); })
+      .catch(()=>{ alert('Sorry, saving the attachment failed.'); fi.value=''; });
+  });
+})();
+
+/* ============================================================
    ROUTER
    ============================================================ */
 function router(){
@@ -744,20 +858,23 @@ function renderArea(area){
   });
 }
 
-/* Examples: user override (array) wins; else fall back to the base single example */
+/* Examples: user override (array) wins; else fall back to the base single example.
+   Each example carries a stable id so attachments stay linked across edits/reorders. */
 function getExamples(q){
   const st = store.q[q.id] || {};
-  if (Array.isArray(st.examples)) return st.examples;
-  if (q.ex) return [{ label:'💡 Example', text:q.ex }];
-  return [];
+  let arr;
+  if (Array.isArray(st.examples)) arr = st.examples;
+  else if (q.ex) arr = [{ label:'💡 Example', text:q.ex }];
+  else arr = [];
+  return arr.map((ex,idx)=>({ id: ex.id || (q.id+'-ex'+idx), label: ex.label, text: ex.text }));
 }
 function isEdited(id){
   const s = store.q[id];
   return !!(s && (s.qOverride!=null || s.aOverride!=null || Array.isArray(s.examples)));
 }
 /* One editable example row inside the editor */
-function exRowHTML(label, text){
-  return `<div class="ex-row rounded-lg border border-slate-200 dark:border-white/10 p-2.5 mb-2 bg-slate-50/60 dark:bg-black/10">
+function exRowHTML(id, label, text){
+  return `<div class="ex-row rounded-lg border border-slate-200 dark:border-white/10 p-2.5 mb-2 bg-slate-50/60 dark:bg-black/10" data-exid="${esc(id)}">
     <div class="flex items-center gap-2 mb-1.5">
       <input class="ex-label flex-1 text-xs font-semibold rounded bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 px-2 py-1.5 outline-none focus:ring-2 focus:ring-brand-400" value="${esc(label)}" placeholder="Example name (e.g. 💡 Example, Real case, My story)">
       <button type="button" data-action="ex-remove" class="text-[11px] font-semibold text-slate-400 hover:text-rose-500 px-2 py-1 shrink-0">✕ Remove</button>
@@ -782,7 +899,7 @@ function qCard(area, q, a, i, reorderAllowed){
       <textarea data-edit-a="${q.id}" rows="6" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 outline-none focus:ring-2 focus:ring-brand-400">${esc(aText)}</textarea>
 
       <label class="block text-xs font-semibold text-slate-500 mb-1 mt-3">Examples <span class="text-slate-400 font-normal">— rename, edit, add or remove as many as you like</span></label>
-      <div id="ex-rows-${q.id}">${getExamples(q).map(ex=>exRowHTML(ex.label, ex.text)).join('')}</div>
+      <div id="ex-rows-${q.id}">${getExamples(q).map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
       <button type="button" data-action="ex-add" data-id="${q.id}" class="text-xs font-semibold ${a.text} hover:underline">+ Add another example</button>
 
       <div class="flex gap-2 mt-4">
@@ -819,11 +936,14 @@ function qCard(area, q, a, i, reorderAllowed){
       <div class="accordion-body ${s._open?'open':''}" id="body-${q.id}">
         <div class="accordion-inner">
           <div class="pl-8 pr-1 pt-3">
-            <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1">Model answer · practical</p>
+            ${attachBlockHTML(q.id+'::q', q.id, a, '📎 Question files')}
+            <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1 mt-3">Model answer · practical</p>
             <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmt(aText)}</p>
+            ${attachBlockHTML(q.id+'::a', q.id, a, '📎 Answer files')}
             ${getExamples(q).map(ex=>`<div class="mt-3 rounded-xl ${a.soft} border-l-2 border-current ${a.text} px-3.5 py-2.5">
               <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-0.5">${esc(ex.label||'Example')}</p>
-              <p class="text-sm text-slate-600 dark:text-slate-200 whitespace-pre-wrap">${fmt(ex.text)}</p></div>`).join('')}
+              <p class="text-sm text-slate-600 dark:text-slate-200 whitespace-pre-wrap">${fmt(ex.text)}</p>
+              ${attachBlockHTML(q.id+'::e:'+ex.id, q.id, a, '📎')}</div>`).join('')}
             ${q.tip?`<div class="mt-2.5 rounded-xl bg-slate-500/5 border border-slate-300/40 dark:border-white/10 px-3.5 py-2.5">
               <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
               <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
@@ -874,7 +994,7 @@ app.addEventListener('click', e => {
   if (act==='edit-cancel'){ const s=qs(id); s._editing=false; save(); refresh(); return; }
   if (act==='ex-add'){
     const cont = document.getElementById('ex-rows-'+id);
-    if (cont){ cont.insertAdjacentHTML('beforeend', exRowHTML('💡 Example','')); cont.lastElementChild.querySelector('.ex-text').focus(); }
+    if (cont){ cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example','')); cont.lastElementChild.querySelector('.ex-text').focus(); }
     return;
   }
   if (act==='ex-remove'){ const row = btn.closest('.ex-row'); if(row) row.remove(); return; }
@@ -883,6 +1003,7 @@ app.addEventListener('click', e => {
     const av = document.querySelector(`[data-edit-a="${id}"]`).value;
     const cont = document.getElementById('ex-rows-'+id);
     const rows = cont ? [...cont.querySelectorAll('.ex-row')].map(r=>({
+      id: r.dataset.exid,
       label: (r.querySelector('.ex-label').value.trim()) || '💡 Example',
       text: r.querySelector('.ex-text').value.trim()
     })).filter(e=>e.text) : [];
@@ -892,6 +1013,9 @@ app.addEventListener('click', e => {
   if (act==='area-filter'){ const ar=btn.dataset.area; (areaFilter[ar]||(areaFilter[ar]={status:'all',search:''})).status=btn.dataset.status; renderArea(AREA_BY_ID[ar]); return; }
   if (act==='add-open'){ openAdd(btn.dataset.area); return; }
   if (act==='order-reset'){ const ar=btn.dataset.area; if(store.order) delete store.order[ar]; save(); renderArea(AREA_BY_ID[ar]); return; }
+  if (act==='attach'){ pendingSlot=btn.dataset.slot; pendingQid=btn.dataset.qid; const fi=document.getElementById('fileInput'); fi.value=''; fi.click(); return; }
+  if (act==='del-att'){ removeAttach(btn.dataset.id, btn.dataset.slot).then(refresh); return; }
+  if (act==='view-att'){ openAttachment(btn.dataset.id, btn.dataset.type, btn.dataset.name); return; }
   if (act==='delete-custom'){
     const ar=btn.dataset.area;
     if (confirm('Delete this custom question?')){
@@ -1020,7 +1144,7 @@ function openAdd(areaId){
    INIT
    ============================================================ */
 applyTheme();
-router();
+loadAttachMeta().finally(router);
 </script>
 </body>
 </html>
