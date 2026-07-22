@@ -96,6 +96,10 @@
               <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
             </svg>
           </div>
+          <a href="#/history" title="Change history — undo any change" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
+            <span class="hidden sm:inline text-xs font-semibold">History</span>
+          </a>
           <a href="#/vault" title="Attachment vault — all files" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
             <span class="hidden sm:inline text-xs font-semibold">Files</span>
@@ -470,8 +474,8 @@ let store = load();
 function load(){
   try {
     const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { q: raw.q || {}, custom: raw.custom || {}, order: raw.order || {}, attach: raw.attach || {}, theme: raw.theme || 'dark' };
-  } catch { return { q:{}, custom:{}, order:{}, attach:{}, theme:'dark' }; }
+    return { q: raw.q || {}, custom: raw.custom || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], theme: raw.theme || 'dark' };
+  } catch { return { q:{}, custom:{}, order:{}, attach:{}, trash:[], theme:'dark' }; }
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(store)); scheduleSync(); }
 function qs(id){ return store.q[id] || (store.q[id] = {}); }
@@ -580,11 +584,11 @@ function setSyncStatus(state){
 function syncPayload(){
   const q={};
   for(const k in store.q){ const s=Object.assign({},store.q[k]); delete s._open; delete s._editing; if(Object.keys(s).length) q[k]=s; }
-  return { v:2, q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, theme:store.theme };
+  return { v:2, q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[], theme:store.theme };
 }
 function adopt(data){
   if(!data) return;
-  store.q=data.q||{}; store.custom=data.custom||{}; store.order=data.order||{}; store.attach=data.attach||{};
+  store.q=data.q||{}; store.custom=data.custom||{}; store.order=data.order||{}; store.attach=data.attach||{}; store.trash=data.trash||[];
   if(data.theme) store.theme=data.theme;
   localStorage.setItem(KEY, JSON.stringify(store));   // direct write — don't trigger a push
   _lastPayload=JSON.stringify(syncPayload());
@@ -620,6 +624,7 @@ function mergeStates(remoteData, local){
     custom: Object.assign({}, r.custom||{}, local.custom||{}),
     order: Object.assign({}, r.order||{}, local.order||{}),
     attach: mergeAttach(r.attach, local.attach),
+    trash: (function(){ const seen=new Set(), out=[]; [...(local.trash||[]),...(r.trash||[])].forEach(t=>{ if(t&&!seen.has(t.id)){ seen.add(t.id); out.push(t); } }); return out; })(),
     theme: local.theme || r.theme
   };
 }
@@ -680,8 +685,24 @@ function attachTo(slot,qid,file){
     .then(()=>{ if(!store.attach) store.attach={}; (store.attach[slot]||(store.attach[slot]=[])).push({id,name:file.name,type,size:file.size}); save(); });
 }
 function removeAttach(id,slot){
+  // SOFT delete: keep the cloud blob, move metadata to Trash so it can be retrieved
+  const arr=(store.attach&&store.attach[slot])||[];
+  const it=arr.find(a=>a.id===id);
+  if(it){ if(!store.trash) store.trash=[]; store.trash.push({id:it.id,name:it.name,type:it.type,size:it.size,slot,deletedAt:Date.now()}); }
+  if(store.attach&&store.attach[slot]) store.attach[slot]=store.attach[slot].filter(a=>a.id!==id);
+  save();
+  return Promise.resolve();
+}
+function restoreTrash(id){
+  const t=(store.trash||[]).find(x=>x.id===id); if(!t) return;
+  if(!store.attach) store.attach={};
+  if(!(store.attach[t.slot]||[]).some(a=>a.id===t.id)) (store.attach[t.slot]||(store.attach[t.slot]=[])).push({id:t.id,name:t.name,type:t.type,size:t.size});
+  store.trash=store.trash.filter(x=>x.id!==id);
+  save();
+}
+function purgeTrash(id){
   const u=FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id);
-  return fetch(u,{method:'DELETE'}).catch(()=>{}).then(()=>{ if(store.attach&&store.attach[slot]) store.attach[slot]=store.attach[slot].filter(a=>a.id!==id); save(); });
+  return fetch(u,{method:'DELETE'}).catch(()=>{}).then(()=>{ store.trash=(store.trash||[]).filter(x=>x.id!==id); save(); });
 }
 
 function fileIcon(t){ t=t||''; if(t.includes('pdf'))return '📄'; if(t.startsWith('image/'))return '🖼️'; if(t.includes('word')||t.includes('document'))return '📝'; if(t.includes('sheet')||t.includes('excel')||t.includes('csv'))return '📊'; return '📎'; }
@@ -732,10 +753,14 @@ function openAttachment(id,type,name){
 
 /* replace the underlying file of an existing attachment (keeps its id & slot) */
 function replaceAttach(id,slot,file){
+  // upload the new file under a NEW id and keep the old blob (moved to Trash) so it's retrievable
+  const newId='att-'+Date.now()+'-'+Math.round(Math.random()*1e9);
   const type=file.type||'application/octet-stream';
-  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
+  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':newId,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
     .then(r=>{ if(!r.ok) throw new Error('replace failed'); return r.json(); })
-    .then(()=>{ const arr=(store.attach&&store.attach[slot])||[]; const it=arr.find(a=>a.id===id); if(it){ it.name=file.name; it.type=type; it.size=file.size; } save(); });
+    .then(()=>{ const arr=(store.attach&&store.attach[slot])||[]; const it=arr.find(a=>a.id===id);
+      if(it){ if(!store.trash) store.trash=[]; store.trash.push({id:it.id,name:it.name,type:it.type,size:it.size,slot,deletedAt:Date.now(),replaced:true}); it.id=newId; it.name=file.name; it.type=type; it.size=file.size; }
+      save(); });
 }
 
 /* ============================================================
@@ -813,7 +838,7 @@ async function vaultBackupAll(){
 }
 async function vaultDeleteSelected(){
   const list=allAttachments().filter(f=>vaultSel.has(f.id)); if(!list.length) return;
-  if(!confirm('Delete '+list.length+' file(s)? This permanently removes them from every device.')) return;
+  if(!confirm('Move '+list.length+' file(s) to Trash? You can restore them from the Trash or from History.')) return;
   setSyncStatus('syncing');
   for(const f of list){ await removeAttach(f.id,f.slot); }
   vaultSel.clear(); await pushNow(); renderVault();
@@ -885,9 +910,85 @@ function renderVault(){
     </div>
 
     <div class="space-y-2">${rows}</div>
+
+    ${trashSectionHTML()}
   `;
   const vs=document.getElementById('vaultSearch');
   vs.addEventListener('input',e=>{ vaultSearch=e.target.value.trim().toLowerCase(); const p=e.target.selectionStart; renderVault(); const n=document.getElementById('vaultSearch'); if(n){ n.focus(); n.setSelectionRange(p,p); } });
+}
+
+/* ---- Trash: soft-deleted / replaced files, retrievable ---- */
+function trashSectionHTML(){
+  const trash=(store.trash||[]).slice().sort((a,b)=>(b.deletedAt||0)-(a.deletedAt||0));
+  if(!trash.length) return '';
+  const rows=trash.map(t=>{
+    const info=questionInfo((t.slot||'').split('::')[0]);
+    return `<div class="flex items-center gap-3 p-3 rounded-xl border border-slate-200/70 dark:border-white/10 bg-slate-500/5">
+      <span class="text-xl shrink-0 opacity-70">${fileIcon(t.type)}</span>
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold truncate text-slate-500 dark:text-slate-400">${esc(t.name)}</p>
+        <p class="text-[11px] text-slate-400 truncate">${humanSize(t.size)} · ${t.replaced?'replaced':'deleted'} ${relTime(t.deletedAt)} · was on ${esc(info.areaTitle)}</p>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button data-action="trash-restore" data-id="${t.id}" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold border border-emerald-400/40 text-emerald-600 dark:text-emerald-300 bg-emerald-500/5">↩ Restore</button>
+        <button data-action="trash-purge" data-id="${t.id}" title="Delete permanently" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-500/10">🗑</button>
+      </div>
+    </div>`;
+  }).join('');
+  return `<div class="mt-6">
+    <div class="flex items-center gap-2 mb-2"><span class="text-lg">🗑</span><h2 class="font-display font-bold text-base">Trash</h2><span class="text-xs text-slate-400">${trash.length} · retrievable</span></div>
+    <div class="space-y-2">${rows}</div>
+  </div>`;
+}
+
+/* ============================================================
+   CHANGE HISTORY (versioned snapshots · restore/undo)
+   ============================================================ */
+function relTime(ts){ if(!ts) return ''; const s=Math.max(0,Math.round((Date.now()-ts)/1000)); if(s<60)return s+'s ago'; const m=Math.round(s/60); if(m<60)return m+'m ago'; const h=Math.round(m/60); if(h<24)return h+'h ago'; return Math.round(h/24)+'d ago'; }
+function absTime(ts){ try{ return new Date(ts).toLocaleString(); }catch(e){ return ''; } }
+function statLabel(s){ if(!s) return ''; const p=[]; if(s.edits)p.push(s.edits+' edited'); if(s.flags)p.push(s.flags+' flagged'); if(s.done)p.push(s.done+' done'); if(s.notes)p.push(s.notes+' noted'); p.push((s.files||0)+' file'+((s.files===1)?'':'s')); if(s.trash)p.push(s.trash+' trashed'); return p.join(' · '); }
+
+function renderHistory(){
+  const app=document.getElementById('app');
+  app.innerHTML=`
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-brand-500 mb-4 transition">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to areas
+    </a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start gap-4">
+        <span class="h-14 w-14 grid place-items-center rounded-2xl bg-violet-500/10 ring-1 ring-violet-400/25 text-2xl shrink-0">🕑</span>
+        <div class="flex-1 min-w-0">
+          <h1 class="font-display text-xl sm:text-2xl font-extrabold tracking-tight">Change History</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Every save is snapshotted. Restore any version to undo changes — restoring is itself undoable, and files come back too.</p>
+        </div>
+      </div>
+    </div>
+    <div id="histList" class="space-y-2"><div class="text-center py-10 text-slate-400">Loading history…</div></div>
+  `;
+  if(!SYNC_ON){ document.getElementById('histList').innerHTML='<div class="text-center py-10 text-slate-400">History needs the online site.</div>'; return; }
+  fetch('/.netlify/functions/history?code='+encodeURIComponent(syncCode)).then(r=>r.json()).then(d=>{
+    const versions=(d&&d.versions)||[];
+    const el=document.getElementById('histList'); if(!el) return;
+    if(!versions.length){ el.innerHTML='<div class="text-center py-10 text-slate-400"><p class="text-3xl mb-2">🕑</p><p class="font-semibold">No history yet.</p><p class="text-sm">Make a change and it will be versioned here.</p></div>'; return; }
+    el.innerHTML=versions.map((v,i)=>`
+      <div class="flex items-center gap-3 p-3.5 rounded-xl border ${i===0?'border-violet-400/40 bg-violet-500/5':'border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/[.03]'} glass">
+        <span class="h-9 w-9 grid place-items-center rounded-lg bg-violet-500/10 text-violet-500 shrink-0 text-sm font-bold">${i===0?'●':versions.length-i}</span>
+        <div class="min-w-0 flex-1">
+          <p class="text-sm font-semibold">${relTime(v.ts)} ${i===0?'<span class="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-500/15 text-violet-600 dark:text-violet-300 font-bold ml-1">CURRENT</span>':''}</p>
+          <p class="text-[11px] text-slate-400 truncate">${absTime(v.ts)} · ${esc(statLabel(v.s))}</p>
+        </div>
+        ${i===0?'':`<button data-action="hist-restore" data-ts="${v.ts}" class="px-3 py-2 rounded-lg text-xs font-semibold border border-violet-400/40 text-violet-600 dark:text-violet-300 bg-violet-500/5 shrink-0">↩ Restore</button>`}
+      </div>`).join('');
+  }).catch(()=>{ const el=document.getElementById('histList'); if(el) el.innerHTML='<div class="text-center py-10 text-rose-400">Could not load history — check your connection.</div>'; });
+}
+function restoreVersion(ts){
+  if(!confirm('Restore your tracker to this version?\n\nYour current state is saved as a new version first, so you can undo this restore too.')) return;
+  setSyncStatus('syncing');
+  fetch('/.netlify/functions/history?code='+encodeURIComponent(syncCode)+'&ts='+encodeURIComponent(ts)).then(r=>r.json()).then(snap=>{
+    if(!snap||!snap.data){ alert('Could not load that version.'); setSyncStatus('offline'); return; }
+    adopt(snap.data); _lastPayload=null;
+    pushNow().then(()=>{ setSyncStatus('saved'); location.hash='#/'; refresh(); alert('Restored to '+absTime(ts)+' ✓'); });
+  }).catch(()=>{ alert('Restore failed — check your connection.'); setSyncStatus('offline'); });
 }
 
 /* wire the shared file picker + manual refresh button */
@@ -921,6 +1022,7 @@ function router(){
   const m = hash.match(/^#\/a\/([\w-]+)/);
   window.scrollTo({top:0});
   if (hash === '#/vault') { vaultSel=new Set(); renderVault(); }
+  else if (hash === '#/history') { renderHistory(); }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
   setHeaderProgress();
@@ -1299,7 +1401,11 @@ app.addEventListener('click', e => {
   if (act==='vault-view'){ openAttachment(btn.dataset.id, btn.dataset.type, btn.dataset.name); return; }
   if (act==='vault-dl1'){ const f=allAttachments().find(x=>x.id===btn.dataset.id); if(f){ const a=document.createElement('a'); a.href=fileViewUrl(f.id,true); a.download=f.name; document.body.appendChild(a); a.click(); a.remove(); } return; }
   if (act==='vault-rep1'){ replaceTargets=[{id:btn.dataset.id, slot:btn.dataset.slot}]; fileMode='replace'; const fi=document.getElementById('fileInput'); fi.multiple=false; fi.value=''; fi.click(); return; }
-  if (act==='vault-del1'){ if(confirm('Delete this file permanently?')){ removeAttach(btn.dataset.id, btn.dataset.slot).then(()=>{ vaultSel.delete(btn.dataset.id); pushNow(); renderVault(); }); } return; }
+  if (act==='vault-del1'){ if(confirm('Move this file to Trash? You can restore it from the Trash below or from History.')){ removeAttach(btn.dataset.id, btn.dataset.slot).then(()=>{ vaultSel.delete(btn.dataset.id); pushNow(); renderVault(); }); } return; }
+  // ---- trash + history ----
+  if (act==='trash-restore'){ restoreTrash(btn.dataset.id); pushNow(); renderVault(); return; }
+  if (act==='trash-purge'){ if(confirm('Permanently delete this file? This cannot be undone and it will no longer be retrievable.')){ purgeTrash(btn.dataset.id).then(()=>{ pushNow(); renderVault(); }); } return; }
+  if (act==='hist-restore'){ restoreVersion(btn.dataset.ts); return; }
   if (act==='delete-custom'){
     const ar=btn.dataset.area;
     if (confirm('Delete this custom question?')){
@@ -1323,6 +1429,7 @@ app.addEventListener('input', e => {
 function refresh(){
   const hash = location.hash||'#/';
   if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
+  if(hash==='#/history'){ renderHistory(); setHeaderProgress(); return; }
   const m = hash.match(/^#\/a\/([\w-]+)/);
   if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]); else renderHome();
   setHeaderProgress();
