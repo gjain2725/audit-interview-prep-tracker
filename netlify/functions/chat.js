@@ -6,7 +6,7 @@ const json = (obj, status = 200) =>
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
 const DAILY_CAP = parseInt(process.env.CHAT_DAILY_CAP || '800', 10);
 
 const SYSTEM = `You are "Audit Buddy", a friendly, sharp tutor helping a Chartered Accountant (Himanshi) prepare for Big 4 Global Delivery Center (EY GDS, KPMG KGS, PwC AC, Deloitte USI) audit interviews in India.
@@ -23,7 +23,8 @@ How to answer:
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
-  const key = process.env.GEMINI_API_KEY;
+  // Accept a few env-var names (avoid Netlify's auto-injected, invalid GEMINI_API_KEY)
+  const key = process.env.GEMINI_KEY || process.env.Gemini || process.env.GEMINI;
   if (!key) {
     return json({
       reply: "⚠️ The AI tutor isn't switched on yet — a Gemini API key still needs to be added to the site's environment variables. (One-time setup by the site owner.)",
@@ -57,19 +58,27 @@ export default async (req) => {
     generationConfig: { temperature: 0.4, maxOutputTokens: 900 },
   };
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${encodeURIComponent(key)}`;
-    const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      const msg = (data && data.error && data.error.message) || ('HTTP ' + r.status);
-      return json({ reply: "Sorry, I couldn't reach Gemini right now — " + msg });
-    }
-    const cand = (data.candidates || [])[0] || {};
-    const parts = (cand.content && cand.content.parts) || [];
-    const reply = parts.map(p => p.text || '').join('').trim() || "(I didn't get a response — please try rephrasing.)";
-    return json({ reply });
-  } catch (e) {
-    return json({ reply: 'Sorry, something went wrong reaching the AI. Please try again.' });
+  // Try several models and use the first one available on this key's free tier
+  const candidates = [MODEL, 'gemini-flash-latest', 'gemini-flash-lite-latest']
+    .filter((m, i, a) => m && a.indexOf(m) === i);
+  let lastErr = '';
+  for (const model of candidates) {
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok) {
+        const cand = (data.candidates || [])[0] || {};
+        const parts = (cand.content && cand.content.parts) || [];
+        const reply = parts.map(p => p.text || '').join('').trim() || "(I didn't get a response — please try rephrasing.)";
+        return json({ reply, model });
+      }
+      lastErr = (data && data.error && data.error.message) || ('HTTP ' + r.status);
+      // stop early only for a clearly fatal auth/key problem; otherwise try the next model
+      if (/api key not valid|invalid api key|api_key_invalid|permission denied on resource/i.test(lastErr)) {
+        return json({ reply: "Sorry — the API key looks invalid: " + lastErr });
+      }
+    } catch (e) { lastErr = e.message; }
   }
+  return json({ reply: "Sorry — none of the available models worked. Last error: " + lastErr });
 };
