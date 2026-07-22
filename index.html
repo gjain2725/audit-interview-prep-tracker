@@ -126,6 +126,40 @@
     <p>Flags, notes, edits &amp; progress save automatically in your browser.</p>
   </footer>
 
+  <!-- ============ AI TUTOR CHATBOT (Gemini) ============ -->
+  <div id="chatPanel" class="fixed bottom-24 right-4 sm:right-6 z-[80] w-[calc(100vw-2rem)] sm:w-[380px] h-[70vh] sm:h-[540px] max-h-[600px] rounded-2xl overflow-hidden shadow-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 flex-col hidden">
+    <div class="flex items-center justify-between gap-2 px-4 py-3 bg-gradient-to-r from-brand-500 to-brand-700 text-white shrink-0">
+      <div class="flex items-center gap-2 min-w-0">
+        <span class="h-8 w-8 grid place-items-center rounded-full bg-white/20 text-lg shrink-0">🤖</span>
+        <div class="min-w-0">
+          <p class="font-display font-bold text-sm leading-tight">Audit Buddy</p>
+          <p class="text-[10px] text-white/80 leading-tight">AI tutor · powered by Gemini</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-1 shrink-0">
+        <button id="chatClear" title="Clear chat" class="h-7 w-7 grid place-items-center rounded-lg hover:bg-white/20 transition text-sm">🧹</button>
+        <button id="chatClose" title="Close" class="h-7 w-7 grid place-items-center rounded-lg hover:bg-white/20 transition">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="chatMsgs" class="flex-1 overflow-y-auto p-3 space-y-3 bg-slate-50 dark:bg-slate-950/40"></div>
+    <div class="p-2.5 border-t border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 shrink-0">
+      <div class="flex items-end gap-2">
+        <textarea id="chatInput" rows="1" placeholder="Ask a doubt… e.g. Explain Ind AS 116 in 30s" class="flex-1 resize-none max-h-28 text-sm rounded-xl bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"></textarea>
+        <button id="chatSend" class="h-10 w-10 grid place-items-center rounded-xl bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow shrink-0 disabled:opacity-50">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
+        </button>
+      </div>
+      <p class="text-[10px] text-slate-400 mt-1.5 text-center">AI can make mistakes — verify important points.</p>
+    </div>
+  </div>
+  <button id="chatFab" title="Ask the AI tutor" class="fixed bottom-5 right-4 sm:right-6 z-[80] h-14 px-4 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 to-brand-700 text-white shadow-2xl shadow-brand-600/40 hover:scale-105 active:scale-95 transition ring-2 ring-white/20">
+    <span class="text-xl">🤖</span>
+    <span class="font-semibold text-sm hidden sm:inline">Ask AI</span>
+    <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse"></span>
+  </button>
+
 <script>
 /* ============================================================
    DATA — areas grouped by category. Each question: {id,q,a,ex?,tip?}
@@ -1531,6 +1565,76 @@ function openAdd(areaId){
   };
   document.getElementById('addQ').focus();
 }
+
+/* ============================================================
+   AI TUTOR CHATBOT (Gemini via /.netlify/functions/chat)
+   ============================================================ */
+(function(){
+  const CHAT_KEY='mb4_chat';
+  const fab=document.getElementById('chatFab');
+  const panel=document.getElementById('chatPanel');
+  const msgsEl=document.getElementById('chatMsgs');
+  const input=document.getElementById('chatInput');
+  const sendBtn=document.getElementById('chatSend');
+  if(!fab||!panel) return;
+  let chat=[]; let busy=false;
+  try{ chat=JSON.parse(localStorage.getItem(CHAT_KEY))||[]; }catch(e){ chat=[]; }
+
+  const SUGGEST=[
+    'Explain Ind AS 115 in 30 seconds',
+    'Auditor responsibilities for fraud (SA 240)?',
+    'How do I answer "tell me about yourself"?',
+    'Difference: TOC vs substantive procedures?'
+  ];
+
+  function chatEsc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function fmtBot(t){
+    // light markdown: **bold**, `code`, and dash bullets; preserve line breaks
+    let h=chatEsc(t);
+    h=h.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/`([^`]+)`/g,'<code class="px-1 rounded bg-black/10 dark:bg-white/10">$1</code>');
+    return h;
+  }
+  function bubble(role,html,extra){
+    if(role==='user') return `<div class="flex justify-end"><div class="max-w-[85%] rounded-2xl rounded-br-sm bg-brand-500 text-white px-3.5 py-2 text-sm whitespace-pre-wrap">${html}</div></div>`;
+    return `<div class="flex justify-start"><div class="max-w-[90%] rounded-2xl rounded-bl-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3.5 py-2 text-sm text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">${html}${extra||''}</div></div>`;
+  }
+  function render(){
+    if(!chat.length){
+      msgsEl.innerHTML=`<div class="text-center pt-4 pb-2">
+        <div class="text-4xl mb-2">🤖</div>
+        <p class="font-display font-bold text-slate-700 dark:text-slate-200">Hi! I'm your Audit Buddy.</p>
+        <p class="text-xs text-slate-400 mt-1 mb-3">Ask me anything about audit, Ind AS, standards, or interview answers.</p>
+        <div class="flex flex-col gap-1.5">${SUGGEST.map(s=>`<button data-suggest="${chatEsc(s)}" class="text-left text-xs px-3 py-2 rounded-lg bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:border-brand-400 transition">${chatEsc(s)}</button>`).join('')}</div>
+      </div>`;
+      msgsEl.querySelectorAll('[data-suggest]').forEach(b=>b.addEventListener('click',()=>{ input.value=b.dataset.suggest; send(); }));
+      return;
+    }
+    msgsEl.innerHTML=chat.map(m=>bubble(m.role, m.role==='user'?chatEsc(m.text):fmtBot(m.text))).join('')
+      + (busy?`<div class="flex justify-start"><div class="rounded-2xl rounded-bl-sm bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 px-4 py-3"><span class="inline-flex gap-1"><span class="h-2 w-2 rounded-full bg-slate-400 animate-bounce"></span><span class="h-2 w-2 rounded-full bg-slate-400 animate-bounce" style="animation-delay:.15s"></span><span class="h-2 w-2 rounded-full bg-slate-400 animate-bounce" style="animation-delay:.3s"></span></span></div></div>`:'');
+    msgsEl.scrollTop=msgsEl.scrollHeight;
+  }
+  function save(){ try{ localStorage.setItem(CHAT_KEY, JSON.stringify(chat.slice(-40))); }catch(e){} }
+
+  function send(){
+    const text=(input.value||'').trim();
+    if(!text||busy) return;
+    chat.push({role:'user', text}); input.value=''; input.style.height='auto';
+    busy=true; render(); save();
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:chat})})
+      .then(r=>r.json())
+      .then(d=>{ busy=false; chat.push({role:'model', text:(d&&d.reply)||"Sorry, I didn't catch that."}); render(); save(); })
+      .catch(()=>{ busy=false; chat.push({role:'model', text:"I couldn't reach the server — check your connection and try again."}); render(); save(); });
+  }
+
+  function open(){ panel.classList.remove('hidden'); panel.classList.add('flex'); fab.classList.add('hidden'); render(); setTimeout(()=>input.focus(),50); }
+  function close(){ panel.classList.add('hidden'); panel.classList.remove('flex'); fab.classList.remove('hidden'); }
+  fab.addEventListener('click',open);
+  document.getElementById('chatClose').addEventListener('click',close);
+  document.getElementById('chatClear').addEventListener('click',()=>{ chat=[]; save(); render(); });
+  sendBtn.addEventListener('click',send);
+  input.addEventListener('keydown',e=>{ if(e.key==='Enter'&&!e.shiftKey){ e.preventDefault(); send(); } });
+  input.addEventListener('input',()=>{ input.style.height='auto'; input.style.height=Math.min(input.scrollHeight,112)+'px'; });
+})();
 
 /* ============================================================
    INIT
