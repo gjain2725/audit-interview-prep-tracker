@@ -598,29 +598,67 @@ function pushNow(){
     .then(r=>r.json()).then(r=>{ if(r&&r.updated_at) localStorage.setItem(TS_KEY,Date.parse(r.updated_at)); setSyncStatus('saved'); })
     .catch(()=>{ _lastPayload=null; setSyncStatus('offline'); });
 }
-function pullAndMerge(){
+const INIT_KEY='mb4_shared_init';
+function cleanQ(q){ const o={}; for(const k in (q||{})){ const s=Object.assign({},q[k]); delete s._open; delete s._editing; if(Object.keys(s).length) o[k]=s; } return o; }
+function mergeAttach(ra,la){
+  const out=Object.assign({},ra||{});
+  for(const slot in (la||{})){
+    const seen=new Set((out[slot]||[]).map(a=>a.id));
+    out[slot]=(out[slot]||[]).concat((la[slot]||[]).filter(a=>!seen.has(a.id)));
+  }
+  return out;
+}
+function mergeStates(remoteData, local){
+  const r=remoteData||{};
+  return {
+    v:2,
+    q: Object.assign({}, r.q||{}, cleanQ(local.q)),       // local edits win per key
+    custom: Object.assign({}, r.custom||{}, local.custom||{}),
+    order: Object.assign({}, r.order||{}, local.order||{}),
+    attach: mergeAttach(r.attach, local.attach),
+    theme: local.theme || r.theme
+  };
+}
+
+// force=true  -> pull latest and let remote win (manual refresh / tab focus)
+// force=false -> load-time reconcile; first sync on a device MERGES so nothing is lost
+function pullAndMerge(force){
   if(!SYNC_ON){ setSyncStatus('local'); return Promise.resolve(); }
   setSyncStatus('syncing');
   return fetch(SYNC_URL+'?code='+encodeURIComponent(syncCode)).then(r=>r.json()).then(async remote=>{
-    if(remote && remote.data){
-      const remoteTs=Date.parse(remote.updated_at||0), localTs=+(localStorage.getItem(TS_KEY)||0);
-      if(remoteTs>=localTs){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); setSyncStatus('saved'); }
-      else { await migrateLocal(); await pushNow(); refresh(); }
-    } else { await migrateLocal(); await pushNow(); refresh(); }   // seed a brand-new code
+    const hasRemote = remote && remote.data;
+    const remoteTs = hasRemote ? Date.parse(remote.updated_at||0) : 0;
+    const localTs = +(localStorage.getItem(TS_KEY)||0);
+    const firstShared = !localStorage.getItem(INIT_KEY);
+    if(force && !firstShared){
+      if(hasRemote){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); }
+      setSyncStatus('saved'); return;
+    }
+    if(localTs===0 || firstShared){
+      // first sync on this device — migrate local files up and MERGE, never clobber
+      await migrateLocal(firstShared);
+      adopt(mergeStates(hasRemote?remote.data:null, store));
+      await pushNow(); refresh();
+      localStorage.setItem(INIT_KEY,'1');
+      return;
+    }
+    if(hasRemote && remoteTs>localTs){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); setSyncStatus('saved'); }
+    else { await pushNow(); refresh(); }
   }).catch(()=>setSyncStatus('offline'));
 }
 
-/* ---- migrate any pre-cloud IndexedDB files up to the cloud (one-time) ---- */
-async function migrateLocal(){
+/* ---- migrate pre-cloud IndexedDB files up to the shared cloud store ---- */
+async function migrateLocal(force){
   let list=[]; try{ list=await idbAll(); }catch{ return; }
   if(!store.attach) store.attach={};
   for(const rec of list){
     if(!rec||!rec.slot||!rec.blob) continue;
     const arr=store.attach[rec.slot]||[];
-    if(arr.some(a=>a.id===rec.id)) continue;
+    const already=arr.some(a=>a.id===rec.id);
+    if(already && !force) continue;             // force re-uploads even if metadata exists (version transition)
     try{
       await fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':rec.id,'x-file-name':encodeURIComponent(rec.name||'file'),'x-file-type':rec.type||'application/octet-stream'},body:rec.blob});
-      (store.attach[rec.slot]||(store.attach[rec.slot]=[])).push({id:rec.id,name:rec.name,type:rec.type,size:rec.size});
+      if(!already) (store.attach[rec.slot]||(store.attach[rec.slot]=[])).push({id:rec.id,name:rec.name,type:rec.type,size:rec.size});
     }catch{}
   }
   localStorage.setItem(KEY, JSON.stringify(store));
@@ -698,7 +736,7 @@ function openAttachment(id,type,name){
       .catch(()=>{ alert('Sorry, uploading the attachment failed. Check your connection and try again.'); fi.value=''; refresh(); });
   });
   // "Sync" button now just pulls the latest shared data on demand
-  const sb=document.getElementById('syncBtn'); if(sb) sb.addEventListener('click',()=>{ if(SYNC_ON){ localStorage.setItem(TS_KEY,'0'); _lastPayload=null; pullAndMerge(); } });
+  const sb=document.getElementById('syncBtn'); if(sb) sb.addEventListener('click',()=>{ if(SYNC_ON) pullAndMerge(true); });
 })();
 
 /* ============================================================
@@ -1211,7 +1249,7 @@ if(SYNC_ON){
   pullAndMerge();                 // reconcile with the shared cloud state
   // near-live: pull the latest shared data whenever the tab regains focus
   document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='visible' && !_syncTimer){ localStorage.setItem(TS_KEY,'0'); _lastPayload=null; pullAndMerge(); }
+    if(document.visibilityState==='visible' && !_syncTimer) pullAndMerge(true);
   });
 }
 </script>
