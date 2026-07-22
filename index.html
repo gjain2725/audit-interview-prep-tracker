@@ -96,7 +96,7 @@
               <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
             </svg>
           </div>
-          <button id="syncBtn" title="Cloud sync across devices" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
+          <button id="syncBtn" title="Shared workspace — click to pull the latest changes" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
             <span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span>
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a5 5 0 0 1-.5-9.98 7 7 0 0 1 13.4 2A4.5 4.5 0 0 1 18.5 18H7Z"/></svg>
             <span id="syncStatus" class="hidden sm:inline text-xs font-semibold text-slate-400">Local</span>
@@ -535,15 +535,17 @@ function setHeaderProgress(){
 
 /* ============================================================
    CLOUD SYNC (Netlify Functions + Blobs) + ATTACHMENTS
-   State (flags/notes/edits/order/attachment-metadata) syncs as one JSON blob
-   keyed by a private sync code. Attachment files live in Netlify Blobs.
+   Single SHARED workspace — no sync code. Everyone with the link reads and
+   writes the same state; attachment files live in Netlify Blobs.
    Slot keys:  <qid>::q (question) | <qid>::a (answer) | <qid>::e:<exId> (example)
    ============================================================ */
 const SYNC_URL='/.netlify/functions/sync';
 const FILES_URL='/.netlify/functions/files';
-const CODE_KEY='mb4_code', TS_KEY='mb4_ts';
+const TS_KEY='mb4_ts';
+const SHARED_CODE='mb4-shared-workspace';   // one fixed key for everyone
 const SYNC_ON = location.protocol==='http:' || location.protocol==='https:';
-let syncCode=null, pendingSlot=null, pendingQid=null;
+const syncCode = SHARED_CODE;
+let pendingSlot=null, pendingQid=null;
 let _syncTimer=null, _lastPayload=null;
 
 /* legacy IndexedDB (read-only) — only used to migrate pre-cloud attachments up */
@@ -560,16 +562,6 @@ function openDB(){
   });
 }
 const idbAll=()=>openDB().then(db=>new Promise((res,rej)=>{ const rq=db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }));
-
-/* ---- sync code ---- */
-function genCode(){
-  const bytes=new Uint8Array(12);
-  if(window.crypto&&crypto.getRandomValues) crypto.getRandomValues(bytes); else for(let i=0;i<12;i++) bytes[i]=Math.floor(Math.random()*256);
-  const chars='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s='';
-  for(const b of bytes) s+=chars[b%chars.length];
-  return s.replace(/(.{4})(.{4})(.{4})/,'$1-$2-$3');
-}
-function ensureCode(){ syncCode=localStorage.getItem(CODE_KEY); if(!syncCode){ syncCode=genCode(); localStorage.setItem(CODE_KEY,syncCode); } return syncCode; }
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -634,13 +626,6 @@ async function migrateLocal(){
   localStorage.setItem(KEY, JSON.stringify(store));
 }
 
-/* ---- link this device to an existing code (used on the phone) ---- */
-function linkDevice(code){
-  code=(code||'').trim().toUpperCase(); if(!code) return;
-  syncCode=code; localStorage.setItem(CODE_KEY,code); localStorage.setItem(TS_KEY,'0'); _lastPayload=null;
-  pullAndMerge();
-}
-
 /* ---- attachment file ops (cloud) ---- */
 function fileViewUrl(id,dl){ return FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id)+(dl?'&dl=1':''); }
 function attListFor(slot){ return (store.attach&&store.attach[slot])||[]; }
@@ -702,39 +687,7 @@ function openAttachment(id,type,name){
   document.addEventListener('keydown',onKey);
 }
 
-/* ---- sync modal (share/link devices) ---- */
-function openSyncModal(){
-  const code=ensureCode();
-  const wrap=document.createElement('div');
-  wrap.className='fixed inset-0 z-[70] grid place-items-center p-4 bg-black/50 backdrop-blur-sm';
-  wrap.innerHTML=`<div class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
-    <h3 class="font-display font-extrabold text-lg mb-1">☁️ Cloud sync</h3>
-    <p class="text-xs text-slate-500 dark:text-slate-400 mb-4">Your notes, flags, edits, ordering and attachments sync across every device that uses the same sync code.</p>
-    <label class="block text-xs font-semibold text-slate-500 mb-1">This device's sync code</label>
-    <div class="flex gap-2 mb-4">
-      <input id="syncCodeShow" readonly value="${esc(code)}" class="flex-1 font-mono text-sm tracking-wider rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none" />
-      <button id="syncCopy" class="px-3 py-2.5 rounded-lg text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Copy</button>
-    </div>
-    <div class="rounded-xl bg-brand-500/5 border border-brand-400/20 p-3 mb-4 text-xs text-slate-600 dark:text-slate-300">
-      📱 <b>On your phone:</b> open <b>missionbig4.netlify.app</b>, tap <b>Sync</b>, paste this code below and Link.
-    </div>
-    <label class="block text-xs font-semibold text-slate-500 mb-1">Link this device to a code</label>
-    <div class="flex gap-2">
-      <input id="syncCodeIn" placeholder="XXXX-XXXX-XXXX" class="flex-1 font-mono text-sm tracking-wider rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
-      <button id="syncLink" class="px-3 py-2.5 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Link</button>
-    </div>
-    <p class="text-[11px] text-slate-400 mt-2">Linking pulls that code's data onto this device (replacing what's here). Keep your code private — anyone with it can see your prep.</p>
-    <div class="flex justify-end mt-4"><button id="syncClose" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button></div>
-  </div>`;
-  document.body.appendChild(wrap);
-  const close=()=>wrap.remove();
-  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
-  wrap.querySelector('#syncClose').onclick=close;
-  wrap.querySelector('#syncCopy').onclick=()=>{ const i=wrap.querySelector('#syncCodeShow'); i.select(); try{navigator.clipboard.writeText(i.value);}catch(_){ document.execCommand('copy'); } const b=wrap.querySelector('#syncCopy'); b.textContent='Copied!'; setTimeout(()=>b.textContent='Copy',1500); };
-  wrap.querySelector('#syncLink').onclick=()=>{ const v=wrap.querySelector('#syncCodeIn').value; if(!v.trim()) return; if(confirm('Link this device to code '+v.trim().toUpperCase()+'? Data currently on this device will be replaced by the linked data.')){ close(); linkDevice(v); } };
-}
-
-/* wire the shared file picker */
+/* wire the shared file picker + manual refresh button */
 (function(){
   const fi=document.getElementById('fileInput');
   fi.addEventListener('change',()=>{
@@ -744,7 +697,8 @@ function openSyncModal(){
       .then(()=>{ fi.value=''; refresh(); pushNow(); })
       .catch(()=>{ alert('Sorry, uploading the attachment failed. Check your connection and try again.'); fi.value=''; refresh(); });
   });
-  const sb=document.getElementById('syncBtn'); if(sb) sb.addEventListener('click',openSyncModal);
+  // "Sync" button now just pulls the latest shared data on demand
+  const sb=document.getElementById('syncBtn'); if(sb) sb.addEventListener('click',()=>{ if(SYNC_ON){ localStorage.setItem(TS_KEY,'0'); _lastPayload=null; pullAndMerge(); } });
 })();
 
 /* ============================================================
@@ -1250,11 +1204,16 @@ function openAdd(areaId){
    INIT
    ============================================================ */
 if(!store.attach) store.attach={};
-ensureCode();
 applyTheme();
 router();                 // render immediately from local cache
 setSyncStatus(SYNC_ON?'syncing':'local');
-if(SYNC_ON) pullAndMerge();   // then reconcile with the cloud
+if(SYNC_ON){
+  pullAndMerge();                 // reconcile with the shared cloud state
+  // near-live: pull the latest shared data whenever the tab regains focus
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState==='visible' && !_syncTimer){ localStorage.setItem(TS_KEY,'0'); _lastPayload=null; pullAndMerge(); }
+  });
+}
 </script>
 </body>
 </html>
