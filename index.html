@@ -638,6 +638,7 @@ function pullAndMerge(force){
       // first sync on this device — migrate local files up and MERGE, never clobber
       await migrateLocal(firstShared);
       adopt(mergeStates(hasRemote?remote.data:null, store));
+      _lastPayload=null;                 // force the merged state to be written to the cloud
       await pushNow(); refresh();
       localStorage.setItem(INIT_KEY,'1');
       return;
