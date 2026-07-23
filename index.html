@@ -505,6 +505,14 @@ const AREAS = [
 const AREA_BY_ID = Object.fromEntries(AREAS.map(a => [a.id, a]));
 const CAT_BY_ID  = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 function areaAccent(area){ return ACCENTS[CAT_BY_ID[area.cat].accent]; }
+function areaMeta(area){
+  const saved=(store.areas&&store.areas[area.id])||{};
+  return Object.assign({},area,{
+    title:(saved.title||area.title).trim(),
+    blurb:(saved.blurb||area.blurb).trim(),
+    icon:(saved.icon||area.icon).trim()
+  });
+}
 
 /* ============================================================
    STATE (localStorage)
@@ -514,8 +522,8 @@ let store = load();
 function load(){
   try {
     const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { q: raw.q || {}, custom: raw.custom || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], theme: raw.theme || 'dark' };
-  } catch { return { q:{}, custom:{}, order:{}, attach:{}, trash:[], theme:'dark' }; }
+    return { q: raw.q || {}, custom: raw.custom || {}, areas: raw.areas || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], theme: raw.theme || 'dark' };
+  } catch { return { q:{}, custom:{}, areas:{}, order:{}, attach:{}, trash:[], theme:'dark' }; }
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(store)); scheduleSync(); }
 function qs(id){ return store.q[id] || (store.q[id] = {}); }
@@ -569,6 +577,7 @@ function applyTheme(){
    HELPERS
    ============================================================ */
 function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function attrEsc(s){ return esc(s).replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 /* Just escape — newlines/spacing are preserved by `whitespace-pre-wrap` on the container,
    so pasted paragraphs, blank lines and indentation render exactly as entered. */
 function fmt(s){ return esc(s); }
@@ -577,6 +586,50 @@ const RICH_TAGS=new Set(['P','BR','DIV','STRONG','B','EM','I','U','S','H2','H3',
 function isRichAnswer(s){ return typeof s==='string' && s.startsWith(RICH_PREFIX); }
 function richBody(s){ return isRichAnswer(s) ? s.slice(RICH_PREFIX.length) : ''; }
 function plainToRichHTML(s){ return esc(s).replace(/\r\n?/g,'\n').replace(/\n/g,'<br>'); }
+function looksLikeMarkdown(s){
+  const text=String(s||'');
+  return /\*\*[^*\n]+\*\*|__[^_\n]+__|(?:^|\n)#{1,3}\s|(?:^|\n)\s*[-*]\s+|(?:^|\n)\s*\d+[.)]\s+/.test(text);
+}
+function markdownInlineHTML(text){
+  let s=esc(text);
+  s=s.replace(/\*\*([^*\n]+?)\*\*/g,'<strong>$1</strong>').replace(/__([^_\n]+?)__/g,'<strong>$1</strong>');
+  s=s.replace(/(^|[\s(])\*([^*\n]+?)\*(?=$|[\s).,;:!?])/g,'$1<em>$2</em>');
+  return s.replace(/\*\*/g,'').replace(/__/g,'');
+}
+function markdownToRichHTML(text){
+  const raw=String(text||'').replace(/\r\n?/g,'\n').trim();
+  if(!raw) return '';
+  const wholeTable=markdownTableHTML(raw); if(wholeTable) return sanitizeRichHTML(wholeTable);
+  const out=[]; let listType=null;
+  const closeList=()=>{ if(listType){ out.push(`</${listType}>`); listType=null; } };
+  raw.split('\n').forEach(line=>{
+    const trimmed=line.trim();
+    if(!trimmed){ closeList(); return; }
+    const bullet=trimmed.match(/^[-*]\s+(.+)$/), numbered=trimmed.match(/^\d+[.)]\s+(.+)$/);
+    if(bullet||numbered){
+      const type=bullet?'ul':'ol'; if(listType!==type){ closeList(); listType=type; out.push(`<${type}>`); }
+      out.push(`<li>${markdownInlineHTML((bullet||numbered)[1])}</li>`); return;
+    }
+    closeList();
+    const heading=trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if(heading){ out.push(`<${heading[1].length===1?'h2':'h3'}>${markdownInlineHTML(heading[2])}</${heading[1].length===1?'h2':'h3'}>`); return; }
+    const quote=trimmed.match(/^>\s?(.+)$/);
+    if(quote){ out.push(`<blockquote>${markdownInlineHTML(quote[1])}</blockquote>`); return; }
+    out.push(`<p>${markdownInlineHTML(trimmed)}</p>`);
+  });
+  closeList();
+  return sanitizeRichHTML(out.join(''));
+}
+function aiRichAnswer(text){ return RICH_PREFIX+markdownToRichHTML(text); }
+function aiPlainText(text){ return answerPlainText(aiRichAnswer(text)); }
+function convertMarkdownMarkers(root){
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  const nodes=[]; while(walker.nextNode()) if(/\*\*[^*\n]+\*\*|__[^_\n]+__/.test(walker.currentNode.nodeValue||'')) nodes.push(walker.currentNode);
+  nodes.forEach(node=>{
+    const temp=document.createElement('span'); temp.innerHTML=markdownInlineHTML(node.nodeValue||'');
+    node.replaceWith(...temp.childNodes);
+  });
+}
 function safeRichColor(value){
   const v=String(value||'').trim().toLowerCase();
   if(/^#[0-9a-f]{3,8}$/.test(v) || /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(v)) return v;
@@ -625,14 +678,16 @@ function sanitizeRichHTML(html){
 }
 function richHTMLWithImages(html){
   const box=document.createElement('div'); box.innerHTML=sanitizeRichHTML(html);
+  convertMarkdownMarkers(box);
   box.querySelectorAll('img[data-mb4-image]').forEach(img=>{ img.src=fileViewUrl(img.getAttribute('data-mb4-image')); });
   return box.innerHTML;
 }
-function answerToEditorHTML(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : plainToRichHTML(s); }
-function fmtAnswer(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : fmt(s); }
+function answerToEditorHTML(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : (looksLikeMarkdown(s)?markdownToRichHTML(s):plainToRichHTML(s)); }
+function fmtAnswer(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : (looksLikeMarkdown(s)?markdownToRichHTML(s):fmt(s)); }
 function answerPlainText(s){
-  if(!isRichAnswer(s)) return String(s==null?'':s);
-  const box=document.createElement('div'); box.innerHTML=sanitizeRichHTML(richBody(s));
+  if(!isRichAnswer(s) && !looksLikeMarkdown(s)) return String(s==null?'':s);
+  const box=document.createElement('div'); box.innerHTML=isRichAnswer(s)?sanitizeRichHTML(richBody(s)):markdownToRichHTML(s);
+  convertMarkdownMarkers(box);
   box.querySelectorAll('br').forEach(el=>el.replaceWith('\n'));
   box.querySelectorAll('td,th').forEach(el=>el.append('\t'));
   box.querySelectorAll('tr,p,div,h2,h3,li,blockquote').forEach(el=>el.append('\n'));
@@ -711,7 +766,7 @@ function saveAuth(){ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }
 function isAdmin(){ return auth.role==='admin'; }
 function authed(){ return auth.role==='admin'||auth.role==='member'; }
 function acct(action, extra){ return fetch(ACCOUNT_URL,{method:'POST',headers:Object.assign({'content-type':'application/json'}, auth.token?{'x-auth':auth.token}:{}),body:JSON.stringify(Object.assign({action},extra||{}))}).then(r=>r.json()); }
-function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
+function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.areas={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -726,7 +781,7 @@ function setSyncStatus(state){
 function buildContent(){
   const q={};
   for(const id in store.q){ const v=store.q[id]||{}; const c={}; if(v.qOverride!=null)c.qOverride=v.qOverride; if(v.aOverride!=null)c.aOverride=v.aOverride; if(Array.isArray(v.examples))c.examples=v.examples; if(Object.keys(c).length)q[id]=c; }
-  return { q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[] };
+  return { q, custom:store.custom||{}, areas:store.areas||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[] };
 }
 function buildPstate(){
   const q={};
@@ -745,12 +800,12 @@ function pushNow(){
   return Promise.all(jobs).then(()=>setSyncStatus('saved')).catch(()=>{ _lastContent=null; _lastPstate=null; setSyncStatus('offline'); });
 }
 function applyCloud(content, ps){
-  content=content||{q:{},custom:{},order:{},attach:{},trash:[]};
+  content=content||{q:{},custom:{},areas:{},order:{},attach:{},trash:[]};
   ps=ps||{};
   store.q={};
   for(const id in (content.q||{})) store.q[id]=Object.assign({}, content.q[id]);
   for(const id in ps){ store.q[id]=Object.assign(store.q[id]||{}, ps[id]); }
-  store.custom=content.custom||{}; store.order=content.order||{}; store.attach=content.attach||{}; store.trash=content.trash||[];
+  store.custom=content.custom||{}; store.areas=content.areas||{}; store.order=content.order||{}; store.attach=content.attach||{}; store.trash=content.trash||[];
   _lastContent=JSON.stringify(buildContent()); _lastPstate=JSON.stringify(buildPstate());
   localStorage.setItem(KEY, JSON.stringify(store));
 }
@@ -861,8 +916,8 @@ function replaceAttach(id,slot,file){
 let vaultSel=new Set(), vaultSearch='', fileMode='attach', replaceTargets=[];
 
 function questionInfo(qid){
-  for(const a of AREAS){ const q=a.questions.find(x=>x.id===qid); if(q){ const ov=store.q[qid]&&store.q[qid].qOverride; return {areaId:a.id, areaTitle:a.title, areaIcon:a.icon, cat:a.cat, qTitle: ov||q.q}; } }
-  for(const areaId in (store.custom||{})){ const c=(store.custom[areaId]||[]).find(x=>x.id===qid); if(c){ const a=AREA_BY_ID[areaId]; return {areaId, areaTitle:a?a.title:areaId, areaIcon:a?a.icon:'📄', cat:a?a.cat:'', qTitle:c.q||qid}; } }
+  for(const a of AREAS){ const q=a.questions.find(x=>x.id===qid); if(q){ const ov=store.q[qid]&&store.q[qid].qOverride, m=areaMeta(a); return {areaId:a.id, areaTitle:m.title, areaIcon:m.icon, cat:a.cat, qTitle: ov||q.q}; } }
+  for(const areaId in (store.custom||{})){ const c=(store.custom[areaId]||[]).find(x=>x.id===qid); if(c){ const a=AREA_BY_ID[areaId], m=a?areaMeta(a):null; return {areaId, areaTitle:m?m.title:areaId, areaIcon:m?m.icon:'📄', cat:a?a.cat:'', qTitle:c.q||qid}; } }
   return {areaId:null, areaTitle:'(unknown)', areaIcon:'❓', cat:'', qTitle:qid};
 }
 function allAttachments(){
@@ -921,7 +976,8 @@ function buildPrintHtml(){
           + (q.tip?`<p class="qt"><b>Interviewer's tip:</b> ${pdfEsc(q.tip)}</p>`:'')
           + `</div>`;
       });
-      areaHtml+=`<h3>${pdfEsc(area.icon+'  '+area.title)}</h3>${qHtml}`;
+      const meta=areaMeta(area);
+      areaHtml+=`<h3>${pdfEsc(meta.icon+'  '+meta.title)}</h3>${qHtml}`;
     });
     if(areaHtml) sections+=`<h2>${pdfEsc(cat.icon+'  '+cat.label)}</h2>${areaHtml}`;
   });
@@ -1024,9 +1080,10 @@ async function bulkDraftArea(areaId){
   const area=AREA_BY_ID[areaId]; if(!area) return;
   const targets=orderedAreaQuestions(area).filter(q=>!isEdited(q.id));
   if(!targets.length){ alert('Every question in this area already has an edited/AI answer. Nothing to draft.'); return; }
-  if(!confirm('Draft '+targets.length+' answer(s) in "'+area.title+'" with AI?\n\nEach is saved automatically — you can edit, refine or undo any afterwards.')) return;
+  const meta=areaMeta(area);
+  if(!confirm('Draft '+targets.length+' answer(s) in "'+meta.title+'" with AI?\n\nEach is saved automatically — you can edit, refine or undo any afterwards.')) return;
   bulkCancel=false;
-  const modal=showBulkModal(area.title, targets.length);
+  const modal=showBulkModal(meta.title, targets.length);
   let done=0, ok=0, failed=0, stopped='';
   for(const q of targets){
     if(bulkCancel){ stopped=' (cancelled)'; break; }
@@ -1034,7 +1091,7 @@ async function bulkDraftArea(areaId){
     try{
       const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:answerPlainText(getText(q,'a'))})}).then(r=>r.json());
       if(d && d.error && /daily limit/i.test(d.error)){ stopped=' — daily AI limit reached'; break; }
-      if(d && d.answer){ const s=qs(q.id); s.aOverride=d.answer; if(d.example) s.examples=[{id:q.id+'-ex'+Date.now(),label:'💡 Example',text:d.example}]; save(); ok++; }
+      if(d && d.answer){ const s=qs(q.id); s.aOverride=aiRichAnswer(d.answer); if(d.example) s.examples=[{id:q.id+'-ex'+Date.now(),label:'💡 Example',text:aiPlainText(d.example)}]; save(); ok++; }
       else failed++;
     }catch(e){ failed++; }
     done++;
@@ -1797,7 +1854,8 @@ function candidateProgress(record){
   const areas=AREAS.map(area=>{
     const ids=areaQuestions(area).map(q=>q.id);
     const areaDone=ids.filter(id=>state[id]&&state[id].done).length;
-    return {id:area.id,title:area.title,icon:area.icon,done:areaDone,total:ids.length,pct:ids.length?Math.round(areaDone*100/ids.length):0};
+    const meta=areaMeta(area);
+    return {id:area.id,title:meta.title,icon:meta.icon,done:areaDone,total:ids.length,pct:ids.length?Math.round(areaDone*100/ids.length):0};
   });
   return {done,total,flagged,notes,pct:total?Math.round(done*100/total):0,updatedAt:record&&record.progress&&record.progress.updatedAt,areas};
 }
@@ -1880,7 +1938,7 @@ function loadAdmin(){
               </div>
               <div class="h-2 mt-3 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500" style="width:${prog.pct}%"></div></div>
               <div class="grid sm:grid-cols-2 gap-x-5 gap-y-2 mt-4">${prog.areas.map(area=>`<div>
-                <div class="flex items-center justify-between gap-2 text-[11px]"><span class="truncate">${area.icon} ${esc(area.title)}</span><span class="text-slate-400 shrink-0">${area.done}/${area.total} · ${area.pct}%</span></div>
+                <div class="flex items-center justify-between gap-2 text-[11px]"><span class="truncate">${esc(area.icon)} ${esc(area.title)}</span><span class="text-slate-400 shrink-0">${area.done}/${area.total} · ${area.pct}%</span></div>
                 <div class="h-1 mt-1 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-brand-500" style="width:${area.pct}%"></div></div>
               </div>`).join('')}</div>
             </div>
@@ -1941,23 +1999,24 @@ function renderHome(){
     const areas = AREAS.filter(a => a.cat === cat.id);
     const cards = areas.map(area => {
       const a = areaAccent(area);
+      const meta = areaMeta(area);
       const qsList = areaQuestions(area);
       const mm = metrics(qsList.map(q=>({q})));
       // search filter: hide card if searching and no match
       if (homeSearch){
-        const hay = (area.title+' '+area.blurb+' '+qsList.map(q=>getText(q,'q')+' '+answerPlainText(getText(q,'a'))).join(' ')).toLowerCase();
+        const hay = (meta.title+' '+meta.blurb+' '+qsList.map(q=>getText(q,'q')+' '+answerPlainText(getText(q,'a'))).join(' ')).toLowerCase();
         if (!hay.includes(homeSearch)) return '';
       }
       return `<a href="#/a/${area.id}" class="area-card fade group block rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-2xl hover:shadow-${cat.accent==='brand'?'brand':cat.accent}-500/10">
         <div class="flex items-start justify-between gap-2">
-          <span class="h-10 w-10 grid place-items-center rounded-xl ${a.soft} ring-1 ${a.ring} text-xl shrink-0">${area.icon}</span>
+          <span class="h-10 w-10 grid place-items-center rounded-xl ${a.soft} ring-1 ${a.ring} text-xl shrink-0">${esc(meta.icon)}</span>
           <div class="text-right">
             <span class="font-display font-extrabold text-sm ${a.text}">${mm.pct}%</span>
             ${mm.flag?`<div class="text-[10px] text-amber-500 font-semibold">🚩 ${mm.flag}</div>`:''}
           </div>
         </div>
-        <h3 class="font-display font-bold text-[15px] mt-3 leading-snug group-hover:${a.text.split(' ')[0]}">${esc(area.title)}</h3>
-        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 lc">${esc(area.blurb)}</p>
+        <h3 class="font-display font-bold text-[15px] mt-3 leading-snug group-hover:${a.text.split(' ')[0]}">${esc(meta.title)}</h3>
+        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 lc">${esc(meta.blurb)}</p>
         <div class="mt-3 flex items-center gap-2">
           <div class="h-1.5 flex-1 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
             <div class="h-full rounded-full bg-gradient-to-r ${a.bar}" style="width:${mm.pct}%"></div>
@@ -2042,6 +2101,7 @@ const areaFilter = {}; // areaId -> {status:'all'|'flag'|'done'|'todo', search:'
 function renderArea(area){
   const app = document.getElementById('app');
   const a = areaAccent(area);
+  const meta = areaMeta(area);
   const cat = CAT_BY_ID[area.cat];
   const f = areaFilter[area.id] || (areaFilter[area.id] = { status:'all', search:'' });
   let list = orderedAreaQuestions(area);
@@ -2076,13 +2136,14 @@ function renderArea(area){
 
     <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
       <div class="flex items-start gap-4">
-        <span class="h-14 w-14 grid place-items-center rounded-2xl ${a.soft} ring-1 ${a.ring} text-2xl shrink-0">${area.icon}</span>
+        <span class="h-14 w-14 grid place-items-center rounded-2xl ${a.soft} ring-1 ${a.ring} text-2xl shrink-0">${esc(meta.icon)}</span>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md ${a.soft} ${a.text}">${cat.icon} ${cat.label}</span>
+            ${isAdmin()?`<button data-action="area-edit" data-area="${area.id}" class="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-slate-200 dark:border-white/10 text-slate-500 hover:${a.text.split(' ')[0]} hover:border-current transition">✏️ Edit section heading</button>`:''}
           </div>
-          <h1 class="font-display text-xl sm:text-2xl font-extrabold tracking-tight mt-1">${esc(area.title)}</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">${esc(area.blurb)}</p>
+          <h1 class="font-display text-xl sm:text-2xl font-extrabold tracking-tight mt-1">${esc(meta.title)}</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">${esc(meta.blurb)}</p>
           <div class="mt-3 flex items-center gap-2 max-w-md">
             <div class="h-2 flex-1 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
               <div class="h-full rounded-full bg-gradient-to-r ${a.bar} transition-all duration-500" style="width:${mm.pct}%"></div>
@@ -2097,7 +2158,7 @@ function renderArea(area){
     <div class="flex flex-col sm:flex-row gap-3 mb-5">
       <div class="relative flex-1">
         <svg class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-        <input id="areaSearch" type="text" value="${esc(f.search)}" placeholder="Search in ${esc(area.title)}…"
+        <input id="areaSearch" type="text" value="${esc(f.search)}" placeholder="Search in ${esc(meta.title)}…"
           class="w-full pl-10 pr-3 py-2.5 rounded-xl bg-white/70 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 focus:ring-2 focus:ring-brand-400 outline-none text-sm shadow-sm" />
       </div>
       <div class="flex gap-2 flex-wrap items-center">
@@ -2531,7 +2592,7 @@ app.addEventListener('click', async e => {
       .then(r=>r.json()).then(d=>{
         if(d.error || !d.answer){ alert('AI draft failed: '+(d.error||'no answer returned')+'\\nPlease try again.'); btn.disabled=false; btn.innerHTML=orig; return; }
         const s=qs(id); s._editing=true; s._open=true;
-        s._draft={ a:d.answer, examples: d.example?[{id:id+'-ex'+Date.now(), label:'💡 Example', text:d.example}]:[] };
+        s._draft={ a:aiRichAnswer(d.answer), examples: d.example?[{id:id+'-ex'+Date.now(), label:'💡 Example', text:aiPlainText(d.example)}]:[] };
         refresh();
       }).catch(()=>{ alert('AI draft failed — check your connection and try again.'); btn.disabled=false; btn.innerHTML=orig; });
     return;
@@ -2551,8 +2612,8 @@ app.addEventListener('click', async e => {
       .then(r=>r.json()).then(d=>{
         btn.disabled=false; btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result returned')); return; }
-        aEl.innerHTML=plainToRichHTML(d.answer);
-        if(d.example){ if(firstEx){ firstEx.value=d.example; } else { const cont=document.getElementById('ex-rows-'+id); if(cont) cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example', d.example)); } }
+        aEl.innerHTML=markdownToRichHTML(d.answer);
+        if(d.example){ const cleanExample=aiPlainText(d.example); if(firstEx){ firstEx.value=cleanExample; } else { const cont=document.getElementById('ex-rows-'+id); if(cont) cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example', cleanExample)); } }
         if(inp) inp.value='';
         aEl.focus();
       }).catch(()=>{ btn.disabled=false; btn.innerHTML=orig; alert('Refine failed — check your connection and try again.'); });
@@ -2581,6 +2642,7 @@ app.addEventListener('click', async e => {
     const s=qs(id); s.qOverride=qv; s.aOverride=av; s.examples=rows; s._editing=false; s._open=true; delete s._draft; save(); refresh(); scheduleMathTypeset(); return;
   }
   if (act==='edit-reset'){ discardPendingRichImages(document.querySelector(`[data-edit-a="${id}"]`)); const s=qs(id); delete s.qOverride; delete s.aOverride; delete s.examples; s._editing=false; delete s._draft; save(); refresh(); return; }
+  if (act==='area-edit'){ openAreaEditor(btn.dataset.area); return; }
   if (act==='area-filter'){ const ar=btn.dataset.area; (areaFilter[ar]||(areaFilter[ar]={status:'all',search:''})).status=btn.dataset.status; renderArea(AREA_BY_ID[ar]); return; }
   if (act==='add-open'){ openAdd(btn.dataset.area); return; }
   if (act==='order-reset'){ const ar=btn.dataset.area; if(store.order) delete store.order[ar]; save(); renderArea(AREA_BY_ID[ar]); return; }
@@ -2615,8 +2677,8 @@ app.addEventListener('click', async e => {
       .then(r=>r.json()).then(d=>{
         btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result')); return; }
-        const st=qs(id); st.aOverride=d.answer;
-        if(d.example){ const cur=getExamples(base).map(e=>({id:e.id,label:e.label,text:e.text})); if(cur[0]){ cur[0].text=d.example; } else { cur.push({id:id+'-ex'+Date.now(),label:'💡 Example',text:d.example}); } st.examples=cur; }
+        const st=qs(id); st.aOverride=aiRichAnswer(d.answer);
+        if(d.example){ const cleanExample=aiPlainText(d.example); const cur=getExamples(base).map(e=>({id:e.id,label:e.label,text:e.text})); if(cur[0]){ cur[0].text=cleanExample; } else { cur.push({id:id+'-ex'+Date.now(),label:'💡 Example',text:cleanExample}); } st.examples=cur; }
         st._open=true; save(); refresh();
       }).catch(()=>{ btn.innerHTML=orig; alert('Refine failed — check your connection.'); });
     return;
@@ -2715,6 +2777,58 @@ function commitReorder(dropId, targetId, after){
   store.order[areaId] = ids;
   save();
   renderArea(area);
+}
+
+/* ============================================================
+   EDIT AREA HEADING (admin)
+   ============================================================ */
+function openAreaEditor(areaId){
+  const area=AREA_BY_ID[areaId]; if(!area||!isAdmin()) return;
+  const meta=areaMeta(area);
+  const wrap=document.createElement('div');
+  wrap.id='areaEditModal';
+  wrap.className='fixed inset-0 z-[75] grid place-items-center p-4 bg-black/55 backdrop-blur-sm';
+  wrap.innerHTML=`<form class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div><h3 class="font-display font-extrabold text-lg">Edit section heading</h3><p class="text-xs text-slate-500 mt-1">This updates the heading for every candidate and in the admin progress view.</p></div>
+      <button type="button" data-area-close aria-label="Close" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10">✕</button>
+    </div>
+    <div class="grid grid-cols-[84px_1fr] gap-3 mt-5">
+      <div><label for="areaIconEdit" class="block text-xs font-semibold text-slate-500 mb-1">Icon</label><input id="areaIconEdit" maxlength="12" value="${attrEsc(meta.icon)}" class="w-full text-center text-xl rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-2 py-2.5 outline-none focus:ring-2 focus:ring-brand-400"></div>
+      <div><label for="areaTitleEdit" class="block text-xs font-semibold text-slate-500 mb-1">Section title</label><input id="areaTitleEdit" maxlength="100" value="${attrEsc(meta.title)}" class="w-full rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-3 outline-none focus:ring-2 focus:ring-brand-400"></div>
+    </div>
+    <label for="areaBlurbEdit" class="block text-xs font-semibold text-slate-500 mt-3 mb-1">Short description</label>
+    <textarea id="areaBlurbEdit" maxlength="300" rows="3" class="w-full rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-3 outline-none focus:ring-2 focus:ring-brand-400 resize-y">${esc(meta.blurb)}</textarea>
+    <div class="flex flex-wrap gap-2 mt-4">
+      <button type="submit" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Save heading</button>
+      <button type="button" data-area-close class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">Cancel</button>
+      <button type="button" id="areaRestoreDefault" class="px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-rose-500 ml-auto">Restore original</button>
+    </div>
+  </form>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelectorAll('[data-area-close]').forEach(b=>b.onclick=close);
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
+  wrap.querySelector('form').onsubmit=e=>{
+    e.preventDefault();
+    const title=document.getElementById('areaTitleEdit').value.trim();
+    const blurb=document.getElementById('areaBlurbEdit').value.trim();
+    const icon=document.getElementById('areaIconEdit').value.trim();
+    if(!title){ document.getElementById('areaTitleEdit').focus(); return; }
+    const change={};
+    if(title!==area.title) change.title=title;
+    if(blurb!==area.blurb) change.blurb=blurb;
+    if(icon&&icon!==area.icon) change.icon=icon;
+    if(!store.areas) store.areas={};
+    if(Object.keys(change).length) store.areas[areaId]=change; else delete store.areas[areaId];
+    save(); close(); renderArea(area); pushNow();
+  };
+  document.getElementById('areaRestoreDefault').onclick=()=>{
+    if(!confirm('Restore this section’s original title, description and icon?')) return;
+    if(store.areas) delete store.areas[areaId];
+    save(); close(); renderArea(area); pushNow();
+  };
+  document.getElementById('areaTitleEdit').focus();
 }
 
 /* ============================================================

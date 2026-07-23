@@ -18,7 +18,7 @@ async function resolveRole(req) {
 // One-time migration: split the old shared workspace into admin-owned CONTENT
 // (question/answer/example edits, custom Qs, order, attachments, trash) and the
 // admin's own PERSONAL state (flags/done/notes). Runs only if content is absent.
-const nonEmpty = (o) => o && (Object.keys(o.q || {}).length || Object.keys(o.custom || {}).length || Object.keys(o.attach || {}).length);
+const nonEmpty = (o) => o && (Object.keys(o.q || {}).length || Object.keys(o.custom || {}).length || Object.keys(o.areas || {}).length || Object.keys(o.attach || {}).length);
 
 async function seedIfNeeded(cstore) {
   const existing = await cstore.get('master', { type: 'json' });
@@ -28,7 +28,7 @@ async function seedIfNeeded(cstore) {
   const oldHasData = nonEmpty(d);
   // Keep a good existing master; also keep an empty one only if there's nothing to migrate.
   if (existing && (nonEmpty(existing) || !oldHasData)) return existing;
-  if (!oldHasData) return existing || { q: {}, custom: {}, order: {}, attach: {}, trash: [] };
+  if (!oldHasData) return existing || { q: {}, custom: {}, areas: {}, order: {}, attach: {}, trash: [] };
   // (Re)migrate from the old shared state — heals a previously empty master too.
   const cq = {}, pq = {};
   for (const id in (d.q || {})) {
@@ -42,7 +42,7 @@ async function seedIfNeeded(cstore) {
     if (Object.keys(c).length) cq[id] = c;
     if (Object.keys(p).length) pq[id] = p;
   }
-  const content = { q: cq, custom: d.custom || {}, order: d.order || {}, attach: d.attach || {}, trash: d.trash || [] };
+  const content = { q: cq, custom: d.custom || {}, areas: d.areas || {}, order: d.order || {}, attach: d.attach || {}, trash: d.trash || [] };
   await cstore.setJSON('master', content);
   try { const ps = getStore('tracker-pstate'); if (!(await ps.get('ps:admin', { type: 'json' }))) await ps.setJSON('ps:admin', { q: pq }); } catch (e) {}
   return content;

@@ -27,6 +27,7 @@ Rules:
 - Ground everything in Indian context: Ind AS / IFRS, SA (Standards on Auditing), CARO 2020, Schedule III, Companies Act.
 - Be practical and structured, not textbook-vague. Show you understand how it works in real audit fieldwork.
 - Prefer numbered points or short paragraphs. Include specific standard numbers, thresholds, and procedures where relevant.
+- Never use Markdown asterisks or underscores for emphasis (no **bold**, *italic*, or __bold__). The editor applies formatting separately.
 - The answer should be interview-ready and confident, roughly 130–260 words.
 - The example must be ONE concrete, memorable, real-world scenario (with small illustrative numbers if useful) that reinforces the answer.`;
 
@@ -111,7 +112,7 @@ Current model answer:
 
 ${example ? 'Current example:\n"""' + example + '"""\n\n' : ''}Revise the answer (and the example if relevant) according to this instruction from the candidate: "${instruction}"
 
-Keep everything correct and useful; apply the instruction faithfully. Output EXACTLY in this format — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, or code fences:
+Keep everything correct and useful; apply the instruction faithfully. Output EXACTLY in this format — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, code fences, or Markdown emphasis markers such as **:
 
 <the revised model answer>
 ###EXAMPLE###
@@ -124,7 +125,7 @@ ${existing ? 'There is an existing answer to improve and enrich (keep what is co
 1) A strong model answer the candidate can speak in the interview.
 2) ONE concrete example that aids memory.
 
-Format your reply EXACTLY like this — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, or code fences:
+Format your reply EXACTLY like this — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, code fences, or Markdown emphasis markers such as **:
 
 <the model answer>
 ###EXAMPLE###
