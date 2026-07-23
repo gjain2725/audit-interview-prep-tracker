@@ -76,44 +76,15 @@
       <div class="flex items-center justify-between gap-4">
         <a href="#/" class="flex items-center gap-3 group">
           <div class="relative h-11 w-11 rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-base shadow-lg shadow-brand-500/40 ring-1 ring-white/20">
-            HG<span class="absolute -inset-1 rounded-2xl bg-brand-500/30 blur-md -z-10"></span>
+            MB4<span class="absolute -inset-1 rounded-2xl bg-brand-500/30 blur-md -z-10"></span>
           </div>
-          <div class="leading-tight">
+          <div class="leading-tight min-w-0">
             <p class="font-display font-extrabold text-base sm:text-lg tracking-tight">Mission <span class="gradient-text">Big 4</span></p>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 -mt-0.5">Himanshi Garg · Audit Interview Prep</p>
+            <p id="hdrUser" class="text-[11px] text-slate-500 dark:text-slate-400 -mt-0.5 truncate max-w-[46vw] sm:max-w-none">Audit Interview Prep</p>
           </div>
         </a>
 
-        <div class="flex items-center gap-3">
-          <div class="hidden sm:flex flex-col items-end">
-            <span id="hdrPct" class="font-display font-extrabold text-brand-600 dark:text-brand-300 text-sm">0%</span>
-            <span class="text-[10px] uppercase tracking-wider text-slate-400">prepared</span>
-          </div>
-          <div class="relative h-11 w-11 shrink-0">
-            <svg class="h-11 w-11 -rotate-90" viewBox="0 0 36 36">
-              <circle cx="18" cy="18" r="15.5" fill="none" stroke="rgba(148,163,184,.2)" stroke-width="3"/>
-              <circle id="hdrRing" cx="18" cy="18" r="15.5" fill="none" stroke="url(#g)" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="97.4" stroke-dashoffset="97.4" style="transition:stroke-dashoffset .7s cubic-bezier(.22,1,.36,1)"/>
-              <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#22d3ee"/><stop offset="55%" stop-color="#3a5bef"/><stop offset="100%" stop-color="#a855f7"/></linearGradient></defs>
-            </svg>
-          </div>
-          <a href="#/history" title="Change history — undo any change" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 1 0 6 5.3L3 8"/><path d="M12 7v5l4 2"/></svg>
-            <span class="hidden sm:inline text-xs font-semibold">History</span>
-          </a>
-          <a href="#/vault" title="Attachment vault — all files" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg>
-            <span class="hidden sm:inline text-xs font-semibold">Files</span>
-          </a>
-          <button id="syncBtn" title="Shared workspace — click to pull the latest changes" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
-            <span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span>
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 18a5 5 0 0 1-.5-9.98 7 7 0 0 1 13.4 2A4.5 4.5 0 0 1 18.5 18H7Z"/></svg>
-            <span id="syncStatus" class="hidden sm:inline text-xs font-semibold text-slate-400">Local</span>
-          </button>
-          <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition">
-            <svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg>
-            <svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg>
-          </button>
-        </div>
+        <div id="hdrControls" class="flex items-center gap-2 sm:gap-3"></div>
       </div>
     </div>
   </header>
@@ -122,8 +93,8 @@
   <input type="file" id="fileInput" multiple class="hidden" />
 
   <footer class="max-w-6xl mx-auto px-4 sm:px-6 mt-8 mb-10 pt-6 border-t border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
-    <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · You've got this, Himanshi 🚀</p>
-    <p>Flags, notes, edits &amp; progress save automatically in your browser.</p>
+    <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · Crack that Big 4 interview 🚀</p>
+    <p>Your flags, notes &amp; progress sync securely to your account.</p>
   </footer>
 
   <!-- ============ AI TUTOR CHATBOT (Gemini) ============ -->
@@ -554,12 +525,10 @@ function metrics(list){
 function applyTheme(){
   const dark = store.theme === 'dark';
   document.documentElement.classList.toggle('dark', dark);
-  document.getElementById('iconSun').classList.toggle('hidden', !dark);
-  document.getElementById('iconMoon').classList.toggle('hidden', dark);
+  const s=document.getElementById('iconSun'), m=document.getElementById('iconMoon');
+  if(s) s.classList.toggle('hidden', !dark);
+  if(m) m.classList.toggle('hidden', dark);
 }
-document.getElementById('themeToggle').addEventListener('click', () => {
-  store.theme = store.theme === 'dark' ? 'light' : 'dark'; save(); applyTheme();
-});
 
 /* ============================================================
    HELPERS
@@ -568,12 +537,7 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
 /* Just escape — newlines/spacing are preserved by `whitespace-pre-wrap` on the container,
    so pasted paragraphs, blank lines and indentation render exactly as entered. */
 function fmt(s){ return esc(s); }
-function setHeaderProgress(){
-  const m = metrics(allQuestions());
-  document.getElementById('hdrPct').textContent = m.pct + '%';
-  const circ = 2*Math.PI*15.5;
-  document.getElementById('hdrRing').style.strokeDashoffset = circ*(1 - m.pct/100);
-}
+function setHeaderProgress(){ /* progress ring removed from header; readiness shown on home */ }
 
 /* ============================================================
    CLOUD SYNC (Netlify Functions + Blobs) + ATTACHMENTS
@@ -581,29 +545,23 @@ function setHeaderProgress(){
    writes the same state; attachment files live in Netlify Blobs.
    Slot keys:  <qid>::q (question) | <qid>::a (answer) | <qid>::e:<exId> (example)
    ============================================================ */
-const SYNC_URL='/.netlify/functions/sync';
+const ACCOUNT_URL='/.netlify/functions/account';
+const CONTENT_URL='/.netlify/functions/content';
+const PSTATE_URL='/.netlify/functions/pstate';
 const FILES_URL='/.netlify/functions/files';
-const TS_KEY='mb4_ts';
-const SHARED_CODE='mb4-shared-workspace';   // one fixed key for everyone
+const AUTH_KEY='mb4_auth';
 const SYNC_ON = location.protocol==='http:' || location.protocol==='https:';
-const syncCode = SHARED_CODE;
 let pendingSlot=null, pendingQid=null;
-let _syncTimer=null, _lastPayload=null;
+let _syncTimer=null, _lastContent=null, _lastPstate=null;
 
-/* legacy IndexedDB (read-only) — only used to migrate pre-cloud attachments up */
-const DB_NAME='himanshi_audit_files', DB_STORE='attachments';
-let _db=null;
-function openDB(){
-  return new Promise((res,rej)=>{
-    if(_db) return res(_db);
-    if(!('indexedDB' in window)) return rej(new Error('no-idb'));
-    const r=indexedDB.open(DB_NAME,1);
-    r.onupgradeneeded=e=>{ const db=e.target.result; if(!db.objectStoreNames.contains(DB_STORE)){ const os=db.createObjectStore(DB_STORE,{keyPath:'id'}); os.createIndex('slot','slot',{unique:false}); } };
-    r.onsuccess=e=>{ _db=e.target.result; res(_db); };
-    r.onerror=e=>rej(e.target.error);
-  });
-}
-const idbAll=()=>openDB().then(db=>new Promise((res,rej)=>{ const rq=db.transaction(DB_STORE,'readonly').objectStore(DB_STORE).getAll(); rq.onsuccess=()=>res(rq.result||[]); rq.onerror=()=>rej(rq.error); }));
+/* ---- auth state (access code = member; passphrase = admin) ---- */
+let auth={ token:null, role:'none', name:null, email:null, expiresAt:null };
+try{ const a=JSON.parse(localStorage.getItem(AUTH_KEY)); if(a&&a.token) auth=a; }catch(e){}
+function saveAuth(){ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }
+function isAdmin(){ return auth.role==='admin'; }
+function authed(){ return auth.role==='admin'||auth.role==='member'; }
+function acct(action, extra){ return fetch(ACCOUNT_URL,{method:'POST',headers:Object.assign({'content-type':'application/json'}, auth.token?{'x-auth':auth.token}:{}),body:JSON.stringify(Object.assign({action},extra||{}))}).then(r=>r.json()); }
+function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -614,107 +572,57 @@ function setSyncStatus(state){
   const dot=document.getElementById('syncDot'); if(dot) dot.className='h-2 w-2 rounded-full '+cls.replace('text-','bg-');
 }
 
-/* ---- payload build / adopt ---- */
-function syncPayload(){
+/* ---- content (admin-owned) + personal state (per-user) split ---- */
+function buildContent(){
   const q={};
-  for(const k in store.q){ const s=Object.assign({},store.q[k]); delete s._open; delete s._editing; delete s._draft; if(Object.keys(s).length) q[k]=s; }
-  return { v:2, q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[], theme:store.theme };
+  for(const id in store.q){ const v=store.q[id]||{}; const c={}; if(v.qOverride!=null)c.qOverride=v.qOverride; if(v.aOverride!=null)c.aOverride=v.aOverride; if(Array.isArray(v.examples))c.examples=v.examples; if(Object.keys(c).length)q[id]=c; }
+  return { q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[] };
 }
-function adopt(data){
-  if(!data) return;
-  store.q=data.q||{}; store.custom=data.custom||{}; store.order=data.order||{}; store.attach=data.attach||{}; store.trash=data.trash||[];
-  if(data.theme) store.theme=data.theme;
-  localStorage.setItem(KEY, JSON.stringify(store));   // direct write — don't trigger a push
-  _lastPayload=JSON.stringify(syncPayload());
-  applyTheme();
+function buildPstate(){
+  const q={};
+  for(const id in store.q){ const v=store.q[id]||{}; const p={}; if(v.flag)p.flag=true; if(v.done)p.done=true; if(v.note)p.note=v.note; if(Object.keys(p).length)q[id]=p; }
+  return { q };
 }
-
-/* ---- push (debounced, deduped) / pull ---- */
-function scheduleSync(){ if(!SYNC_ON||!syncCode) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(pushNow,1000); }
+function scheduleSync(){ if(!SYNC_ON||!authed()) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(pushNow,1000); }
 function pushNow(){
-  if(!SYNC_ON||!syncCode) return Promise.resolve();
-  const payload=syncPayload(); const str=JSON.stringify(payload);
-  if(str===_lastPayload) return Promise.resolve();
-  _lastPayload=str; setSyncStatus('syncing');
-  return fetch(SYNC_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({code:syncCode,data:payload})})
-    .then(r=>r.json()).then(r=>{ if(r&&r.updated_at) localStorage.setItem(TS_KEY,Date.parse(r.updated_at)); setSyncStatus('saved'); })
-    .catch(()=>{ _lastPayload=null; setSyncStatus('offline'); });
-}
-const INIT_KEY='mb4_shared_init';
-function cleanQ(q){ const o={}; for(const k in (q||{})){ const s=Object.assign({},q[k]); delete s._open; delete s._editing; delete s._draft; if(Object.keys(s).length) o[k]=s; } return o; }
-function mergeAttach(ra,la){
-  const out=Object.assign({},ra||{});
-  for(const slot in (la||{})){
-    const seen=new Set((out[slot]||[]).map(a=>a.id));
-    out[slot]=(out[slot]||[]).concat((la[slot]||[]).filter(a=>!seen.has(a.id)));
-  }
-  return out;
-}
-function mergeStates(remoteData, local){
-  const r=remoteData||{};
-  return {
-    v:2,
-    q: Object.assign({}, r.q||{}, cleanQ(local.q)),       // local edits win per key
-    custom: Object.assign({}, r.custom||{}, local.custom||{}),
-    order: Object.assign({}, r.order||{}, local.order||{}),
-    attach: mergeAttach(r.attach, local.attach),
-    trash: (function(){ const seen=new Set(), out=[]; [...(local.trash||[]),...(r.trash||[])].forEach(t=>{ if(t&&!seen.has(t.id)){ seen.add(t.id); out.push(t); } }); return out; })(),
-    theme: local.theme || r.theme
-  };
-}
-
-// force=true  -> pull latest and let remote win (manual refresh / tab focus)
-// force=false -> load-time reconcile; first sync on a device MERGES so nothing is lost
-function pullAndMerge(force){
-  if(!SYNC_ON){ setSyncStatus('local'); return Promise.resolve(); }
+  if(!SYNC_ON||!authed()) return Promise.resolve();
+  const cp=JSON.stringify(buildContent()), pp=JSON.stringify(buildPstate());
+  const jobs=[];
+  if(isAdmin() && cp!==_lastContent){ _lastContent=cp; jobs.push(fetch(CONTENT_URL,{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({content:JSON.parse(cp)})}).then(r=>{ if(!r.ok) throw 0; })); }
+  if(pp!==_lastPstate){ _lastPstate=pp; jobs.push(fetch(PSTATE_URL,{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({pstate:JSON.parse(pp)})}).then(r=>{ if(!r.ok) throw 0; })); }
+  if(!jobs.length) return Promise.resolve();
   setSyncStatus('syncing');
-  return fetch(SYNC_URL+'?code='+encodeURIComponent(syncCode)).then(r=>r.json()).then(async remote=>{
-    const hasRemote = remote && remote.data;
-    const remoteTs = hasRemote ? Date.parse(remote.updated_at||0) : 0;
-    const localTs = +(localStorage.getItem(TS_KEY)||0);
-    const firstShared = !localStorage.getItem(INIT_KEY);
-    if(force && !firstShared){
-      if(hasRemote){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); }
-      setSyncStatus('saved'); return;
-    }
-    if(localTs===0 || firstShared){
-      // first sync on this device — migrate local files up and MERGE, never clobber
-      await migrateLocal(firstShared);
-      adopt(mergeStates(hasRemote?remote.data:null, store));
-      _lastPayload=null;                 // force the merged state to be written to the cloud
-      await pushNow(); refresh();
-      localStorage.setItem(INIT_KEY,'1');
-      return;
-    }
-    if(hasRemote && remoteTs>localTs){ adopt(remote.data); localStorage.setItem(TS_KEY,remoteTs); refresh(); setSyncStatus('saved'); }
-    else { await pushNow(); refresh(); }
+  return Promise.all(jobs).then(()=>setSyncStatus('saved')).catch(()=>{ _lastContent=null; _lastPstate=null; setSyncStatus('offline'); });
+}
+function applyCloud(content, ps){
+  content=content||{q:{},custom:{},order:{},attach:{},trash:[]};
+  ps=ps||{};
+  store.q={};
+  for(const id in (content.q||{})) store.q[id]=Object.assign({}, content.q[id]);
+  for(const id in ps){ store.q[id]=Object.assign(store.q[id]||{}, ps[id]); }
+  store.custom=content.custom||{}; store.order=content.order||{}; store.attach=content.attach||{}; store.trash=content.trash||[];
+  _lastContent=JSON.stringify(buildContent()); _lastPstate=JSON.stringify(buildPstate());
+  localStorage.setItem(KEY, JSON.stringify(store));
+}
+function loadFromCloud(){
+  if(!SYNC_ON||!authed()) return Promise.resolve();
+  setSyncStatus('syncing');
+  return Promise.all([
+    fetch(CONTENT_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null),
+    fetch(PSTATE_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null)
+  ]).then(([c,p])=>{
+    applyCloud(c&&c.content, p&&p.pstate&&p.pstate.q);
+    setSyncStatus('saved'); refresh();
   }).catch(()=>setSyncStatus('offline'));
 }
 
-/* ---- migrate pre-cloud IndexedDB files up to the shared cloud store ---- */
-async function migrateLocal(force){
-  let list=[]; try{ list=await idbAll(); }catch{ return; }
-  if(!store.attach) store.attach={};
-  for(const rec of list){
-    if(!rec||!rec.slot||!rec.blob) continue;
-    const arr=store.attach[rec.slot]||[];
-    const already=arr.some(a=>a.id===rec.id);
-    if(already && !force) continue;             // force re-uploads even if metadata exists (version transition)
-    try{
-      await fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':rec.id,'x-file-name':encodeURIComponent(rec.name||'file'),'x-file-type':rec.type||'application/octet-stream'},body:rec.blob});
-      if(!already) (store.attach[rec.slot]||(store.attach[rec.slot]=[])).push({id:rec.id,name:rec.name,type:rec.type,size:rec.size});
-    }catch{}
-  }
-  localStorage.setItem(KEY, JSON.stringify(store));
-}
-
 /* ---- attachment file ops (cloud) ---- */
-function fileViewUrl(id,dl){ return FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id)+(dl?'&dl=1':''); }
+function fileViewUrl(id,dl){ return FILES_URL+'?auth='+encodeURIComponent(auth.token||'')+'&id='+encodeURIComponent(id)+(dl?'&dl=1':''); }
 function attListFor(slot){ return (store.attach&&store.attach[slot])||[]; }
 function attachTo(slot,qid,file){
   const id='att-'+Date.now()+'-'+Math.round(Math.random()*1e9);
   const type=file.type||'application/octet-stream';
-  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
+  return fetch(FILES_URL,{method:'POST',headers:{'x-auth':auth.token,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
     .then(r=>{ if(!r.ok) throw new Error('upload failed'); return r.json(); })
     .then(()=>{ if(!store.attach) store.attach={}; (store.attach[slot]||(store.attach[slot]=[])).push({id,name:file.name,type,size:file.size}); save(); });
 }
@@ -735,8 +643,8 @@ function restoreTrash(id){
   save();
 }
 function purgeTrash(id){
-  const u=FILES_URL+'?code='+encodeURIComponent(syncCode)+'&id='+encodeURIComponent(id);
-  return fetch(u,{method:'DELETE'}).catch(()=>{}).then(()=>{ store.trash=(store.trash||[]).filter(x=>x.id!==id); save(); });
+  const u=FILES_URL+'?id='+encodeURIComponent(id);
+  return fetch(u,{method:'DELETE',headers:{'x-auth':auth.token}}).catch(()=>{}).then(()=>{ store.trash=(store.trash||[]).filter(x=>x.id!==id); save(); });
 }
 
 function fileIcon(t){ t=t||''; if(t.includes('pdf'))return '📄'; if(t.startsWith('image/'))return '🖼️'; if(t.includes('word')||t.includes('document'))return '📝'; if(t.includes('sheet')||t.includes('excel')||t.includes('csv'))return '📊'; return '📎'; }
@@ -744,19 +652,19 @@ function humanSize(n){ if(n<1024)return n+' B'; if(n<1048576)return Math.round(n
 
 /* Compact attach zone for a slot */
 function attachBlockHTML(slot,qid,a,label){
-  if(!SYNC_ON) return `<div class="mt-2 text-[11px] text-slate-400">Open the online site (missionbig4.netlify.app) to add attachments.</div>`;
   const items=attListFor(slot);
+  if(!items.length && !isAdmin()) return '';   // members see nothing if no files
   const chips=items.map(f=>`<span class="inline-flex items-center gap-1.5 text-xs rounded-lg pl-2 pr-1 py-1 bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10">
     <button data-action="view-att" data-id="${f.id}" data-type="${esc(f.type)}" data-name="${esc(f.name)}" class="inline-flex items-center gap-1 hover:${a.text.split(' ')[0]} max-w-[190px]" title="Open ${esc(f.name)}">${fileIcon(f.type)} <span class="truncate">${esc(f.name)}</span></button>
     <span class="text-[10px] text-slate-400 shrink-0">${humanSize(f.size)}</span>
-    <button data-action="del-att" data-id="${f.id}" data-slot="${esc(slot)}" title="Remove attachment" class="h-5 w-5 grid place-items-center rounded text-slate-400 hover:text-rose-500 shrink-0">✕</button>
+    ${isAdmin()?`<button data-action="del-att" data-id="${f.id}" data-slot="${esc(slot)}" title="Remove attachment" class="h-5 w-5 grid place-items-center rounded text-slate-400 hover:text-rose-500 shrink-0">✕</button>`:''}
   </span>`).join('');
   return `<div class="mt-2 flex flex-wrap items-center gap-1.5">
-    ${label?`<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">${label}</span>`:''}
+    ${label && (items.length||isAdmin())?`<span class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-0.5">${label}</span>`:''}
     ${chips}
-    <button data-action="attach" data-slot="${esc(slot)}" data-qid="${esc(qid)}" class="inline-flex items-center gap-1 text-xs font-semibold ${a.text} hover:underline">
+    ${isAdmin()?`<button data-action="attach" data-slot="${esc(slot)}" data-qid="${esc(qid)}" class="inline-flex items-center gap-1 text-xs font-semibold ${a.text} hover:underline">
       <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg> Attach
-    </button>
+    </button>`:''}
   </div>`;
 }
 
@@ -790,7 +698,7 @@ function replaceAttach(id,slot,file){
   // upload the new file under a NEW id and keep the old blob (moved to Trash) so it's retrievable
   const newId='att-'+Date.now()+'-'+Math.round(Math.random()*1e9);
   const type=file.type||'application/octet-stream';
-  return fetch(FILES_URL,{method:'POST',headers:{'x-code':syncCode,'x-att-id':newId,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
+  return fetch(FILES_URL,{method:'POST',headers:{'x-auth':auth.token,'x-att-id':newId,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
     .then(r=>{ if(!r.ok) throw new Error('replace failed'); return r.json(); })
     .then(()=>{ const arr=(store.attach&&store.attach[slot])||[]; const it=arr.find(a=>a.id===id);
       if(it){ if(!store.trash) store.trash=[]; store.trash.push({id:it.id,name:it.name,type:it.type,size:it.size,slot,deletedAt:Date.now(),replaced:true}); it.id=newId; it.name=file.name; it.type=type; it.size=file.size; }
@@ -1195,13 +1103,160 @@ function router(){
   const m = hash.match(/^#\/a\/([\w-]+)/);
   window.scrollTo({top:0});
   stopSpeech();   // stop any audio when navigating
-  if (hash === '#/vault') { vaultSel=new Set(); renderVault(); }
-  else if (hash === '#/history') { renderHistory(); }
+  renderHeaderControls();
+  if (!authed()){                        // not logged in → gate (buy-access is public)
+    if (hash === '#/request') renderRequest(); else renderGate();
+    return;
+  }
+  if (hash === '#/request') { renderRequest(); }
+  else if (hash === '#/admin') { renderAdmin(); }
+  else if (hash === '#/vault') { if(isAdmin()){ vaultSel=new Set(); renderVault(); } else { location.hash='#/'; renderHome(); } }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
-  setHeaderProgress();
 }
 window.addEventListener('hashchange', router);
+
+/* ============================================================
+   AUTH PAGES + HEADER CONTROLS
+   ============================================================ */
+function fmtExpiry(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return iso; } }
+
+function renderHeaderControls(){
+  const el=document.getElementById('hdrControls'); if(!el) return;
+  const uname=document.getElementById('hdrUser');
+  if(uname) uname.textContent = authed() ? ('Hi, '+(auth.name||'there').split(' ')[0]+(isAdmin()?' · Admin':'')) : 'Audit Interview Prep';
+  if(!authed()){ el.innerHTML=`<button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg></button>`; wireTheme(); return; }
+  const adminBtns = isAdmin() ? `
+    <a href="#/admin" title="Admin portal" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>🛠️</span><span class="hidden sm:inline text-xs font-semibold">Admin</span></a>
+    <a href="#/vault" title="Files" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg><span class="hidden sm:inline text-xs font-semibold">Files</span></a>` : '';
+  el.innerHTML=`${adminBtns}
+    <span class="hidden sm:flex items-center gap-1.5 h-10 px-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5"><span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span><span id="syncStatus" class="text-xs font-semibold text-slate-400">·</span></span>
+    <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg></button>
+    <button data-action="logout" title="Log out" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-500 transition"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></button>`;
+  const lo=el.querySelector('[data-action="logout"]'); if(lo) lo.onclick=()=>{ if(confirm('Log out?')) logout(); };
+  wireTheme(); setSyncStatus('saved');
+}
+function wireTheme(){ const t=document.getElementById('themeToggle'); if(t) t.onclick=()=>{ store.theme=store.theme==='dark'?'light':'dark'; localStorage.setItem(KEY,JSON.stringify(store)); applyTheme(); }; }
+
+function renderGate(){
+  const app=document.getElementById('app');
+  app.innerHTML=`<div class="max-w-md mx-auto mt-6 sm:mt-12 fade">
+    <div class="rounded-3xl overflow-hidden bg-gradient-to-br from-brand-500/10 via-cyan-400/5 to-fuchsia-500/10 border border-white/40 dark:border-white/10 glass p-6 sm:p-8 text-center">
+      <div class="h-14 w-14 mx-auto rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-lg shadow-lg shadow-brand-500/40">MB4</div>
+      <h1 class="font-display text-2xl font-extrabold mt-4">Mission <span class="gradient-text">Big 4</span></h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Audit interview prep tracker</p>
+      <div class="mt-6 text-left">
+        <label class="block text-xs font-semibold text-slate-500 mb-1">Your access code</label>
+        <input id="loginCode" type="text" placeholder="MB4-XXXXX-XXXXX" class="w-full font-mono tracking-wider text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-3 outline-none focus:ring-2 focus:ring-brand-400 uppercase" />
+        <p id="loginErr" class="text-xs text-rose-500 mt-1.5 hidden"></p>
+        <button data-action="do-login" class="mt-3 w-full py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/30">Log in</button>
+      </div>
+      <div class="mt-5 pt-5 border-t border-slate-200/60 dark:border-white/10">
+        <p class="text-sm text-slate-600 dark:text-slate-300">Don't have a code yet?</p>
+        <a href="#/request" class="inline-block mt-2 px-4 py-2 rounded-xl text-sm font-semibold border border-brand-400/40 text-brand-600 dark:text-brand-300 bg-brand-500/5 hover:bg-brand-500/10 transition">Get access — ₹199 / year →</a>
+      </div>
+      <button data-action="admin-login" class="mt-5 text-[11px] text-slate-400 hover:text-slate-600 underline">Admin login</button>
+    </div>
+  </div>`;
+  const inp=document.getElementById('loginCode');
+  if(inp) inp.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+}
+function showLoginErr(msg){ const e=document.getElementById('loginErr'); if(e){ e.textContent=msg; e.classList.remove('hidden'); } }
+function doLogin(){
+  const code=(document.getElementById('loginCode').value||'').trim();
+  if(!code) return;
+  acct('login',{token:code}).then(r=>{
+    if(!r || !r.ok){ showLoginErr((r&&r.error)||'Login failed.'); return; }
+    auth={ token:code, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
+    renderHeaderControls(); location.hash='#/'; router(); loadFromCloud();
+  }).catch(()=>showLoginErr('Network error — please try again.'));
+}
+function adminLoginPrompt(){
+  const pass=prompt('Admin passphrase:');
+  if(!pass) return;
+  acct('login',{token:pass}).then(r=>{
+    if(!r||!r.ok||r.role!=='admin'){ alert('Invalid admin passphrase.'); return; }
+    auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null }; saveAuth();
+    renderHeaderControls(); location.hash='#/admin'; router(); loadFromCloud();
+  }).catch(()=>alert('Network error.'));
+}
+
+function renderRequest(){
+  const app=document.getElementById('app');
+  app.innerHTML=`<div class="max-w-lg mx-auto mt-6 fade">
+    ${authed()?'':'<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to login</a>'}
+    <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
+      <h1 class="font-display text-2xl font-extrabold">Get access — <span class="gradient-text">₹199 / year</span></h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access to the complete audit-interview question bank with model answers, examples, audio, AI tutor and more.</p>
+      <ol class="mt-5 space-y-3 text-sm">
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">1</span><div><b>Pay ₹199 via UPI</b> to <span class="font-mono font-bold text-brand-600 dark:text-brand-300 select-all">8968549488@ptsbi</span></div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">2</span><div><b>Send the payment screenshot on WhatsApp</b> to <span class="font-mono font-bold text-emerald-600 dark:text-emerald-300 select-all">8968549488</span>, with your <b>name, email &amp; phone</b>.</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">3</span><div><b>Submit your details below</b> so we can match your payment.</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-xs font-bold">4</span><div>We verify &amp; <b>WhatsApp you a login code within ~4 hours</b>. Enter it on the login page — done!</div></li>
+      </ol>
+      <div class="mt-6 pt-5 border-t border-slate-200/60 dark:border-white/10">
+        <div id="reqForm" class="grid gap-2.5">
+          <input id="reqName" placeholder="Full name" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+          <input id="reqEmail" type="email" placeholder="Email" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+          <input id="reqPhone" placeholder="Phone (same as WhatsApp)" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+          <button data-action="do-request" class="mt-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Submit my request</button>
+          <p id="reqMsg" class="text-xs text-center mt-1"></p>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+function doRequest(){
+  const name=(document.getElementById('reqName').value||'').trim();
+  const email=(document.getElementById('reqEmail').value||'').trim();
+  const phone=(document.getElementById('reqPhone').value||'').trim();
+  const msg=document.getElementById('reqMsg');
+  if(!name||!email||!phone){ msg.textContent='Please fill name, email and phone.'; msg.className='text-xs text-center mt-1 text-rose-500'; return; }
+  msg.textContent='Submitting…'; msg.className='text-xs text-center mt-1 text-slate-400';
+  fetch(ACCOUNT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'request',name,email,phone})}).then(r=>r.json()).then(r=>{
+    if(r&&r.ok){ document.getElementById('reqForm').innerHTML='<div class="text-center py-4"><div class="text-4xl mb-2">✅</div><p class="font-semibold">Request received!</p><p class="text-sm text-slate-500 mt-1">Make sure you have sent the payment screenshot on WhatsApp to <b>8968549488</b>. We will WhatsApp your login code within ~4 hours.</p><a href="#/" class="inline-block mt-4 text-sm font-semibold text-brand-600 dark:text-brand-300 underline">Go to login</a></div>'; }
+    else { msg.textContent=(r&&r.error)||'Something went wrong.'; msg.className='text-xs text-center mt-1 text-rose-500'; }
+  }).catch(()=>{ msg.textContent='Network error — please try again.'; msg.className='text-xs text-center mt-1 text-rose-500'; });
+}
+
+function renderAdmin(){
+  const app=document.getElementById('app');
+  if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p><button data-action="admin-login" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Admin login</button></div>`; return; }
+  app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to tracker</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
+      <button data-action="admin-refresh" class="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button>
+    </div>
+    <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
+  loadAdmin();
+}
+function loadAdmin(){
+  acct('list').then(d=>{
+    const body=document.getElementById('adminBody'); if(!body) return;
+    if(d && d.error){ body.innerHTML='<div class="text-center py-8 text-rose-400">'+esc(d.error)+'</div>'; return; }
+    const pending=d.pending||[], users=d.users||[];
+    const pendHtml = pending.length ? pending.map(p=>`<div class="flex items-center gap-3 p-3 rounded-xl border border-amber-400/30 bg-amber-500/5">
+      <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.name)}</p><p class="text-[11px] text-slate-500 truncate">${esc(p.email)} · ${esc(p.phone)} · ${fmtExpiry(p.requestedAt)}</p></div>
+      <button data-action="admin-approve" data-id="${esc(p.id)}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shrink-0">✓ Approve 1yr</button>
+      <button data-action="admin-dismiss" data-id="${esc(p.id)}" title="Dismiss" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 shrink-0">✕</button>
+    </div>`).join('') : '<p class="text-sm text-slate-400 px-1">No pending requests.</p>';
+    const nowT=Date.now();
+    const userHtml = users.length ? users.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(u=>{
+      const exp=Date.parse(u.expiresAt||0), expired=exp&&exp<nowT, inactive=u.active===false;
+      return `<div class="flex items-center gap-3 p-3 rounded-xl border ${inactive||expired?'border-slate-200/70 dark:border-white/10 opacity-70':'border-emerald-400/30 bg-emerald-500/5'}">
+        <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
+        <p class="text-[11px] text-slate-500 truncate">${esc(u.email||'')} · ${esc(u.phone||'')}</p>
+        <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)}</p></div>
+        <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
+        <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
+        <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
+      </div>`;
+    }).join('') : '<p class="text-sm text-slate-400 px-1">No subscribers yet.</p>';
+    body.innerHTML=`<div class="mb-6"><div class="flex items-center gap-2 mb-2"><span class="text-lg">📥</span><h2 class="font-display font-bold text-base">Pending requests</h2><span class="text-xs text-slate-400">${pending.length}</span></div><div class="space-y-2">${pendHtml}</div></div>
+      <div><div class="flex items-center gap-2 mb-2"><span class="text-lg">👥</span><h2 class="font-display font-bold text-base">Subscribers</h2><span class="text-xs text-slate-400">${users.length}</span></div><div class="space-y-2">${userHtml}</div></div>`;
+  }).catch(()=>{ const b=document.getElementById('adminBody'); if(b) b.innerHTML='<div class="text-center py-8 text-rose-400">Could not load. Check connection.</div>'; });
+}
 
 /* ============================================================
    HOME (index)
@@ -1275,11 +1330,11 @@ function renderHome(){
     <div class="fade rounded-3xl overflow-hidden mb-6 relative bg-gradient-to-br from-brand-500/10 via-cyan-400/5 to-fuchsia-500/10 border border-white/40 dark:border-white/10 glass">
       <div class="p-5 sm:p-7">
         <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-500/15 to-cyan-400/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/30">🎯 Big 4 GDC Gurgaon · Audit</span>
-          <span class="text-xs text-slate-500 dark:text-slate-400">CA · Articleship @ Pawan Ram Kumar &amp; Co · Truva Finance</span>
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-500/15 to-cyan-400/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/30">🎯 Big 4 GDC · Audit Interview Prep</span>
+          ${auth.expiresAt?`<span class="text-xs text-slate-500 dark:text-slate-400">Access till ${fmtExpiry(auth.expiresAt)}</span>`:''}
         </div>
-        <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">Practice like it's the <span class="gradient-text">real panel.</span></h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">Pick an area to open its question bank. On each question you can <b>🚩 flag</b> it for revision, tick it <b>✅ done</b>, add your own <b>📝 notes</b>, and <b>✏️ edit</b> the question or model answer to sound like you. Answers are written practically, with examples.</p>
+        <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">${esc((auth.name||'there').split(' ')[0])}, practice like it's the <span class="gradient-text">real panel.</span></h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">Pick an area to open its question bank. On each question you can <b>🚩 flag</b> it for revision, tick it <b>✅ done</b>, add your own <b>📝 notes</b>, and listen to it. ${isAdmin()?'As admin you can also edit answers, draft with AI, and manage subscribers.':'Answers are written practically, with real examples.'}</p>
         <div class="mt-4 flex items-end gap-3 text-sm flex-wrap">
           <div class="flex-1 max-w-md min-w-[200px]">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
@@ -1387,21 +1442,21 @@ function renderArea(area){
       </div>
     </div>
 
-    ${(function(){ const un=orderedAreaQuestions(area).filter(q=>!isEdited(q.id)).length; return un ? `<div class="mb-3"><button data-action="bulk-draft" data-area="${area.id}" class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow hover:opacity-95 transition">✨ Draft all un-answered with AI (${un})</button><span class="hidden sm:inline text-[11px] text-slate-400 ml-2">writes a fresh answer + example for each; you can edit/undo any</span></div>` : ''; })()}
+    ${isAdmin() ? (function(){ const un=orderedAreaQuestions(area).filter(q=>!isEdited(q.id)).length; return un ? `<div class="mb-3"><button data-action="bulk-draft" data-area="${area.id}" class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow hover:opacity-95 transition">✨ Draft all un-answered with AI (${un})</button><span class="hidden sm:inline text-[11px] text-slate-400 ml-2">writes a fresh answer + example for each; you can edit/undo any</span></div>` : ''; })() : ''}
 
-    <div class="flex items-center justify-between mb-2 px-1">
+    ${isAdmin()?`<div class="flex items-center justify-between mb-2 px-1">
       <p class="text-[11px] text-slate-400 inline-flex items-center gap-1.5">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
         ${reorderAllowed ? 'Drag the grip handle to reorder questions' : 'Switch to “All” and clear search to reorder'}
       </p>
       ${(store.order && store.order[area.id] && store.order[area.id].length) ? `<button data-action="order-reset" data-area="${area.id}" class="text-[11px] font-semibold text-slate-400 hover:text-rose-500">↺ Reset order</button>` : ''}
-    </div>
+    </div>`:''}
 
     <div class="space-y-3.5">${cards}</div>
 
-    <button data-action="add-open" data-area="${area.id}" class="mt-5 w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:${a.text.split(' ')[0]} hover:border-current transition">
+    ${isAdmin()?`<button data-action="add-open" data-area="${area.id}" class="mt-5 w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:${a.text.split(' ')[0]} hover:border-current transition">
       + Add your own question to this area
-    </button>
+    </button>`:''}
   `;
 
   const as = document.getElementById('areaSearch');
@@ -1487,10 +1542,10 @@ function qCard(area, q, a, i, reorderAllowed){
   return `<article class="q-card fade rounded-2xl bg-white/80 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm ${s.done?'ring-1 ring-emerald-400/40':''}" data-qid="${q.id}" style="animation-delay:${i*25}ms">
     <div class="p-4 sm:p-5">
       <div class="flex items-start gap-2">
-        <span data-drag-handle ${reorderAllowed?'':'data-disabled="1"'} title="${reorderAllowed?'Drag to reorder':'Switch to All (clear search &amp; filter) to reorder'}"
+        ${isAdmin()?`<span data-drag-handle ${reorderAllowed?'':'data-disabled="1"'} title="${reorderAllowed?'Drag to reorder':'Switch to All (clear search &amp; filter) to reorder'}"
           class="grip mt-0.5 h-6 w-4 grid place-items-center text-slate-300 dark:text-slate-600 hover:text-slate-500 shrink-0 ${reorderAllowed?'':'opacity-30 !cursor-not-allowed'}">
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
-        </span>
+        </span>`:''}
         <button data-action="toggle" data-id="${q.id}" class="mt-0.5 flex-1 text-left flex items-start gap-2.5 group">
           <span class="mt-0.5 grid place-items-center h-6 w-6 rounded-lg ${a.soft} shrink-0">
             <svg class="w-4 h-4 chevron transition-transform ${a.text} ${s._open?'rotate-90':''}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m9 18 6-6-6-6"/></svg>
@@ -1525,7 +1580,7 @@ function qCard(area, q, a, i, reorderAllowed){
               <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
               <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
 
-            <div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
+            ${isAdmin()?`<div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
               <button data-action="ai-draft" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold px-2 py-1 rounded-lg bg-gradient-to-r from-brand-500/15 to-cyan-400/15 ring-1 ring-brand-400/30 ${a.text} hover:from-brand-500/25 hover:to-cyan-400/25 transition">
                 ✨ Draft with AI
               </button>
@@ -1537,7 +1592,7 @@ function qCard(area, q, a, i, reorderAllowed){
               </button>
               ${isEdited(q.id)?`<span class="text-[10px] px-1.5 py-0.5 rounded ${a.soft} ${a.text} font-semibold">edited</span>`:''}
               ${q._custom?`<button data-action="delete-custom" data-id="${q.id}" data-area="${area.id}" class="inline-flex items-center gap-1 font-semibold text-slate-400 hover:text-rose-500 ml-auto">🗑 Delete</button>`:''}
-            </div>
+            </div>`:''}
 
             <details class="mt-3 group" ${noteOpen}>
               <summary class="cursor-pointer flex items-center gap-2 text-sm font-semibold text-slate-600 dark:text-slate-300 select-none hover:${a.text.split(' ')[0]} transition">
@@ -1563,6 +1618,28 @@ app.addEventListener('click', e => {
   if (!btn) return;
   const act = btn.dataset.action;
   const id = btn.dataset.id;
+
+  // ---- auth / request / admin ----
+  if (act==='do-login'){ doLogin(); return; }
+  if (act==='admin-login'){ adminLoginPrompt(); return; }
+  if (act==='do-request'){ doRequest(); return; }
+  if (act==='logout'){ if(confirm('Log out?')) logout(); return; }
+  if (act==='admin-refresh'){ loadAdmin(); return; }
+  if (act==='admin-dismiss'){ acct('dismiss',{id:btn.dataset.id}).then(()=>setTimeout(loadAdmin,600)); return; }
+  if (act==='admin-approve'){
+    if(!confirm('Approve this request and generate a 1-year access code?')) return;
+    btn.disabled=true; btn.textContent='…';
+    acct('approve',{id:btn.dataset.id,days:365}).then(r=>{
+      if(r&&r.ok){ prompt('✅ Approved '+(r.name||'')+'!\n\nSend this login code to them on WhatsApp (valid till '+fmtExpiry(r.expiresAt)+'):', r.code); }
+      else alert('Approve failed: '+((r&&r.error)||''));
+      setTimeout(loadAdmin,700);
+    }).catch(()=>{ alert('Network error.'); loadAdmin(); });
+    return;
+  }
+  if (act==='admin-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
+  if (act==='admin-extend'){ acct('extend',{code:btn.dataset.code,days:365}).then(()=>setTimeout(loadAdmin,600)); return; }
+  if (act==='admin-revoke'){ if(confirm('Revoke access for this subscriber?')) acct('revoke',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
+  if (act==='admin-reactivate'){ acct('reactivate',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
 
   if (act==='toggle'){
     const s = qs(id); s._open = !s._open; save();
@@ -1869,15 +1946,21 @@ function openAdd(areaId){
    ============================================================ */
 if(!store.attach) store.attach={};
 applyTheme();
-router();                 // render immediately from local cache
-setSyncStatus(SYNC_ON?'syncing':'local');
-if(SYNC_ON){
-  pullAndMerge();                 // reconcile with the shared cloud state
-  // near-live: pull the latest shared data whenever the tab regains focus
-  document.addEventListener('visibilitychange', ()=>{
-    if(document.visibilityState==='visible' && !_syncTimer) pullAndMerge(true);
-  });
+renderHeaderControls();
+if(SYNC_ON && auth.token){
+  // verify the stored session, then load content + personal state
+  acct('me').then(m=>{
+    if(!m || m.role==='none'){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; saveAuth(); renderHeaderControls(); router(); return; }
+    auth.role=m.role; auth.name=m.name; auth.email=m.email||null; auth.expiresAt=m.expiresAt||null; saveAuth();
+    renderHeaderControls(); router(); loadFromCloud();
+  }).catch(()=>{ router(); });   // offline → render from local cache
+} else {
+  router();                      // show login gate (or public buy-access page)
 }
+// near-live: pull the latest whenever the tab regains focus (logged-in users)
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible' && authed() && !_syncTimer) loadFromCloud();
+});
 </script>
 </body>
 </html>

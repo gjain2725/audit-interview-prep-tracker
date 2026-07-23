@@ -15,7 +15,7 @@ const pendingOf = async (store) => (await store.get('pending', { type: 'json' })
 
 function authRole(token, users) {
   const admin = process.env.ADMIN_SECRET;
-  if (admin && token && token === admin) return { role: 'admin', name: 'Gaurav Jain' };
+  if (admin && token && token === admin) return { role: 'admin', name: 'Gaurav Jain', email: process.env.ADMIN_EMAIL || '' };
   const u = token && users[token];
   if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) {
     return { role: 'member', name: u.name, code: token, expiresAt: u.expiresAt };
@@ -46,10 +46,10 @@ export default async (req) => {
   if (action === 'login') {
     const a = authRole(body.token || '', users);
     if (a.role === 'none') return json({ ok: false, error: 'Invalid, inactive or expired code.' });
-    return json({ ok: true, role: a.role, name: a.name, expiresAt: a.expiresAt || null });
+    return json({ ok: true, role: a.role, name: a.name, email: a.email || null, expiresAt: a.expiresAt || null });
   }
   if (action === 'me') {
-    return json({ role: auth.role, name: auth.name || null, expiresAt: auth.expiresAt || null });
+    return json({ role: auth.role, name: auth.name || null, email: auth.email || null, expiresAt: auth.expiresAt || null });
   }
 
   // ----- admin only -----

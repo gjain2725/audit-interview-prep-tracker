@@ -30,6 +30,17 @@ Rules:
 - The answer should be interview-ready and confident, roughly 130–260 words.
 - The example must be ONE concrete, memorable, real-world scenario (with small illustrative numbers if useful) that reinforces the answer.`;
 
+async function roleFor(token) {
+  if (!token) return 'none';
+  if (process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET) return 'admin';
+  try {
+    const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
+    const u = users[token];
+    if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) return 'member';
+  } catch (e) {}
+  return 'none';
+}
+
 async function callGemini(key, payload, models) {
   const list = models.filter((m, i, a) => m && a.indexOf(m) === i);
   let lastErr = '';
@@ -63,6 +74,11 @@ export default async (req) => {
   let body;
   try { body = await req.json(); } catch { body = null; }
   if (!body) return json({ error: 'bad request' }, 400);
+
+  // auth: chat needs an approved user; draft/refine (content generation) needs admin
+  const role = await roleFor(req.headers.get('x-auth') || body.token);
+  if (role === 'none') return json({ error: 'unauthorized', reply: 'Please log in to use the AI tutor.' }, 401);
+  if ((body.task === 'draft' || body.task === 'refine') && role !== 'admin') return json({ error: 'admin only' }, 403);
 
   // soft daily cap protects the owner's Gemini quota on a public endpoint
   try {
