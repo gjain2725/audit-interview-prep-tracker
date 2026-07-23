@@ -75,8 +75,8 @@
     <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5">
       <div class="flex items-center justify-between gap-4">
         <a href="#/" class="flex items-center gap-3 group">
-          <div class="relative h-11 w-11 rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-base shadow-lg shadow-brand-500/40 ring-1 ring-white/20">
-            MB4<span class="absolute -inset-1 rounded-2xl bg-brand-500/30 blur-md -z-10"></span>
+          <div id="headerAvatarWrap" class="relative h-11 w-11 rounded-2xl bg-gradient-to-br from-brand-400 via-brand-500 to-brand-700 grid place-items-center text-white font-extrabold text-base shadow-lg shadow-brand-500/40 ring-1 ring-white/20 overflow-hidden">
+            <span id="headerAvatarText">MB4</span><img id="headerAvatarImg" alt="" class="hidden absolute inset-0 w-full h-full object-cover" /><span class="absolute -inset-1 rounded-2xl bg-brand-500/30 blur-md -z-10"></span>
           </div>
           <div class="leading-tight min-w-0">
             <p class="font-display font-extrabold text-base sm:text-lg tracking-tight">Mission <span class="gradient-text">Big 4</span></p>
@@ -562,7 +562,7 @@ function saveAuth(){ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }
 function isAdmin(){ return auth.role==='admin'; }
 function authed(){ return auth.role==='admin'||auth.role==='member'; }
 function acct(action, extra){ return fetch(ACCOUNT_URL,{method:'POST',headers:Object.assign({'content-type':'application/json'}, auth.token?{'x-auth':auth.token}:{}),body:JSON.stringify(Object.assign({action},extra||{}))}).then(r=>r.json()); }
-function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
+function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -880,7 +880,7 @@ async function bulkDraftArea(areaId){
     if(bulkCancel){ stopped=' (cancelled)'; break; }
     updateBulkModal(modal, done, targets.length, getText(q,'q').slice(0,70));
     try{
-      const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:getText(q,'a')})}).then(r=>r.json());
+      const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:getText(q,'a')})}).then(r=>r.json());
       if(d && d.error && /daily limit/i.test(d.error)){ stopped=' — daily AI limit reached'; break; }
       if(d && d.answer){ const s=qs(q.id); s.aOverride=d.answer; if(d.example) s.examples=[{id:q.id+'-ex'+Date.now(),label:'💡 Example',text:d.example}]; save(); ok++; }
       else failed++;
@@ -1128,6 +1128,7 @@ function renderHeaderControls(){
   const el=document.getElementById('hdrControls'); if(!el) return;
   const uname=document.getElementById('hdrUser');
   if(uname) uname.textContent = authed() ? ('Hi, '+(auth.name||'there').split(' ')[0]+(isAdmin()?' · Admin':'')) : 'Audit Interview Prep';
+  refreshHeaderAvatar();
   if(!authed()){ el.innerHTML=`<button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg></button>`; wireTheme(); return; }
   const adminBtns = isAdmin() ? `
     <a href="#/admin" title="Admin portal" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>🛠️</span><span class="hidden sm:inline text-xs font-semibold">Admin</span></a>
@@ -1278,8 +1279,10 @@ function doRequest(){
    ============================================================ */
 let portalCache=null;
 let avatarObjectUrl=null;
+let headerAvatarObjectUrl=null;
 let editingInterviewId=null;
 let adminPortalRecords=[];
+const AVATAR_CHOICES=['🐶','🐱','🦁','🐼','🦊','🐨','🐯','🐰','🦉','🐸','🦄','🐧'];
 
 function portalRequest(action, options={}){
   const method=options.method||'GET';
@@ -1312,10 +1315,40 @@ function textareaHTML(id,label,value,placeholder=''){
 function initials(name){
   return String(name||'Candidate').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'C';
 }
+function setHeaderAvatarFallback(profile){
+  const text=document.getElementById('headerAvatarText'), img=document.getElementById('headerAvatarImg');
+  if(!text||!img) return;
+  img.classList.add('hidden'); img.src='';
+  const chosen=profile&&AVATAR_CHOICES.includes(profile.avatarChoice)?profile.avatarChoice:'';
+  text.textContent=authed()?(chosen||initials((profile&&profile.fullName)||auth.name)):'MB4';
+  text.className=chosen?'text-2xl leading-none':'';
+}
+function refreshHeaderAvatar(){
+  const text=document.getElementById('headerAvatarText'), img=document.getElementById('headerAvatarImg');
+  if(!text||!img) return;
+  if(!authed()){
+    if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;}
+    setHeaderAvatarFallback(null); return;
+  }
+  const token=auth.token;
+  fetch(PORTAL_URL+'?action=avatar&v='+Date.now(),{headers:{'x-auth':token},cache:'no-store'}).then(r=>{
+    if(!r.ok) throw new Error('no avatar');
+    return r.blob();
+  }).then(blob=>{
+    if(auth.token!==token) return;
+    if(headerAvatarObjectUrl) URL.revokeObjectURL(headerAvatarObjectUrl);
+    headerAvatarObjectUrl=URL.createObjectURL(blob);
+    img.src=headerAvatarObjectUrl; img.classList.remove('hidden'); text.textContent='';
+  }).catch(()=>{
+    const cached=portalCache&&portalCache.profile;
+    if(cached){ setHeaderAvatarFallback(cached); return; }
+    portalRequest('me').then(d=>{ if(auth.token===token) setHeaderAvatarFallback(d.profile||{}); }).catch(()=>setHeaderAvatarFallback({fullName:auth.name}));
+  });
+}
 function loadOwnAvatar(){
   const img=document.getElementById('profileAvatar');
   if(!img) return;
-  fetch(PORTAL_URL+'?action=avatar',{headers:{'x-auth':auth.token}}).then(r=>{
+  fetch(PORTAL_URL+'?action=avatar&v='+Date.now(),{headers:{'x-auth':auth.token},cache:'no-store'}).then(r=>{
     if(!r.ok) throw new Error('no avatar');
     return r.blob();
   }).then(blob=>{
@@ -1340,7 +1373,7 @@ function drawProfile(record){
       <div class="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
         <div class="text-center shrink-0">
           <div class="relative h-24 w-24 mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-brand-400 to-fuchsia-500 grid place-items-center text-white font-display text-2xl font-extrabold shadow-lg">
-            <span id="profileAvatarFallback">${esc(initials(p.fullName||auth.name))}</span>
+            <span id="profileAvatarFallback" class="${p.avatarChoice?'text-5xl':''}">${esc(p.avatarChoice||initials(p.fullName||auth.name))}</span>
             <img id="profileAvatar" alt="Profile picture" class="hidden absolute inset-0 w-full h-full object-cover" />
           </div>
           <input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" />
@@ -1353,6 +1386,11 @@ function drawProfile(record){
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Keep your career profile current. Only you and the Mission Big 4 administrator can view it.</p>
           <a href="#/interviews" class="inline-flex mt-3 px-3 py-2 rounded-xl text-xs font-semibold bg-brand-500/10 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/20">📅 Open interview tracker →</a>
         </div>
+      </div>
+      <div class="mt-5 pt-4 border-t border-slate-200/70 dark:border-white/10">
+        <p class="text-xs font-semibold text-slate-500 mb-2 text-center sm:text-left">Or choose an avatar</p>
+        <div class="flex flex-wrap gap-2 justify-center sm:justify-start">${AVATAR_CHOICES.map(choice=>`<button type="button" data-action="profile-avatar-choice" data-avatar="${choice}" title="Use ${choice} avatar" class="h-11 w-11 grid place-items-center rounded-xl text-2xl bg-white/70 dark:bg-white/5 border ${p.avatarChoice===choice?'border-brand-400 ring-2 ring-brand-400/30':'border-slate-200 dark:border-white/10'} hover:scale-105 transition">${choice}</button>`).join('')}</div>
+        <p id="avatarChoiceMsg" class="text-[11px] text-slate-400 mt-2 text-center sm:text-left">${p.avatarChoice?'Selected avatar: '+p.avatarChoice:'Choose one if you prefer not to upload a photo.'}</p>
       </div>
     </div>
     <form id="profileForm" class="space-y-5">
@@ -1412,6 +1450,7 @@ function saveProfile(){
     currentEmployer:profileFormValue('pfCurrentEmployer'), targetRole:profileFormValue('pfTargetRole'),
     preferredFirms:profileFormValue('pfPreferredFirms'), preferredLocations:profileFormValue('pfPreferredLocations'),
     noticePeriod:profileFormValue('pfNoticePeriod'), linkedIn:profileFormValue('pfLinkedIn'), skills:profileFormValue('pfSkills'),
+    avatarChoice:(portalCache&&portalCache.profile&&portalCache.profile.avatarChoice)||'',
     marketingConsent:document.getElementById('pfConsent').checked,
     consentUpdatedAt:new Date().toISOString()
   };
@@ -1428,7 +1467,7 @@ function uploadProfileAvatar(){
   input.onchange=()=>{
     const file=input.files&&input.files[0]; if(!file) return;
     if(file.size>2*1024*1024){ alert('Please choose an image under 2 MB.'); return; }
-    portalRequest('avatar',{method:'POST',headers:{'content-type':file.type},body:file}).then(()=>loadOwnAvatar()).catch(err=>alert(err.message));
+    portalRequest('avatar',{method:'POST',headers:{'content-type':file.type},body:file}).then(()=>{ loadOwnAvatar(); refreshHeaderAvatar(); }).catch(err=>alert(err.message));
   };
 }
 function removeProfileAvatar(){
@@ -1437,7 +1476,23 @@ function removeProfileAvatar(){
     if(avatarObjectUrl){ URL.revokeObjectURL(avatarObjectUrl); avatarObjectUrl=null; }
     const img=document.getElementById('profileAvatar'); if(img){ img.src=''; img.classList.add('hidden'); }
     const fallback=document.getElementById('profileAvatarFallback'); if(fallback) fallback.classList.remove('hidden');
+    if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;}
+    setHeaderAvatarFallback((portalCache&&portalCache.profile)||{fullName:auth.name});
   }).catch(err=>alert(err.message));
+}
+function chooseProfileAvatar(choice){
+  if(!AVATAR_CHOICES.includes(choice)) return;
+  const msg=document.getElementById('avatarChoiceMsg'); if(msg) msg.textContent='Saving avatar…';
+  portalRequest('save-avatar-choice',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({avatarChoice:choice})}).then(()=>{
+    portalCache=portalCache||{profile:{},interviews:[]}; portalCache.profile=portalCache.profile||{}; portalCache.profile.avatarChoice=choice;
+    document.querySelectorAll('[data-action="profile-avatar-choice"]').forEach(button=>{
+      const selected=button.dataset.avatar===choice;
+      button.classList.toggle('border-brand-400',selected); button.classList.toggle('ring-2',selected); button.classList.toggle('ring-brand-400/30',selected);
+    });
+    const fallback=document.getElementById('profileAvatarFallback'); if(fallback){fallback.textContent=choice;fallback.className='text-5xl';}
+    if(msg){msg.textContent='✓ Avatar saved';msg.className='text-[11px] text-emerald-500 font-semibold mt-2 text-center sm:text-left';}
+    refreshHeaderAvatar();
+  }).catch(err=>{ if(msg){msg.textContent=err.message;msg.className='text-[11px] text-rose-500 mt-2';} });
 }
 
 const INTERVIEW_STATUS=[
@@ -1610,7 +1665,7 @@ function loadAdmin(){
       </div>`).join(''):'<p class="text-xs text-slate-400 py-2">No interview entries yet.</p>';
       return `<div class="rounded-xl border ${inactive||expired?'border-slate-200/70 dark:border-white/10 opacity-70':'border-emerald-400/30 bg-emerald-500/5'}">
         <div class="flex items-center gap-3 p-3">
-          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white text-xs font-extrabold shrink-0">${esc(initials(p.fullName||u.name))}</div>
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white ${p.avatarChoice?'text-xl':'text-xs'} font-extrabold shrink-0">${esc(p.avatarChoice||initials(p.fullName||u.name))}</div>
           <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
           <p class="text-[11px] text-slate-500 truncate">${esc(p.email||u.email||'')} · ${esc(p.mobile||u.phone||'')}</p>
           <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'}</p></div>
@@ -2042,6 +2097,7 @@ app.addEventListener('click', e => {
   if (act==='profile-save'){ saveProfile(); return; }
   if (act==='profile-avatar'){ uploadProfileAvatar(); return; }
   if (act==='profile-avatar-remove'){ removeProfileAvatar(); return; }
+  if (act==='profile-avatar-choice'){ chooseProfileAvatar(btn.dataset.avatar); return; }
   if (act==='interview-new'){ openInterviewEditor(null); return; }
   if (act==='interview-edit'){ openInterviewEditor(btn.dataset.id); return; }
   if (act==='interview-cancel'){ editingInterviewId=null; const h=document.getElementById('interviewEditor'); if(h) h.innerHTML=''; return; }
@@ -2073,7 +2129,7 @@ app.addEventListener('click', e => {
     const base=findBaseQ(id); if(!base){ return; }
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Drafting… <span class="inline-block animate-spin">◌</span>';
     const question=getText(base,'q'), existing=getText(base,'a');
-    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'draft',question,answer:existing})})
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question,answer:existing})})
       .then(r=>r.json()).then(d=>{
         if(d.error || !d.answer){ alert('AI draft failed: '+(d.error||'no answer returned')+'\\nPlease try again.'); btn.disabled=false; btn.innerHTML=orig; return; }
         const s=qs(id); s._editing=true; s._open=true;
@@ -2093,7 +2149,7 @@ app.addEventListener('click', e => {
     const firstEx=document.querySelector(`#ex-rows-${id} .ex-text`);
     const curExample=firstEx?firstEx.value:'';
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Refining…';
-    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'refine',question,answer:curAnswer,example:curExample,instruction})})
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'refine',question,answer:curAnswer,example:curExample,instruction})})
       .then(r=>r.json()).then(d=>{
         btn.disabled=false; btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result returned')); return; }
@@ -2152,7 +2208,7 @@ app.addEventListener('click', e => {
     if(!instruction || !instruction.trim()) return;
     const orig=btn.innerHTML; btn.innerHTML='✨ …';
     const exs=getExamples(base); const example=exs[0]?exs[0].text:'';
-    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'refine',question:getText(base,'q'),answer:getText(base,'a'),example,instruction})})
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'refine',question:getText(base,'q'),answer:getText(base,'a'),example,instruction})})
       .then(r=>r.json()).then(d=>{
         btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result')); return; }
@@ -2345,7 +2401,7 @@ function openAdd(areaId){
     if(!text||busy) return;
     chat.push({role:'user', text}); input.value=''; input.style.height='auto';
     busy=true; render(); save();
-    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({messages:chat})})
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({messages:chat})})
       .then(r=>r.json())
       .then(d=>{ busy=false; chat.push({role:'model', text:(d&&d.reply)||"Sorry, I didn't catch that."}); render(); save(); })
       .catch(()=>{ busy=false; chat.push({role:'model', text:"I couldn't reach the server — check your connection and try again."}); render(); save(); });

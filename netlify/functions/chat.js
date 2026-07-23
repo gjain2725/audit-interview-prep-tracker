@@ -6,11 +6,11 @@ const json = (obj, status = 200) =>
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 
-const CHAT_MODEL = process.env.GEMINI_MODEL || 'gemini-flash-latest';
-const DRAFT_MODEL = process.env.GEMINI_DRAFT_MODEL || 'gemini-pro-latest';
+const CHAT_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const DRAFT_MODEL = process.env.GEMINI_DRAFT_MODEL || 'gemini-2.5-flash';
 const DAILY_CAP = parseInt(process.env.CHAT_DAILY_CAP || '800', 10);
 
-const SYSTEM = `You are "Audit Buddy", a friendly, sharp tutor helping a Chartered Accountant (Himanshi) prepare for Big 4 Global Delivery Center (EY GDS, KPMG KGS, PwC AC, Deloitte USI) audit interviews in India.
+const SYSTEM = `You are "Audit Buddy", a friendly, sharp tutor helping Chartered Accountancy candidates prepare for Big 4 Global Delivery Center (EY GDS, KPMG KGS, PwC AC, Deloitte USI) audit interviews in India.
 
 Your expertise: statutory audit, Ind AS / IFRS, SA / ISA auditing standards, CARO 2020, Schedule III, internal financial controls (IFC), audit procedures and assertions, fraud (SA 240), materiality, sampling, and behavioural / HR interview questions.
 
@@ -43,11 +43,16 @@ async function roleFor(token) {
 
 async function callGemini(key, payload, models) {
   const list = models.filter((m, i, a) => m && a.indexOf(m) === i);
+  const baseUrl = (process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
   let lastErr = '';
   for (const model of list) {
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`;
-      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) });
+      const url = `${baseUrl}/v1beta/models/${model}:generateContent`;
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(payload),
+      });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
         const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
@@ -63,7 +68,7 @@ async function callGemini(key, payload, models) {
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
 
-  const key = process.env.GEMINI_KEY || process.env.Gemini || process.env.GEMINI;
+  const key = process.env.GEMINI_API_KEY || process.env.GEMINI_KEY || process.env.Gemini || process.env.GEMINI;
   if (!key) {
     return json({
       reply: "⚠️ The AI tutor isn't switched on yet — a Gemini API key still needs to be added to the site's environment variables. (One-time setup by the site owner.)",
@@ -130,7 +135,7 @@ Format your reply EXACTLY like this — the answer first, then the delimiter on 
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
     };
-    const res = await callGemini(key, payload, [DRAFT_MODEL, 'gemini-flash-latest', 'gemini-flash-lite-latest']);
+    const res = await callGemini(key, payload, [DRAFT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']);
     if (res.error) return json({ error: res.error });
     let answer = (res.text || '').trim();
     let example = '';
@@ -150,7 +155,7 @@ Format your reply EXACTLY like this — the answer first, then the delimiter on 
     contents: trimmed.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
     generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
   };
-  const res = await callGemini(key, payload, [CHAT_MODEL, 'gemini-flash-latest', 'gemini-flash-lite-latest']);
+  const res = await callGemini(key, payload, [CHAT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']);
   if (res.error) return json({ reply: "Sorry, I couldn't reach Gemini right now — " + res.error });
   return json({ reply: res.text || "(I didn't get a response — please try rephrasing.)", model: res.model });
 };

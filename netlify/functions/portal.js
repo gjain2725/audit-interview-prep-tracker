@@ -14,7 +14,10 @@ const PROFILE_FIELDS = [
   'state', 'pinCode', 'country', 'caStatus', 'caAttempt', 'qualificationYear',
   'articleshipFirm', 'experienceYears', 'currentEmployer', 'targetRole',
   'preferredFirms', 'preferredLocations', 'noticePeriod', 'linkedIn', 'skills',
+  'avatarChoice',
 ];
+
+const ALLOWED_AVATARS = new Set(['🐶', '🐱', '🦁', '🐼', '🦊', '🐨', '🐯', '🐰', '🦉', '🐸', '🦄', '🐧']);
 
 const INTERVIEW_FIELDS = [
   'id', 'company', 'role', 'interviewDate', 'round', 'mode', 'interviewerName',
@@ -35,6 +38,7 @@ function cleanProfile(input = {}) {
     const max = ['addressLine1', 'addressLine2', 'skills'].includes(field) ? 500 : 160;
     profile[field] = trim(input[field], max);
   }
+  if (!ALLOWED_AVATARS.has(profile.avatarChoice)) profile.avatarChoice = '';
   profile.marketingConsent = input.marketingConsent === true;
   profile.consentUpdatedAt = profile.marketingConsent
     ? trim(input.consentUpdatedAt, 40) || new Date().toISOString()
@@ -160,7 +164,7 @@ export default async (req) => {
       status: 200,
       headers: {
         'content-type': (result.metadata && result.metadata.type) || 'image/jpeg',
-        'cache-control': 'private, max-age=300',
+        'cache-control': 'no-store',
       },
     });
   }
@@ -175,6 +179,24 @@ export default async (req) => {
     }
     await profileStore.setJSON(`profile:${auth.key}`, profile);
     return json({ ok: true, profile });
+  }
+
+  if (req.method === 'POST' && action === 'save-avatar-choice') {
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const avatarChoice = trim(body.avatarChoice, 8);
+    if (!ALLOWED_AVATARS.has(avatarChoice)) return json({ error: 'Invalid avatar choice.' }, 400);
+    const current = (await profileStore.get(`profile:${auth.key}`, { type: 'json' })) || {
+      fullName: auth.account.name || '',
+      email: auth.account.email || '',
+      mobile: auth.account.phone || '',
+      country: 'India',
+      marketingConsent: false,
+    };
+    current.avatarChoice = avatarChoice;
+    current.updatedAt = new Date().toISOString();
+    await profileStore.setJSON(`profile:${auth.key}`, current);
+    return json({ ok: true, avatarChoice });
   }
 
   if (req.method === 'POST' && action === 'save-interviews') {
