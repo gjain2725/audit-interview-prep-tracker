@@ -617,7 +617,7 @@ function setSyncStatus(state){
 /* ---- payload build / adopt ---- */
 function syncPayload(){
   const q={};
-  for(const k in store.q){ const s=Object.assign({},store.q[k]); delete s._open; delete s._editing; if(Object.keys(s).length) q[k]=s; }
+  for(const k in store.q){ const s=Object.assign({},store.q[k]); delete s._open; delete s._editing; delete s._draft; if(Object.keys(s).length) q[k]=s; }
   return { v:2, q, custom:store.custom||{}, order:store.order||{}, attach:store.attach||{}, trash:store.trash||[], theme:store.theme };
 }
 function adopt(data){
@@ -641,7 +641,7 @@ function pushNow(){
     .catch(()=>{ _lastPayload=null; setSyncStatus('offline'); });
 }
 const INIT_KEY='mb4_shared_init';
-function cleanQ(q){ const o={}; for(const k in (q||{})){ const s=Object.assign({},q[k]); delete s._open; delete s._editing; if(Object.keys(s).length) o[k]=s; } return o; }
+function cleanQ(q){ const o={}; for(const k in (q||{})){ const s=Object.assign({},q[k]); delete s._open; delete s._editing; delete s._draft; if(Object.keys(s).length) o[k]=s; } return o; }
 function mergeAttach(ra,la){
   const out=Object.assign({},ra||{});
   for(const slot in (la||{})){
@@ -1277,6 +1277,11 @@ function getExamples(q){
   else arr = [];
   return arr.map((ex,idx)=>({ id: ex.id || (q.id+'-ex'+idx), label: ex.label, text: ex.text }));
 }
+function findBaseQ(id){
+  for(const ar of AREAS){ const q=ar.questions.find(x=>x.id===id); if(q) return q; }
+  for(const areaId in (store.custom||{})){ const c=(store.custom[areaId]||[]).find(x=>x.id===id); if(c) return c; }
+  return null;
+}
 function isEdited(id){
   const s = store.q[id];
   return !!(s && (s.qOverride!=null || s.aOverride!=null || Array.isArray(s.examples)));
@@ -1300,15 +1305,19 @@ function qCard(area, q, a, i, reorderAllowed){
   const noteOpen = s.note ? 'open' : '';
 
   if (editing){
+    const draft = s._draft;                       // AI draft pre-fills answer + examples (nothing saved until Save)
+    const eaText = draft ? draft.a : aText;
+    const exList = draft ? draft.examples : getExamples(q);
     return `<article class="q-card fade rounded-2xl p-4 sm:p-5 bg-white/85 dark:bg-white/[.05] glass border-2 ${a.ring} border-current/30 shadow-md">
       <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-2">✏️ Editing</p>
+      ${draft?`<div class="mb-3 rounded-xl bg-gradient-to-r from-brand-500/10 to-cyan-400/10 border border-brand-400/30 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">✨ <b>AI draft ready</b> — review &amp; edit below, then <b>Save</b> to keep it (or Cancel to discard). Nothing is saved yet.</div>`:''}
       <label class="block text-xs font-semibold text-slate-500 mb-1">Question</label>
       <textarea data-edit-q="${q.id}" rows="2" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 mb-3 outline-none focus:ring-2 focus:ring-brand-400">${esc(qText)}</textarea>
       <label class="block text-xs font-semibold text-slate-500 mb-1">Model answer</label>
-      <textarea data-edit-a="${q.id}" rows="6" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 outline-none focus:ring-2 focus:ring-brand-400">${esc(aText)}</textarea>
+      <textarea data-edit-a="${q.id}" rows="8" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 outline-none focus:ring-2 focus:ring-brand-400 whitespace-pre-wrap">${esc(eaText)}</textarea>
 
       <label class="block text-xs font-semibold text-slate-500 mb-1 mt-3">Examples <span class="text-slate-400 font-normal">— rename, edit, add or remove as many as you like</span></label>
-      <div id="ex-rows-${q.id}">${getExamples(q).map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
+      <div id="ex-rows-${q.id}">${exList.map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
       <button type="button" data-action="ex-add" data-id="${q.id}" class="text-xs font-semibold ${a.text} hover:underline">+ Add another example</button>
 
       <div class="flex gap-2 mt-4">
@@ -1357,9 +1366,12 @@ function qCard(area, q, a, i, reorderAllowed){
               <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
               <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
 
-            <div class="mt-3 flex items-center gap-3 text-xs">
+            <div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
+              <button data-action="ai-draft" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold px-2 py-1 rounded-lg bg-gradient-to-r from-brand-500/15 to-cyan-400/15 ring-1 ring-brand-400/30 ${a.text} hover:from-brand-500/25 hover:to-cyan-400/25 transition">
+                ✨ Draft with AI
+              </button>
               <button data-action="edit-open" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold text-slate-500 hover:${a.text.split(' ')[0]} transition">
-                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Edit Q&amp;A + examples
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Edit
               </button>
               ${isEdited(q.id)?`<span class="text-[10px] px-1.5 py-0.5 rounded ${a.soft} ${a.text} font-semibold">edited</span>`:''}
               ${q._custom?`<button data-action="delete-custom" data-id="${q.id}" data-area="${area.id}" class="inline-flex items-center gap-1 font-semibold text-slate-400 hover:text-rose-500 ml-auto">🗑 Delete</button>`:''}
@@ -1400,7 +1412,20 @@ app.addEventListener('click', e => {
   if (act==='flag'){ const s=qs(id); s.flag=!s.flag; save(); refresh(); return; }
   if (act==='done'){ const s=qs(id); s.done=!s.done; if(s.done) s.flag=s.flag; save(); refresh(); return; }
   if (act==='edit-open'){ const s=qs(id); s._editing=true; s._open=true; save(); refresh(); return; }
-  if (act==='edit-cancel'){ const s=qs(id); s._editing=false; save(); refresh(); return; }
+  if (act==='edit-cancel'){ const s=qs(id); s._editing=false; delete s._draft; save(); refresh(); return; }
+  if (act==='ai-draft'){
+    const base=findBaseQ(id); if(!base){ return; }
+    btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Drafting… <span class="inline-block animate-spin">◌</span>';
+    const question=getText(base,'q'), existing=getText(base,'a');
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'draft',question,answer:existing})})
+      .then(r=>r.json()).then(d=>{
+        if(d.error || !d.answer){ alert('AI draft failed: '+(d.error||'no answer returned')+'\\nPlease try again.'); btn.disabled=false; btn.innerHTML=orig; return; }
+        const s=qs(id); s._editing=true; s._open=true;
+        s._draft={ a:d.answer, examples: d.example?[{id:id+'-ex'+Date.now(), label:'💡 Example', text:d.example}]:[] };
+        refresh();
+      }).catch(()=>{ alert('AI draft failed — check your connection and try again.'); btn.disabled=false; btn.innerHTML=orig; });
+    return;
+  }
   if (act==='ex-add'){
     const cont = document.getElementById('ex-rows-'+id);
     if (cont){ cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example','')); cont.lastElementChild.querySelector('.ex-text').focus(); }
@@ -1416,9 +1441,9 @@ app.addEventListener('click', e => {
       label: (r.querySelector('.ex-label').value.trim()) || '💡 Example',
       text: r.querySelector('.ex-text').value.trim()
     })).filter(e=>e.text) : [];
-    const s=qs(id); s.qOverride=qv; s.aOverride=av; s.examples=rows; s._editing=false; s._open=true; save(); refresh(); return;
+    const s=qs(id); s.qOverride=qv; s.aOverride=av; s.examples=rows; s._editing=false; s._open=true; delete s._draft; save(); refresh(); return;
   }
-  if (act==='edit-reset'){ const s=qs(id); delete s.qOverride; delete s.aOverride; delete s.examples; s._editing=false; save(); refresh(); return; }
+  if (act==='edit-reset'){ const s=qs(id); delete s.qOverride; delete s.aOverride; delete s.examples; s._editing=false; delete s._draft; save(); refresh(); return; }
   if (act==='area-filter'){ const ar=btn.dataset.area; (areaFilter[ar]||(areaFilter[ar]={status:'all',search:''})).status=btn.dataset.status; renderArea(AREA_BY_ID[ar]); return; }
   if (act==='add-open'){ openAdd(btn.dataset.area); return; }
   if (act==='order-reset'){ const ar=btn.dataset.area; if(store.order) delete store.order[ar]; save(); renderArea(AREA_BY_ID[ar]); return; }
