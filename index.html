@@ -1102,6 +1102,7 @@ function restoreVersion(ts){
 function router(){
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/a\/([\w-]+)/);
+  if(hash!=='#/admin'&&adminLiveTimer){ clearInterval(adminLiveTimer); adminLiveTimer=null; }
   window.scrollTo({top:0});
   stopSpeech();   // stop any audio when navigating
   renderHeaderControls();
@@ -1283,6 +1284,8 @@ let headerAvatarObjectUrl=null;
 let headerAvatarRequest=0;
 let editingInterviewId=null;
 let adminPortalRecords=[];
+let adminLiveTimer=null;
+const adminOpenCandidates=new Set();
 const AVATAR_CHOICES=['🐶','🐱','🦁','🐼','🦊','🐨','🐯','🐰','🦉','🐸','🦄','🐧'];
 
 function portalRequest(action, options={}){
@@ -1609,14 +1612,16 @@ function saveInterview(){
   persistInterviews(list).then(()=>{ editingInterviewId=null; drawInterviews(); }).catch(err=>{ msg.textContent=err.message; msg.className='text-xs text-rose-500'; });
 }
 function exportCandidateData(){
-  const headers=['Name','Email','Mobile','City','State','PIN','CA status','CA attempt','Qualification year','Experience','Current employer','Target role','Preferred firms','Preferred locations','Marketing consent','Interview company','Interview role','Interview date','Round','Status','Follow-up date','Employer email','Confidence','Questions asked','Feedback','Next step'];
+  const headers=['Name','Email','Mobile','City','State','PIN','CA status','CA attempt','Qualification year','Experience','Current employer','Target role','Preferred firms','Preferred locations','Marketing consent','Readiness %','Questions completed','Flagged questions','Last progress sync','Interview company','Interview role','Interview date','Round','Status','Follow-up date','Employer email','Confidence','Questions asked','Feedback','Next step'];
   const rows=[];
   adminPortalRecords.forEach(record=>{
     const p=record.profile||{}, interviews=(record.interviews&&record.interviews.length)?record.interviews:[{}];
+    const progress=candidateProgress(record);
     interviews.forEach(item=>rows.push([
       p.fullName,p.email,p.mobile,p.city,p.state,p.pinCode,p.caStatus,p.caAttempt,p.qualificationYear,
       p.experienceYears,p.currentEmployer,p.targetRole,p.preferredFirms,p.preferredLocations,
-      p.marketingConsent?'Yes':'No',item.company,item.role,item.interviewDate,item.round,
+      p.marketingConsent?'Yes':'No',progress.pct,progress.done,progress.flagged,progress.updatedAt||'',
+      item.company,item.role,item.interviewDate,item.round,
       statusLabel(item.status||''),item.followUpDate,item.employerEmail,item.confidenceRating,
       item.questionsAsked,item.feedback,item.nextStep
     ]));
@@ -1625,14 +1630,46 @@ function exportCandidateData(){
   const csv=[headers,...rows].map(row=>row.map(cell).join(',')).join('\r\n');
   downloadBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),'mission-big4-candidate-data-'+new Date().toISOString().slice(0,10)+'.csv');
 }
+function candidateProgress(record){
+  const state=(record&&record.progress&&record.progress.q)||{};
+  const questions=allQuestions();
+  const validIds=new Set(questions.map(item=>item.q.id));
+  let done=0, flagged=0, notes=0;
+  for(const [id,value] of Object.entries(state)){
+    if(!validIds.has(id)) continue;
+    if(value.done) done++;
+    if(value.flag) flagged++;
+    if(value.hasNote) notes++;
+  }
+  const total=questions.length;
+  const areas=AREAS.map(area=>{
+    const ids=areaQuestions(area).map(q=>q.id);
+    const areaDone=ids.filter(id=>state[id]&&state[id].done).length;
+    return {id:area.id,title:area.title,icon:area.icon,done:areaDone,total:ids.length,pct:ids.length?Math.round(areaDone*100/ids.length):0};
+  });
+  return {done,total,flagged,notes,pct:total?Math.round(done*100/total):0,updatedAt:record&&record.progress&&record.progress.updatedAt,areas};
+}
+function fmtLastActive(iso){
+  if(!iso) return 'No recent sync recorded';
+  const time=Date.parse(iso); if(!time) return 'No recent sync recorded';
+  const mins=Math.max(0,Math.round((Date.now()-time)/60000));
+  if(mins<2) return 'Just now';
+  if(mins<60) return mins+' min ago';
+  const hours=Math.round(mins/60); if(hours<24) return hours+' hr ago';
+  const days=Math.round(hours/24); if(days<7) return days+' day'+(days===1?'':'s')+' ago';
+  return fmtExpiry(iso);
+}
 
 function renderAdmin(){
   const app=document.getElementById('app');
   if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p><button data-action="admin-login" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Admin login</button></div>`; return; }
+  if(adminLiveTimer) clearInterval(adminLiveTimer);
+  adminLiveTimer=setInterval(()=>{ if(location.hash==='#/admin') loadAdmin(); },30000);
   app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to tracker</a>
     <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
       <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers, monitor preparation progress and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
+      <p class="text-[11px] text-emerald-500 mt-1">● Progress refreshes automatically every 30 seconds · private note text is never shown</p>
       <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button></div>
     </div>
     <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
@@ -1650,6 +1687,9 @@ function loadAdmin(){
     const totalInterviews=records.reduce((n,r)=>n+(r.interviews||[]).length,0);
     const followUps=records.reduce((n,r)=>n+(r.interviews||[]).filter(x=>x.followUpDate&&Date.parse(x.followUpDate)>=Date.now()-86400000&&!['rejected','accepted','declined'].includes(x.status)).length,0);
     const positive=records.reduce((n,r)=>n+(r.interviews||[]).filter(x=>['cleared','offer-received','accepted'].includes(x.status)).length,0);
+    const progressRows=records.map(candidateProgress);
+    const averageReadiness=progressRows.length?Math.round(progressRows.reduce((sum,p)=>sum+p.pct,0)/progressRows.length):0;
+    const activeLearners=progressRows.filter(p=>p.updatedAt&&Date.now()-Date.parse(p.updatedAt)<7*86400000).length;
     const pendHtml = pending.length ? pending.map(p=>`<div class="flex items-center gap-3 p-3 rounded-xl border border-amber-400/30 bg-amber-500/5">
       <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.name)}</p><p class="text-[11px] text-slate-500 truncate">${esc(p.email)} · ${esc(p.phone)} · ${fmtExpiry(p.requestedAt)}</p></div>
       <button data-action="admin-approve" data-id="${esc(p.id)}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shrink-0">✓ Approve 1yr</button>
@@ -1659,6 +1699,7 @@ function loadAdmin(){
     const userHtml = users.length ? users.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(u=>{
       const exp=Date.parse(u.expiresAt||0), expired=exp&&exp<nowT, inactive=u.active===false;
       const rec=recordByCode[u.code]||{profile:{},interviews:[]}, p=rec.profile||{}, ints=rec.interviews||[];
+      const prog=candidateProgress(rec);
       const candidateKey=String(u.code).replace(/[^a-zA-Z0-9_-]/g,'');
       const interviewRows=ints.length?ints.slice().sort((a,b)=>(b.interviewDate||'').localeCompare(a.interviewDate||'')).map(x=>`<div class="grid sm:grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 sm:gap-3 py-2 border-t border-slate-200/60 dark:border-white/10 text-xs">
         <span><b>${esc(x.company||'Company')}</b><span class="block text-slate-400">${esc(x.role||'')}</span></span>
@@ -1671,14 +1712,26 @@ function loadAdmin(){
           <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white ${p.avatarChoice?'text-xl':'text-xs'} font-extrabold shrink-0">${esc(p.avatarChoice||initials(p.fullName||u.name))}</div>
           <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
           <p class="text-[11px] text-slate-500 truncate">${esc(p.email||u.email||'')} · ${esc(p.mobile||u.phone||'')}</p>
-          <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'}</p></div>
+          <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'}</p>
+          <div class="mt-1.5 flex items-center gap-2"><div class="h-1.5 w-24 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-400 to-brand-500" style="width:${prog.pct}%"></div></div><span class="text-[11px] font-semibold text-brand-500">${prog.pct}% ready</span><span class="text-[10px] text-slate-400">· ${fmtLastActive(prog.updatedAt)}</span></div></div>
           <button data-action="admin-candidate-toggle" data-key="${candidateKey}" class="h-8 px-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">View data</button>
           <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
           <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
           <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
         </div>
-        <div id="candidate-${candidateKey}" class="hidden px-4 pb-4">
+        <div id="candidate-${candidateKey}" class="${adminOpenCandidates.has(candidateKey)?'':'hidden'} px-4 pb-4">
           <div class="rounded-xl bg-white/60 dark:bg-black/15 p-3">
+            <div class="rounded-xl bg-gradient-to-br from-brand-500/10 to-cyan-400/5 border border-brand-400/15 p-3 mb-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div><h4 class="font-display font-bold text-sm">Preparation progress</h4><p class="text-[11px] text-slate-400">${prog.done}/${prog.total} questions completed · ${prog.flagged} flagged · ${prog.notes} with private notes</p></div>
+                <div class="text-right"><p class="font-display text-2xl font-extrabold text-brand-500">${prog.pct}%</p><p class="text-[10px] text-slate-400">${fmtLastActive(prog.updatedAt)}</p></div>
+              </div>
+              <div class="h-2 mt-3 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500" style="width:${prog.pct}%"></div></div>
+              <div class="grid sm:grid-cols-2 gap-x-5 gap-y-2 mt-4">${prog.areas.map(area=>`<div>
+                <div class="flex items-center justify-between gap-2 text-[11px]"><span class="truncate">${area.icon} ${esc(area.title)}</span><span class="text-slate-400 shrink-0">${area.done}/${area.total} · ${area.pct}%</span></div>
+                <div class="h-1 mt-1 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-brand-500" style="width:${area.pct}%"></div></div>
+              </div>`).join('')}</div>
+            </div>
             <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div><span class="text-slate-400">Location</span><p class="font-semibold">${esc([p.city,p.state,p.pinCode].filter(Boolean).join(', ')||'Not provided')}</p></div>
               <div><span class="text-slate-400">CA details</span><p class="font-semibold">${esc([p.caStatus,p.caAttempt,p.qualificationYear].filter(Boolean).join(' · ')||'Not provided')}</p></div>
@@ -1692,7 +1745,9 @@ function loadAdmin(){
         </div>
       </div>`;
     }).join('') : '<p class="text-sm text-slate-400 px-1">No subscribers yet.</p>';
-    body.innerHTML=`<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+    body.innerHTML=`<div class="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 mb-6">
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Avg readiness</p><p class="font-display text-3xl font-extrabold text-brand-500">${averageReadiness}%</p></div>
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Active 7 days</p><p class="font-display text-3xl font-extrabold text-cyan-500">${activeLearners}</p></div>
         <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Profiles started</p><p class="font-display text-3xl font-extrabold">${profilesStarted}<span class="text-xs text-slate-400">/${records.length}</span></p></div>
         <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Interviews</p><p class="font-display text-3xl font-extrabold text-brand-500">${totalInterviews}</p></div>
         <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Follow-ups</p><p class="font-display text-3xl font-extrabold text-amber-500">${followUps}</p></div>
@@ -2113,7 +2168,10 @@ app.addEventListener('click', e => {
   }
   if (act==='admin-candidate-toggle'){
     const panel=document.getElementById('candidate-'+btn.dataset.key);
-    if(panel) panel.classList.toggle('hidden');
+    if(panel){
+      panel.classList.toggle('hidden');
+      if(panel.classList.contains('hidden')) adminOpenCandidates.delete(btn.dataset.key); else adminOpenCandidates.add(btn.dataset.key);
+    }
     return;
   }
 

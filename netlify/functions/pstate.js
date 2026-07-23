@@ -23,14 +23,17 @@ export default async (req) => {
   if (!key) return json({ error: 'unauthorized' }, 401);
 
   if (req.method === 'GET') {
-    const st = (await store.get('ps:' + key, { type: 'json' })) || { q: {} };
+    const st = (await store.get('ps:' + key, { type: 'json' })) || { q: {}, updatedAt: null };
     return json({ pstate: st });
   }
   if (req.method === 'POST') {
     let body; try { body = await req.json(); } catch { body = null; }
     if (!body) return json({ error: 'bad request' }, 400);
-    await store.setJSON('ps:' + key, body.pstate || { q: {} });
-    return json({ ok: true, updated_at: new Date().toISOString() });
+    const updatedAt = new Date().toISOString();
+    const next = body.pstate || { q: {} };
+    next.updatedAt = updatedAt;
+    await store.setJSON('ps:' + key, next);
+    return json({ ok: true, updated_at: updatedAt });
   }
   return json({ error: 'method not allowed' }, 405);
 };

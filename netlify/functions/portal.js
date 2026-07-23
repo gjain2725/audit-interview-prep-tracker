@@ -117,13 +117,25 @@ async function recordFor(key, account = {}) {
 
 async function adminRecords() {
   const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
+  const progressStore = getStore('tracker-pstate');
   const entries = Object.entries(users);
   return Promise.all(entries.map(async ([code, user]) => {
-    const record = await recordFor(code, {
-      name: user.name,
-      email: user.email,
-      phone: user.phone,
-    });
+    const [record, savedProgress] = await Promise.all([
+      recordFor(code, {
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+      }),
+      progressStore.get(`ps:${code}`, { type: 'json' }),
+    ]);
+    const progressQ = {};
+    for (const [questionId, value] of Object.entries((savedProgress && savedProgress.q) || {})) {
+      const safe = {};
+      if (value && value.done) safe.done = true;
+      if (value && value.flag) safe.flag = true;
+      if (value && value.note) safe.hasNote = true;
+      if (Object.keys(safe).length) progressQ[questionId] = safe;
+    }
     return {
       code,
       active: user.active !== false,
@@ -131,6 +143,10 @@ async function adminRecords() {
       createdAt: user.createdAt || null,
       profile: record.profile,
       interviews: record.interviews,
+      progress: {
+        q: progressQ,
+        updatedAt: (savedProgress && savedProgress.updatedAt) || null,
+      },
     };
   }));
 }
