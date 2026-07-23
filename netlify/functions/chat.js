@@ -49,21 +49,60 @@ async function callGemini(key, payload, models) {
   for (const model of list) {
     try {
       const url = `${baseUrl}/v1beta/models/${model}:generateContent`;
+      const requestPayload = JSON.parse(JSON.stringify(payload));
+      // Gemini 2.5 Flash thinks dynamically by default. For short interview
+      // drafts, reserve the output budget for the visible answer instead.
+      if (!/2\.5/i.test(model) && requestPayload.generationConfig) {
+        delete requestPayload.generationConfig.thinkingConfig;
+      }
       const r = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(requestPayload),
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
-        const parts = (((d.candidates || [])[0] || {}).content || {}).parts || [];
-        return { text: parts.map(p => p.text || '').join('').trim(), model };
+        const candidate = (d.candidates || [])[0] || {};
+        const parts = (candidate.content || {}).parts || [];
+        return {
+          text: parts.map(p => p.text || '').join('').trim(),
+          model,
+          finishReason: candidate.finishReason || '',
+          finishMessage: candidate.finishMessage || '',
+          usage: d.usageMetadata || {},
+        };
       }
       lastErr = (d && d.error && d.error.message) || ('HTTP ' + r.status);
       if (/api key not valid|invalid api key|api_key_invalid|permission denied on resource/i.test(lastErr)) return { error: lastErr, fatal: true };
     } catch (e) { lastErr = e.message; }
   }
   return { error: lastErr };
+}
+
+function parseDraftResponse(text) {
+  let answer = String(text || '').trim();
+  let example = '';
+  const marker = answer.match(/(?:^|\n)\s*#{0,3}\s*EXAMPLE\s*#{0,3}\s*(?:\n|$)/i);
+  if (marker) {
+    const start = marker.index || 0;
+    example = answer.slice(start + marker[0].length).trim();
+    answer = answer.slice(0, start).trim();
+  }
+  answer = answer.replace(/^(answer|model answer)\s*[:.-]\s*/i, '').trim();
+  example = example.replace(/^(example)\s*[:.-]\s*/i, '').trim();
+  return { answer, example };
+}
+
+function draftIsComplete(parsed, response, task) {
+  if (!parsed.answer || !parsed.example) return false;
+  if (response.finishReason && response.finishReason !== 'STOP') return false;
+  const answerWords = parsed.answer.split(/\s+/).filter(Boolean).length;
+  const exampleWords = parsed.example.split(/\s+/).filter(Boolean).length;
+  const minAnswerWords = task === 'refine' ? 30 : 90;
+  const minExampleWords = task === 'refine' ? 8 : 12;
+  if (answerWords < minAnswerWords || exampleWords < minExampleWords) return false;
+  if (/[:;,(\-–—]$/.test(parsed.answer)) return false;
+  return true;
 }
 
 export default async (req) => {
@@ -134,17 +173,45 @@ Format your reply EXACTLY like this — the answer first, then the delimiter on 
     const payload = {
       system_instruction: { parts: [{ text: DRAFT_SYSTEM }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
+      generationConfig: {
+        temperature: 0.5,
+        maxOutputTokens: 4096,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
     };
-    const res = await callGemini(key, payload, [DRAFT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']);
+    const models = [DRAFT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+    let res = await callGemini(key, payload, models);
     if (res.error) return json({ error: res.error });
-    let answer = (res.text || '').trim();
-    let example = '';
-    const idx = answer.indexOf('###EXAMPLE###');
-    if (idx >= 0) { example = answer.slice(idx + 13).trim(); answer = answer.slice(0, idx).trim(); }
-    answer = answer.replace(/^(answer|model answer)\s*[:.-]\s*/i, '').trim();
-    example = example.replace(/^(example)\s*[:.-]\s*/i, '').trim();
-    return json({ answer, example, model: res.model });
+    let parsed = parseDraftResponse(res.text);
+    let retried = false;
+    if (!draftIsComplete(parsed, res, body.task)) {
+      retried = true;
+      const retryPayload = JSON.parse(JSON.stringify(payload));
+      retryPayload.contents[0].parts[0].text += body.task === 'refine'
+        ? `\n\nCRITICAL COMPLETION REQUIREMENT:
+Your previous attempt was incomplete. Rewrite the revised answer from the beginning and fully follow the candidate's instruction.
+- Include the exact ###EXAMPLE### delimiter and a complete practical example.
+- Use complete sentences and never stop immediately after a heading or colon.`
+        : `\n\nCRITICAL COMPLETION REQUIREMENT:
+Your previous attempt was incomplete. Start again from the beginning.
+- Complete every audit step; do not stop after a heading or colon.
+- Keep the model answer between 160 and 230 words.
+- Include the exact ###EXAMPLE### delimiter and a complete 35–70 word example.
+- Finish both sections with complete sentences.`;
+      retryPayload.generationConfig.temperature = 0.35;
+      retryPayload.generationConfig.maxOutputTokens = 6144;
+      res = await callGemini(key, retryPayload, models);
+      if (res.error) return json({ error: res.error });
+      parsed = parseDraftResponse(res.text);
+    }
+    if (!draftIsComplete(parsed, res, body.task)) {
+      return json({
+        error: 'The AI response was incomplete, so it was not inserted. Please click Draft again.',
+        incomplete: true,
+        finishReason: res.finishReason || '',
+      }, 502);
+    }
+    return json({ answer: parsed.answer, example: parsed.example, model: res.model, retried });
   }
 
   // ---------- CHAT mode ----------
@@ -154,7 +221,7 @@ Format your reply EXACTLY like this — the answer first, then the delimiter on 
   const payload = {
     system_instruction: { parts: [{ text: SYSTEM }] },
     contents: trimmed.map(m => ({ role: m.role, parts: [{ text: m.text }] })),
-    generationConfig: { temperature: 0.4, maxOutputTokens: 1200 },
+    generationConfig: { temperature: 0.4, maxOutputTokens: 1600, thinkingConfig: { thinkingBudget: 0 } },
   };
   const res = await callGemini(key, payload, [CHAT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest']);
   if (res.error) return json({ reply: "Sorry, I couldn't reach Gemini right now — " + res.error });
