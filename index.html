@@ -892,6 +892,98 @@ function downloadPdf(){
   w.document.write(buildPrintHtml()); w.document.close();
   setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 500);
 }
+
+/* ---- Text-to-speech: listen to Q&A (prefers an Indian male English voice) ---- */
+let _voices=[], speakingId=null, _ttsKeep=null;
+function _loadVoices(){ try{ _voices=window.speechSynthesis.getVoices()||[]; }catch(e){ _voices=[]; } }
+if('speechSynthesis' in window){ _loadVoices(); try{ window.speechSynthesis.onvoiceschanged=_loadVoices; }catch(e){} }
+function pickVoice(){
+  if(!_voices.length) _loadVoices();
+  const v=_voices; if(!v.length) return null;
+  const f=fn=>v.find(fn);
+  return f(x=>/en[-_]IN/i.test(x.lang)&&/male|ravi|prabhat|hemant|madhur/i.test(x.name))
+    || f(x=>/ravi|prabhat|hemant/i.test(x.name))
+    || f(x=>/en[-_]IN/i.test(x.lang))
+    || f(x=>/india/i.test(x.name))
+    || f(x=>/^en/i.test(x.lang)&&/male/i.test(x.name))
+    || f(x=>/^en[-_](gb|us|au)/i.test(x.lang))
+    || f(x=>/^en/i.test(x.lang))
+    || v[0];
+}
+function stopSpeech(){ try{ window.speechSynthesis.cancel(); }catch(e){} speakingId=null; if(_ttsKeep){clearInterval(_ttsKeep);_ttsKeep=null;} updateSpeakButtons(); }
+function speakText(id, text){
+  if(!('speechSynthesis' in window)){ alert('Sorry, this browser does not support reading text aloud.'); return; }
+  const synth=window.speechSynthesis;
+  if(speakingId===id){ stopSpeech(); return; }   // toggle off
+  synth.cancel();
+  const voice=pickVoice();
+  const sentences=(text.replace(/\s+/g,' ').match(/[^.!?]+[.!?]+|\S[^.!?]*$/g)||[text]);
+  const chunks=[]; let buf='';
+  sentences.forEach(c=>{ if((buf+' '+c).length>210){ if(buf) chunks.push(buf.trim()); buf=c; } else buf=buf?buf+' '+c:c; });
+  if(buf.trim()) chunks.push(buf.trim());
+  speakingId=id;
+  chunks.forEach((c,i)=>{ const u=new SpeechSynthesisUtterance(c); if(voice){ u.voice=voice; u.lang=voice.lang; } u.rate=0.97; u.pitch=1;
+    if(i===chunks.length-1) u.onend=()=>{ if(speakingId===id) stopSpeech(); };
+    u.onerror=()=>{}; synth.speak(u);
+  });
+  if(_ttsKeep) clearInterval(_ttsKeep);
+  _ttsKeep=setInterval(()=>{ if(!synth.speaking){ clearInterval(_ttsKeep); _ttsKeep=null; return; } try{ synth.resume(); }catch(e){} }, 9000);
+  updateSpeakButtons();
+}
+function updateSpeakButtons(){
+  document.querySelectorAll('[data-action="speak"]').forEach(b=>{ const on=b.dataset.id===speakingId; b.classList.toggle('text-rose-500',on); b.classList.toggle('bg-rose-500/10',on); b.title=on?'Stop':'Listen'; });
+}
+function speakQA(id){
+  const base=findBaseQ(id); if(!base) return;
+  const exs=getExamples(base); const ex=exs[0]?exs[0].text:'';
+  const text=getText(base,'q')+'. Answer. '+getText(base,'a')+(ex?('. For example. '+ex):'');
+  speakText(id, text);
+}
+
+/* ---- Bulk: draft all un-edited questions in an area ---- */
+let bulkCancel=false;
+function showBulkModal(title,total){
+  const wrap=document.createElement('div'); wrap.id='bulkModal';
+  wrap.className='fixed inset-0 z-[75] grid place-items-center p-4 bg-black/50 backdrop-blur-sm';
+  wrap.innerHTML=`<div class="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5 text-center">
+    <div class="text-3xl mb-2">✨</div>
+    <h3 class="font-display font-extrabold text-lg">Drafting with AI…</h3>
+    <p class="text-xs text-slate-500 mt-1">${esc(title)}</p>
+    <div class="h-2 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden mt-4"><div id="bulkBar" class="h-full bg-gradient-to-r from-brand-500 to-brand-600 transition-all" style="width:0%"></div></div>
+    <p id="bulkCount" class="text-sm font-semibold mt-2">0 / ${total}</p>
+    <p id="bulkCur" class="text-[11px] text-slate-400 mt-1 truncate px-2">Starting…</p>
+    <button id="bulkCancelBtn" class="mt-4 px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Cancel</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  wrap.querySelector('#bulkCancelBtn').onclick=()=>{ bulkCancel=true; const b=wrap.querySelector('#bulkCancelBtn'); b.textContent='Finishing current…'; b.disabled=true; };
+  return wrap;
+}
+function updateBulkModal(m,done,total,cur){ if(!m) return; const bar=m.querySelector('#bulkBar'); if(bar) bar.style.width=Math.round(done/total*100)+'%'; const c=m.querySelector('#bulkCount'); if(c) c.textContent=done+' / '+total; const cc=m.querySelector('#bulkCur'); if(cc&&cur!=null) cc.textContent=cur||''; }
+async function bulkDraftArea(areaId){
+  const area=AREA_BY_ID[areaId]; if(!area) return;
+  const targets=orderedAreaQuestions(area).filter(q=>!isEdited(q.id));
+  if(!targets.length){ alert('Every question in this area already has an edited/AI answer. Nothing to draft.'); return; }
+  if(!confirm('Draft '+targets.length+' answer(s) in "'+area.title+'" with AI?\n\nEach is saved automatically — you can edit, refine or undo any afterwards.')) return;
+  bulkCancel=false;
+  const modal=showBulkModal(area.title, targets.length);
+  let done=0, ok=0, failed=0, stopped='';
+  for(const q of targets){
+    if(bulkCancel){ stopped=' (cancelled)'; break; }
+    updateBulkModal(modal, done, targets.length, getText(q,'q').slice(0,70));
+    try{
+      const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:getText(q,'a')})}).then(r=>r.json());
+      if(d && d.error && /daily limit/i.test(d.error)){ stopped=' — daily AI limit reached'; break; }
+      if(d && d.answer){ const s=qs(q.id); s.aOverride=d.answer; if(d.example) s.examples=[{id:q.id+'-ex'+Date.now(),label:'💡 Example',text:d.example}]; save(); ok++; }
+      else failed++;
+    }catch(e){ failed++; }
+    done++;
+    updateBulkModal(modal, done, targets.length, '');
+  }
+  try{ await pushNow(); }catch(e){}
+  if(modal) modal.remove();
+  refresh();
+  alert('Drafted '+ok+' answer(s)'+(failed?(', '+failed+' failed'):'')+stopped+'.');
+}
 function uniqueName(name,seen){ if(seen[name]==null){ seen[name]=0; return name; } seen[name]++; const d=name.lastIndexOf('.'); return d>0? name.slice(0,d)+' ('+seen[name]+')'+name.slice(d) : name+' ('+seen[name]+')'; }
 
 async function zipAttachments(list, prefix){
@@ -1102,6 +1194,7 @@ function router(){
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/a\/([\w-]+)/);
   window.scrollTo({top:0});
+  stopSpeech();   // stop any audio when navigating
   if (hash === '#/vault') { vaultSel=new Set(); renderVault(); }
   else if (hash === '#/history') { renderHistory(); }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
@@ -1294,6 +1387,8 @@ function renderArea(area){
       </div>
     </div>
 
+    ${(function(){ const un=orderedAreaQuestions(area).filter(q=>!isEdited(q.id)).length; return un ? `<div class="mb-3"><button data-action="bulk-draft" data-area="${area.id}" class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow hover:opacity-95 transition">✨ Draft all un-answered with AI (${un})</button><span class="hidden sm:inline text-[11px] text-slate-400 ml-2">writes a fresh answer + example for each; you can edit/undo any</span></div>` : ''; })()}
+
     <div class="flex items-center justify-between mb-2 px-1">
       <p class="text-[11px] text-slate-400 inline-flex items-center gap-1.5">
         <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
@@ -1316,6 +1411,7 @@ function renderArea(area){
     renderArea(area);
     const ns = document.getElementById('areaSearch'); if(ns){ ns.focus(); ns.setSelectionRange(pos,pos); }
   });
+  updateSpeakButtons();
 }
 
 /* Examples: user override (array) wins; else fall back to the base single example.
@@ -1402,6 +1498,9 @@ function qCard(area, q, a, i, reorderAllowed){
           <span class="text-[15px] font-semibold leading-snug whitespace-pre-wrap ${s.done?'text-slate-400 line-through decoration-slate-300':''}">${fmt(qText)}</span>
         </button>
         <div class="flex items-center gap-1 shrink-0">
+          <button data-action="speak" data-id="${q.id}" title="Listen" class="h-8 w-8 grid place-items-center rounded-lg transition ${speakingId===q.id?'text-rose-500 bg-rose-500/10':'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+          </button>
           <button data-action="flag" data-id="${q.id}" title="Flag for revision" class="h-8 w-8 grid place-items-center rounded-lg transition ${s.flag?'bg-amber-400/20 text-amber-500':'text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'}">
             <svg class="w-4 h-4" viewBox="0 0 24 24" fill="${s.flag?'currentColor':'none'}" stroke="currentColor" stroke-width="2"><path d="M4 21V4h13l-2 4 2 4H4"/></svg>
           </button>
@@ -1429,6 +1528,9 @@ function qCard(area, q, a, i, reorderAllowed){
             <div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
               <button data-action="ai-draft" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold px-2 py-1 rounded-lg bg-gradient-to-r from-brand-500/15 to-cyan-400/15 ring-1 ring-brand-400/30 ${a.text} hover:from-brand-500/25 hover:to-cyan-400/25 transition">
                 ✨ Draft with AI
+              </button>
+              <button data-action="ai-refine-quick" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold px-2 py-1 rounded-lg ${a.soft} ${a.text} hover:opacity-80 transition">
+                ✨ Refine
               </button>
               <button data-action="edit-open" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold text-slate-500 hover:${a.text.split(' ')[0]} transition">
                 <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg> Edit
@@ -1548,6 +1650,24 @@ app.addEventListener('click', e => {
   if (act==='trash-purge'){ if(confirm('Permanently delete this file? This cannot be undone and it will no longer be retrievable.')){ purgeTrash(btn.dataset.id).then(()=>{ pushNow(); renderVault(); }); } return; }
   if (act==='hist-restore'){ restoreVersion(btn.dataset.ts); return; }
   if (act==='download-pdf'){ downloadPdf(); return; }
+  if (act==='speak'){ speakQA(id); return; }
+  if (act==='bulk-draft'){ bulkDraftArea(btn.dataset.area); return; }
+  if (act==='ai-refine-quick'){
+    const base=findBaseQ(id); if(!base) return;
+    const instruction=prompt('How should the AI change this answer?\n\nExamples: "make it shorter", "add a numeric example", "more on cut-off", "simpler language", "sound more confident"');
+    if(!instruction || !instruction.trim()) return;
+    const orig=btn.innerHTML; btn.innerHTML='✨ …';
+    const exs=getExamples(base); const example=exs[0]?exs[0].text:'';
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'refine',question:getText(base,'q'),answer:getText(base,'a'),example,instruction})})
+      .then(r=>r.json()).then(d=>{
+        btn.innerHTML=orig;
+        if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result')); return; }
+        const st=qs(id); st.aOverride=d.answer;
+        if(d.example){ const cur=getExamples(base).map(e=>({id:e.id,label:e.label,text:e.text})); if(cur[0]){ cur[0].text=d.example; } else { cur.push({id:id+'-ex'+Date.now(),label:'💡 Example',text:d.example}); } st.examples=cur; }
+        st._open=true; save(); refresh();
+      }).catch(()=>{ btn.innerHTML=orig; alert('Refine failed — check your connection.'); });
+    return;
+  }
   if (act==='delete-custom'){
     const ar=btn.dataset.area;
     if (confirm('Delete this custom question?')){
