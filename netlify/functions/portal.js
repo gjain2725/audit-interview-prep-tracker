@@ -1,0 +1,211 @@
+import { getStore } from '@netlify/blobs';
+
+const json = (value, status = 200) =>
+  new Response(JSON.stringify(value), {
+    status,
+    headers: {
+      'content-type': 'application/json',
+      'cache-control': 'no-store',
+    },
+  });
+
+const PROFILE_FIELDS = [
+  'fullName', 'email', 'mobile', 'addressLine1', 'addressLine2', 'city',
+  'state', 'pinCode', 'country', 'caStatus', 'caAttempt', 'qualificationYear',
+  'articleshipFirm', 'experienceYears', 'currentEmployer', 'targetRole',
+  'preferredFirms', 'preferredLocations', 'noticePeriod', 'linkedIn', 'skills',
+];
+
+const INTERVIEW_FIELDS = [
+  'id', 'company', 'role', 'interviewDate', 'round', 'mode', 'interviewerName',
+  'employerEmail', 'followUpDate', 'status', 'confidenceRating',
+  'experienceRating', 'questionsAsked', 'feedback', 'nextStep', 'notes',
+];
+
+const VALID_STATUSES = new Set([
+  'applied', 'scheduled', 'waiting', 'follow-up', 'rejected', 'cleared',
+  'offer-received', 'accepted', 'declined',
+]);
+
+const trim = (value, max = 250) => String(value == null ? '' : value).trim().slice(0, max);
+
+function cleanProfile(input = {}) {
+  const profile = {};
+  for (const field of PROFILE_FIELDS) {
+    const max = ['addressLine1', 'addressLine2', 'skills'].includes(field) ? 500 : 160;
+    profile[field] = trim(input[field], max);
+  }
+  profile.marketingConsent = input.marketingConsent === true;
+  profile.consentUpdatedAt = profile.marketingConsent
+    ? trim(input.consentUpdatedAt, 40) || new Date().toISOString()
+    : null;
+  profile.updatedAt = new Date().toISOString();
+  return profile;
+}
+
+function cleanInterview(input = {}) {
+  const item = {};
+  for (const field of INTERVIEW_FIELDS) {
+    const max = ['questionsAsked', 'feedback', 'nextStep', 'notes'].includes(field) ? 2000 : 180;
+    item[field] = trim(input[field], max);
+  }
+  item.id = item.id || `int-${Date.now()}-${Math.round(Math.random() * 1e7)}`;
+  if (!VALID_STATUSES.has(item.status)) item.status = 'applied';
+  item.confidenceRating = Math.min(5, Math.max(0, Number(input.confidenceRating) || 0));
+  item.experienceRating = Math.min(5, Math.max(0, Number(input.experienceRating) || 0));
+  item.updatedAt = new Date().toISOString();
+  return item;
+}
+
+async function resolveAuth(req) {
+  const url = new URL(req.url);
+  const token = req.headers.get('x-auth') || url.searchParams.get('auth') || '';
+  if (!token) return { role: 'none', key: null, token: '' };
+  if (process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET) {
+    return {
+      role: 'admin',
+      key: 'admin',
+      token,
+      account: {
+        name: 'Gaurav Jain',
+        email: process.env.ADMIN_EMAIL || '',
+        phone: '',
+      },
+    };
+  }
+  const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
+  const user = users[token];
+  if (user && user.active !== false && (!user.expiresAt || Date.parse(user.expiresAt) > Date.now())) {
+    return {
+      role: 'member',
+      key: token,
+      token,
+      account: {
+        name: user.name || '',
+        email: user.email || '',
+        phone: user.phone || '',
+        expiresAt: user.expiresAt || null,
+      },
+    };
+  }
+  return { role: 'none', key: null, token: '' };
+}
+
+async function recordFor(key, account = {}) {
+  const profileStore = getStore('tracker-profiles');
+  const interviewStore = getStore('tracker-interviews');
+  const [savedProfile, savedInterviews] = await Promise.all([
+    profileStore.get(`profile:${key}`, { type: 'json' }),
+    interviewStore.get(`interviews:${key}`, { type: 'json' }),
+  ]);
+  const profile = savedProfile || {
+    fullName: account.name || '',
+    email: account.email || '',
+    mobile: account.phone || '',
+    country: 'India',
+    marketingConsent: false,
+  };
+  return {
+    profile,
+    interviews: Array.isArray(savedInterviews) ? savedInterviews : [],
+  };
+}
+
+async function adminRecords() {
+  const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
+  const entries = Object.entries(users);
+  return Promise.all(entries.map(async ([code, user]) => {
+    const record = await recordFor(code, {
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
+    });
+    return {
+      code,
+      active: user.active !== false,
+      expiresAt: user.expiresAt || null,
+      createdAt: user.createdAt || null,
+      profile: record.profile,
+      interviews: record.interviews,
+    };
+  }));
+}
+
+export default async (req) => {
+  const auth = await resolveAuth(req);
+  if (auth.role === 'none') return json({ error: 'unauthorized' }, 401);
+
+  const url = new URL(req.url);
+  const action = url.searchParams.get('action') || 'me';
+  const profileStore = getStore('tracker-profiles');
+  const interviewStore = getStore('tracker-interviews');
+  const avatarStore = getStore('tracker-profile-files');
+
+  if (req.method === 'GET' && action === 'me') {
+    return json(await recordFor(auth.key, auth.account));
+  }
+
+  if (req.method === 'GET' && action === 'admin-list') {
+    if (auth.role !== 'admin') return json({ error: 'admin only' }, 403);
+    return json({ records: await adminRecords() });
+  }
+
+  if (req.method === 'GET' && action === 'avatar') {
+    const requestedKey = auth.role === 'admin' && url.searchParams.get('code')
+      ? url.searchParams.get('code')
+      : auth.key;
+    const result = await avatarStore.getWithMetadata(`avatar:${requestedKey}`, { type: 'arrayBuffer' });
+    if (!result || !result.data) return json({ error: 'not found' }, 404);
+    return new Response(result.data, {
+      status: 200,
+      headers: {
+        'content-type': (result.metadata && result.metadata.type) || 'image/jpeg',
+        'cache-control': 'private, max-age=300',
+      },
+    });
+  }
+
+  if (req.method === 'POST' && action === 'save-profile') {
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const profile = cleanProfile(body.profile);
+    if (!profile.fullName) return json({ error: 'Name is required.' }, 400);
+    if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+      return json({ error: 'Please enter a valid email address.' }, 400);
+    }
+    await profileStore.setJSON(`profile:${auth.key}`, profile);
+    return json({ ok: true, profile });
+  }
+
+  if (req.method === 'POST' && action === 'save-interviews') {
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const source = Array.isArray(body.interviews) ? body.interviews : [];
+    if (source.length > 100) return json({ error: 'Maximum 100 interview entries.' }, 400);
+    const interviews = source.map(cleanInterview);
+    await interviewStore.setJSON(`interviews:${auth.key}`, interviews);
+    return json({ ok: true, interviews });
+  }
+
+  if (req.method === 'POST' && action === 'avatar') {
+    const type = trim(req.headers.get('content-type'), 100).toLowerCase();
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(type)) {
+      return json({ error: 'Use a JPG, PNG or WebP image.' }, 400);
+    }
+    const data = await req.arrayBuffer();
+    if (!data.byteLength || data.byteLength > 2 * 1024 * 1024) {
+      return json({ error: 'Profile picture must be under 2 MB.' }, 400);
+    }
+    await avatarStore.set(`avatar:${auth.key}`, data, {
+      metadata: { type, size: data.byteLength, updatedAt: new Date().toISOString() },
+    });
+    return json({ ok: true });
+  }
+
+  if (req.method === 'DELETE' && action === 'avatar') {
+    await avatarStore.delete(`avatar:${auth.key}`);
+    return json({ ok: true });
+  }
+
+  return json({ error: 'unknown action' }, 400);
+};

@@ -549,6 +549,7 @@ const ACCOUNT_URL='/.netlify/functions/account';
 const CONTENT_URL='/.netlify/functions/content';
 const PSTATE_URL='/.netlify/functions/pstate';
 const FILES_URL='/.netlify/functions/files';
+const PORTAL_URL='/.netlify/functions/portal';
 const AUTH_KEY='mb4_auth';
 const SYNC_ON = location.protocol==='http:' || location.protocol==='https:';
 let pendingSlot=null, pendingQid=null;
@@ -561,7 +562,7 @@ function saveAuth(){ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }
 function isAdmin(){ return auth.role==='admin'; }
 function authed(){ return auth.role==='admin'||auth.role==='member'; }
 function acct(action, extra){ return fetch(ACCOUNT_URL,{method:'POST',headers:Object.assign({'content-type':'application/json'}, auth.token?{'x-auth':auth.token}:{}),body:JSON.stringify(Object.assign({action},extra||{}))}).then(r=>r.json()); }
-function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
+function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -1110,6 +1111,8 @@ function router(){
   }
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
+  else if (hash === '#/profile') { renderProfile(); }
+  else if (hash === '#/interviews') { renderInterviews(); }
   else if (hash === '#/vault') { if(isAdmin()){ vaultSel=new Set(); renderVault(); } else { location.hash='#/'; renderHome(); } }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
@@ -1130,6 +1133,8 @@ function renderHeaderControls(){
     <a href="#/admin" title="Admin portal" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>🛠️</span><span class="hidden sm:inline text-xs font-semibold">Admin</span></a>
     <a href="#/vault" title="Files" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m21.4 11.05-9.19 9.19a5 5 0 0 1-7.07-7.07l9.19-9.19a3 3 0 0 1 4.24 4.24l-9.2 9.19a1 1 0 0 1-1.41-1.41l8.49-8.49"/></svg><span class="hidden sm:inline text-xs font-semibold">Files</span></a>` : '';
   el.innerHTML=`${adminBtns}
+    <a href="#/profile" title="My profile" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>👤</span><span class="hidden md:inline text-xs font-semibold">Profile</span></a>
+    <a href="#/interviews" title="Interview tracker" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>📅</span><span class="hidden md:inline text-xs font-semibold">Interviews</span></a>
     <span class="hidden sm:flex items-center gap-1.5 h-10 px-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5"><span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span><span id="syncStatus" class="text-xs font-semibold text-slate-400">·</span></span>
     <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg></button>
     <button data-action="logout" title="Log out" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-500 transition"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></button>`;
@@ -1172,13 +1177,62 @@ function doLogin(){
   }).catch(()=>showLoginErr('Network error — please try again.'));
 }
 function adminLoginPrompt(){
-  const pass=prompt('Admin passphrase:');
-  if(!pass) return;
-  acct('login',{token:pass}).then(r=>{
-    if(!r||!r.ok||r.role!=='admin'){ alert('Invalid admin passphrase.'); return; }
-    auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null }; saveAuth();
-    renderHeaderControls(); location.hash='#/admin'; router(); loadFromCloud();
-  }).catch(()=>alert('Network error.'));
+  if(document.getElementById('adminLoginModal')) return;
+  const wrap=document.createElement('div');
+  wrap.id='adminLoginModal';
+  wrap.className='fixed inset-0 z-[90] grid place-items-center p-4 bg-black/55 backdrop-blur-sm';
+  wrap.innerHTML=`<div role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle" class="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
+    <div class="flex items-start justify-between gap-3">
+      <div><h2 id="adminLoginTitle" class="font-display font-extrabold text-lg">Admin login</h2><p class="text-xs text-slate-500 mt-1">Enter the admin passphrase to manage Mission Big 4.</p></div>
+      <button type="button" data-admin-close aria-label="Close admin login" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10">✕</button>
+    </div>
+    <label for="adminPassphrase" class="block text-xs font-semibold text-slate-500 mt-5 mb-1">Admin passphrase</label>
+    <input id="adminPassphrase" type="password" autocomplete="current-password" class="w-full rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-3 outline-none focus:ring-2 focus:ring-brand-400" />
+    <p id="adminLoginErr" class="hidden text-xs text-rose-500 mt-1.5"></p>
+    <button type="button" id="adminLoginSubmit" class="mt-3 w-full py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/25">Log in to admin portal</button>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector('[data-admin-close]').onclick=close;
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
+  const submit=()=>{
+    const input=document.getElementById('adminPassphrase');
+    const err=document.getElementById('adminLoginErr');
+    const pass=(input.value||'').trim();
+    if(!pass){ input.focus(); return; }
+    const button=document.getElementById('adminLoginSubmit');
+    button.disabled=true; button.textContent='Checking…';
+    acct('login',{token:pass}).then(r=>{
+      if(!r||!r.ok||r.role!=='admin'){
+        err.textContent='Invalid admin passphrase.'; err.classList.remove('hidden');
+        button.disabled=false; button.textContent='Log in to admin portal'; input.select(); return;
+      }
+      auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null }; saveAuth();
+      close(); renderHeaderControls(); location.hash='#/admin'; router(); loadFromCloud();
+    }).catch(()=>{
+      err.textContent='Network error — please try again.'; err.classList.remove('hidden');
+      button.disabled=false; button.textContent='Log in to admin portal';
+    });
+  };
+  document.getElementById('adminLoginSubmit').onclick=submit;
+  document.getElementById('adminPassphrase').addEventListener('keydown',e=>{ if(e.key==='Enter') submit(); });
+  setTimeout(()=>document.getElementById('adminPassphrase').focus(),30);
+}
+function showGeneratedCode(name,code,expiresAt){
+  const wrap=document.createElement('div');
+  wrap.className='fixed inset-0 z-[95] grid place-items-center p-4 bg-black/55 backdrop-blur-sm';
+  wrap.innerHTML=`<div role="dialog" aria-modal="true" class="w-full max-w-md rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5 text-center">
+    <div class="text-4xl mb-2">✅</div><h2 class="font-display font-extrabold text-lg">Access approved</h2>
+    <p class="text-sm text-slate-500 mt-1">${esc(name||'Member')} · valid till ${fmtExpiry(expiresAt)}</p>
+    <div class="mt-4 rounded-xl bg-slate-100 dark:bg-black/20 p-3 font-mono font-bold tracking-wider select-all">${esc(code)}</div>
+    <p class="text-xs text-slate-400 mt-2">Send this code to the candidate through your preferred channel.</p>
+    <div class="flex gap-2 mt-4"><button data-code-copy class="flex-1 py-2.5 rounded-xl text-sm font-bold bg-brand-500 text-white">Copy code</button><button data-code-close class="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button></div>
+  </div>`;
+  document.body.appendChild(wrap);
+  const close=()=>wrap.remove();
+  wrap.querySelector('[data-code-close]').onclick=close;
+  wrap.querySelector('[data-code-copy]').onclick=e=>{ navigator.clipboard.writeText(code).then(()=>{ e.currentTarget.textContent='Copied ✓'; }).catch(()=>{}); };
+  wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
 }
 
 function renderRequest(){
@@ -1219,6 +1273,301 @@ function doRequest(){
   }).catch(()=>{ msg.textContent='Network error — please try again.'; msg.className='text-xs text-center mt-1 text-rose-500'; });
 }
 
+/* ============================================================
+   CANDIDATE PROFILE + INTERVIEW TRACKER
+   ============================================================ */
+let portalCache=null;
+let avatarObjectUrl=null;
+let editingInterviewId=null;
+let adminPortalRecords=[];
+
+function portalRequest(action, options={}){
+  const method=options.method||'GET';
+  const headers=Object.assign({}, auth.token?{'x-auth':auth.token}:{}, options.headers||{});
+  const url=PORTAL_URL+'?action='+encodeURIComponent(action)+(options.query||'');
+  return fetch(url,{method,headers,body:options.body}).then(async r=>{
+    const data=await r.json().catch(()=>({error:'Unexpected server response.'}));
+    if(!r.ok) throw new Error(data.error||'Request failed.');
+    return data;
+  });
+}
+function loadPortalRecord(){
+  return portalRequest('me').then(d=>{ portalCache={profile:d.profile||{},interviews:d.interviews||[]}; return portalCache; });
+}
+function fieldHTML(id,label,value,type='text',placeholder='',required=false){
+  return `<label class="block"><span class="block text-xs font-semibold text-slate-500 mb-1">${label}${required?' <span class="text-rose-500">*</span>':''}</span>
+    <input id="${id}" type="${type}" value="${esc(value||'')}" placeholder="${esc(placeholder)}" ${required?'required':''}
+      class="w-full rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400" /></label>`;
+}
+function selectHTML(id,label,value,options){
+  return `<label class="block"><span class="block text-xs font-semibold text-slate-500 mb-1">${label}</span>
+    <select id="${id}" class="w-full rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400">
+      ${options.map(o=>`<option value="${esc(o[0])}" ${value===o[0]?'selected':''}>${esc(o[1])}</option>`).join('')}
+    </select></label>`;
+}
+function textareaHTML(id,label,value,placeholder=''){
+  return `<label class="block"><span class="block text-xs font-semibold text-slate-500 mb-1">${label}</span>
+    <textarea id="${id}" rows="3" placeholder="${esc(placeholder)}" class="w-full rounded-xl bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-brand-400 resize-y">${esc(value||'')}</textarea></label>`;
+}
+function initials(name){
+  return String(name||'Candidate').split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'C';
+}
+function loadOwnAvatar(){
+  const img=document.getElementById('profileAvatar');
+  if(!img) return;
+  fetch(PORTAL_URL+'?action=avatar',{headers:{'x-auth':auth.token}}).then(r=>{
+    if(!r.ok) throw new Error('no avatar');
+    return r.blob();
+  }).then(blob=>{
+    if(avatarObjectUrl) URL.revokeObjectURL(avatarObjectUrl);
+    avatarObjectUrl=URL.createObjectURL(blob);
+    img.src=avatarObjectUrl; img.classList.remove('hidden');
+    const fallback=document.getElementById('profileAvatarFallback'); if(fallback) fallback.classList.add('hidden');
+  }).catch(()=>{});
+}
+function renderProfile(){
+  const app=document.getElementById('app');
+  app.innerHTML=`<div class="text-center py-14 text-slate-400">Loading your profile…</div>`;
+  loadPortalRecord().then(drawProfile).catch(err=>{
+    app.innerHTML=`<div class="max-w-lg mx-auto text-center py-12"><p class="text-4xl mb-3">⚠️</p><p class="font-semibold">Could not load profile.</p><p class="text-sm text-slate-500 mt-1">${esc(err.message)}</p></div>`;
+  });
+}
+function drawProfile(record){
+  const p=record.profile||{};
+  const app=document.getElementById('app');
+  app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4">← Back to tracker</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
+        <div class="text-center shrink-0">
+          <div class="relative h-24 w-24 mx-auto rounded-3xl overflow-hidden bg-gradient-to-br from-brand-400 to-fuchsia-500 grid place-items-center text-white font-display text-2xl font-extrabold shadow-lg">
+            <span id="profileAvatarFallback">${esc(initials(p.fullName||auth.name))}</span>
+            <img id="profileAvatar" alt="Profile picture" class="hidden absolute inset-0 w-full h-full object-cover" />
+          </div>
+          <input id="profileAvatarInput" type="file" accept="image/jpeg,image/png,image/webp" class="hidden" />
+          <button data-action="profile-avatar" class="mt-2 text-xs font-semibold text-brand-600 dark:text-brand-300">Change picture</button>
+          <button data-action="profile-avatar-remove" class="block mx-auto mt-1 text-[11px] text-slate-400 hover:text-rose-500">Remove</button>
+          <p class="text-[10px] text-slate-400 mt-1">JPG, PNG or WebP · max 2 MB</p>
+        </div>
+        <div class="flex-1 min-w-0 text-center sm:text-left">
+          <h1 class="font-display text-2xl font-extrabold">My <span class="gradient-text">profile</span></h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Keep your career profile current. Only you and the Mission Big 4 administrator can view it.</p>
+          <a href="#/interviews" class="inline-flex mt-3 px-3 py-2 rounded-xl text-xs font-semibold bg-brand-500/10 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/20">📅 Open interview tracker →</a>
+        </div>
+      </div>
+    </div>
+    <form id="profileForm" class="space-y-5">
+      <section class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+        <h2 class="font-display font-bold mb-4">Contact details</h2>
+        <div class="grid sm:grid-cols-2 gap-4">
+          ${fieldHTML('pfFullName','Full name',p.fullName||auth.name,'text','Your full name',true)}
+          ${fieldHTML('pfEmail','Email address',p.email||auth.email,'email','you@example.com')}
+          ${fieldHTML('pfMobile','Mobile number',p.mobile,'tel','+91 …')}
+          ${fieldHTML('pfLinkedIn','LinkedIn profile',p.linkedIn,'url','https://linkedin.com/in/…')}
+          ${fieldHTML('pfAddress1','Address line 1',p.addressLine1)}
+          ${fieldHTML('pfAddress2','Address line 2',p.addressLine2)}
+          ${fieldHTML('pfCity','City',p.city)}
+          ${fieldHTML('pfState','State',p.state)}
+          ${fieldHTML('pfPinCode','PIN code',p.pinCode,'text','6-digit PIN')}
+          ${fieldHTML('pfCountry','Country',p.country||'India')}
+        </div>
+      </section>
+      <section class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+        <h2 class="font-display font-bold mb-4">CA and career details</h2>
+        <div class="grid sm:grid-cols-2 gap-4">
+          ${selectHTML('pfCaStatus','CA status',p.caStatus||'', [['','Select'],['student','CA student'],['finalist','CA finalist'],['qualified','Qualified CA'],['other','Other']])}
+          ${fieldHTML('pfCaAttempt','CA attempt',p.caAttempt,'text','e.g. May 2026 · 2nd attempt')}
+          ${fieldHTML('pfQualificationYear','Qualification year',p.qualificationYear,'text','e.g. 2025')}
+          ${fieldHTML('pfArticleshipFirm','Articleship firm',p.articleshipFirm)}
+          ${fieldHTML('pfExperienceYears','Experience',p.experienceYears,'text','e.g. 2.5 years')}
+          ${fieldHTML('pfCurrentEmployer','Current employer',p.currentEmployer)}
+          ${fieldHTML('pfTargetRole','Target role',p.targetRole,'text','e.g. Audit Associate')}
+          ${fieldHTML('pfPreferredFirms','Preferred firms',p.preferredFirms,'text','e.g. EY, Deloitte')}
+          ${fieldHTML('pfPreferredLocations','Preferred locations',p.preferredLocations,'text','e.g. Gurgaon, Bengaluru')}
+          ${fieldHTML('pfNoticePeriod','Notice period',p.noticePeriod,'text','e.g. Immediate / 30 days')}
+        </div>
+        <div class="mt-4">${textareaHTML('pfSkills','Key skills',p.skills,'Statutory audit, Ind AS, Excel, SAP…')}</div>
+      </section>
+      <section class="rounded-2xl p-5 bg-brand-500/5 border border-brand-400/20">
+        <label class="flex items-start gap-3 cursor-pointer">
+          <input id="pfConsent" type="checkbox" ${p.marketingConsent?'checked':''} class="mt-1 h-4 w-4 accent-brand-500" />
+          <span><b class="text-sm">Career updates and relevant offers</b><span class="block text-xs text-slate-500 mt-0.5">Optional: I agree that Mission Big 4 may use my profile to share relevant interview preparation, career services or offers. I can withdraw consent by unchecking this box.</span></span>
+        </label>
+      </section>
+      <div class="flex items-center gap-3">
+        <button data-action="profile-save" type="button" class="px-5 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20">Save profile</button>
+        <span id="profileMsg" class="text-xs text-slate-400">${p.updatedAt?'Last saved '+fmtExpiry(p.updatedAt):''}</span>
+      </div>
+    </form>`;
+  loadOwnAvatar();
+}
+function profileFormValue(id){ const el=document.getElementById(id); return el?(el.value||'').trim():''; }
+function saveProfile(){
+  const msg=document.getElementById('profileMsg');
+  const profile={
+    fullName:profileFormValue('pfFullName'), email:profileFormValue('pfEmail'), mobile:profileFormValue('pfMobile'),
+    addressLine1:profileFormValue('pfAddress1'), addressLine2:profileFormValue('pfAddress2'), city:profileFormValue('pfCity'),
+    state:profileFormValue('pfState'), pinCode:profileFormValue('pfPinCode'), country:profileFormValue('pfCountry'),
+    caStatus:profileFormValue('pfCaStatus'), caAttempt:profileFormValue('pfCaAttempt'), qualificationYear:profileFormValue('pfQualificationYear'),
+    articleshipFirm:profileFormValue('pfArticleshipFirm'), experienceYears:profileFormValue('pfExperienceYears'),
+    currentEmployer:profileFormValue('pfCurrentEmployer'), targetRole:profileFormValue('pfTargetRole'),
+    preferredFirms:profileFormValue('pfPreferredFirms'), preferredLocations:profileFormValue('pfPreferredLocations'),
+    noticePeriod:profileFormValue('pfNoticePeriod'), linkedIn:profileFormValue('pfLinkedIn'), skills:profileFormValue('pfSkills'),
+    marketingConsent:document.getElementById('pfConsent').checked,
+    consentUpdatedAt:new Date().toISOString()
+  };
+  if(!profile.fullName){ document.getElementById('pfFullName').focus(); return; }
+  msg.textContent='Saving…';
+  portalRequest('save-profile',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({profile})}).then(d=>{
+    portalCache=portalCache||{interviews:[]}; portalCache.profile=d.profile; auth.name=d.profile.fullName||auth.name; auth.email=d.profile.email||auth.email; saveAuth(); renderHeaderControls();
+    msg.textContent='✓ Profile saved'; msg.className='text-xs text-emerald-500 font-semibold';
+  }).catch(err=>{ msg.textContent=err.message; msg.className='text-xs text-rose-500'; });
+}
+function uploadProfileAvatar(){
+  const input=document.getElementById('profileAvatarInput'); if(!input) return;
+  input.value=''; input.click();
+  input.onchange=()=>{
+    const file=input.files&&input.files[0]; if(!file) return;
+    if(file.size>2*1024*1024){ alert('Please choose an image under 2 MB.'); return; }
+    portalRequest('avatar',{method:'POST',headers:{'content-type':file.type},body:file}).then(()=>loadOwnAvatar()).catch(err=>alert(err.message));
+  };
+}
+function removeProfileAvatar(){
+  if(!confirm('Remove your profile picture?')) return;
+  portalRequest('avatar',{method:'DELETE'}).then(()=>{
+    if(avatarObjectUrl){ URL.revokeObjectURL(avatarObjectUrl); avatarObjectUrl=null; }
+    const img=document.getElementById('profileAvatar'); if(img){ img.src=''; img.classList.add('hidden'); }
+    const fallback=document.getElementById('profileAvatarFallback'); if(fallback) fallback.classList.remove('hidden');
+  }).catch(err=>alert(err.message));
+}
+
+const INTERVIEW_STATUS=[
+  ['applied','Applied'],['scheduled','Scheduled'],['waiting','Waiting'],['follow-up','Follow-up due'],
+  ['cleared','Round cleared'],['offer-received','Offer received'],['accepted','Accepted'],
+  ['rejected','Rejected'],['declined','Declined']
+];
+function statusLabel(value){ const found=INTERVIEW_STATUS.find(x=>x[0]===value); return found?found[1]:value; }
+function statusClass(value){
+  if(['cleared','offer-received','accepted'].includes(value)) return 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300';
+  if(['rejected','declined'].includes(value)) return 'bg-rose-500/10 text-rose-600 dark:text-rose-300';
+  if(['scheduled','follow-up'].includes(value)) return 'bg-amber-500/10 text-amber-600 dark:text-amber-300';
+  return 'bg-brand-500/10 text-brand-600 dark:text-brand-300';
+}
+function renderInterviews(){
+  const app=document.getElementById('app');
+  app.innerHTML='<div class="text-center py-14 text-slate-400">Loading interview tracker…</div>';
+  loadPortalRecord().then(()=>drawInterviews()).catch(err=>{
+    app.innerHTML=`<div class="text-center py-12 text-rose-500">${esc(err.message)}</div>`;
+  });
+}
+function drawInterviews(){
+  const list=(portalCache&&portalCache.interviews)||[];
+  const sorted=[...list].sort((a,b)=>(b.interviewDate||'').localeCompare(a.interviewDate||''));
+  const followups=list.filter(x=>x.followUpDate && Date.parse(x.followUpDate)>=Date.now()-86400000 && !['rejected','accepted','declined'].includes(x.status)).length;
+  const successes=list.filter(x=>['cleared','offer-received','accepted'].includes(x.status)).length;
+  const rows=sorted.length?sorted.map(item=>`<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10 shadow-sm">
+    <div class="flex items-start gap-3">
+      <div class="h-11 w-11 grid place-items-center rounded-xl bg-gradient-to-br from-brand-500/15 to-cyan-400/15 text-xl shrink-0">🏢</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2 flex-wrap"><h3 class="font-display font-bold">${esc(item.company||'Company')}</h3><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${statusClass(item.status)}">${esc(statusLabel(item.status))}</span></div>
+        <p class="text-sm text-slate-600 dark:text-slate-300">${esc(item.role||'Role not specified')} ${item.round?'· '+esc(item.round):''}</p>
+        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+          <span>📅 ${item.interviewDate?fmtExpiry(item.interviewDate):'Date not set'}</span>
+          ${item.mode?`<span>📍 ${esc(item.mode)}</span>`:''}
+          ${item.followUpDate?`<span>🔔 Follow up ${fmtExpiry(item.followUpDate)}</span>`:''}
+          ${item.confidenceRating?`<span>⭐ Confidence ${item.confidenceRating}/5</span>`:''}
+        </div>
+        ${item.nextStep?`<p class="text-xs text-slate-500 mt-2"><b>Next step:</b> ${esc(item.nextStep)}</p>`:''}
+      </div>
+      <div class="flex gap-1 shrink-0"><button data-action="interview-edit" data-id="${esc(item.id)}" title="Edit" class="h-8 w-8 grid place-items-center rounded-lg hover:bg-brand-500/10">✏️</button><button data-action="interview-delete" data-id="${esc(item.id)}" title="Delete" class="h-8 w-8 grid place-items-center rounded-lg hover:bg-rose-500/10">🗑️</button></div>
+    </div>
+  </div>`).join(''):`<div class="text-center py-12 rounded-2xl border border-dashed border-slate-300 dark:border-white/15 text-slate-400"><p class="text-4xl mb-2">📅</p><p class="font-semibold">No interviews tracked yet.</p><p class="text-xs mt-1">Add your first application or interview above.</p></div>`;
+  const app=document.getElementById('app');
+  app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4">← Back to tracker</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div><h1 class="font-display text-2xl font-extrabold">Interview <span class="gradient-text">tracker</span></h1><p class="text-sm text-slate-500 mt-1">Track applications, interview rounds, outcomes and follow-ups in one place.</p></div>
+        <button data-action="interview-new" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20">＋ Add interview</button>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mt-5">
+        <div class="rounded-xl bg-slate-500/5 p-3"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Total</p><p class="font-display text-2xl font-extrabold">${list.length}</p></div>
+        <div class="rounded-xl bg-amber-500/5 p-3"><p class="text-[10px] uppercase tracking-wider text-amber-500 font-bold">Follow-ups</p><p class="font-display text-2xl font-extrabold text-amber-500">${followups}</p></div>
+        <div class="rounded-xl bg-emerald-500/5 p-3"><p class="text-[10px] uppercase tracking-wider text-emerald-500 font-bold">Positive</p><p class="font-display text-2xl font-extrabold text-emerald-500">${successes}</p></div>
+      </div>
+    </div>
+    <div id="interviewEditor" class="mb-5"></div>
+    <div class="space-y-3">${rows}</div>`;
+}
+function openInterviewEditor(id){
+  editingInterviewId=id||null;
+  const item=id?((portalCache&&portalCache.interviews)||[]).find(x=>x.id===id)||{}:{status:'applied'};
+  const holder=document.getElementById('interviewEditor'); if(!holder) return;
+  holder.innerHTML=`<section class="fade rounded-2xl p-5 bg-white/90 dark:bg-slate-900/90 border border-brand-400/30 shadow-xl">
+    <div class="flex justify-between gap-3 mb-4"><div><h2 class="font-display font-bold">${id?'Edit':'Add'} interview</h2><p class="text-xs text-slate-500">Employer email is saved for your reference only. No email is sent automatically.</p></div><button data-action="interview-cancel" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400">✕</button></div>
+    <div class="grid sm:grid-cols-2 gap-4">
+      ${fieldHTML('intCompany','Company',item.company,'text','e.g. EY GDS',true)}
+      ${fieldHTML('intRole','Role',item.role,'text','e.g. Audit Associate')}
+      ${fieldHTML('intDate','Interview date',item.interviewDate,'date')}
+      ${fieldHTML('intRound','Round',item.round,'text','e.g. Technical round 1')}
+      ${selectHTML('intMode','Mode',item.mode||'', [['','Select'],['Online','Online'],['In person','In person'],['Phone','Phone']])}
+      ${fieldHTML('intInterviewer','Interviewer name',item.interviewerName)}
+      ${fieldHTML('intEmployerEmail','Employer/recruiter email',item.employerEmail,'email','For follow-up reference')}
+      ${fieldHTML('intFollowUp','Follow-up date',item.followUpDate,'date')}
+      ${selectHTML('intStatus','Status',item.status||'applied',INTERVIEW_STATUS)}
+      ${selectHTML('intConfidence','How well did it go?',String(item.confidenceRating||''), [['','Not rated'],['1','1 — Poor'],['2','2 — Below average'],['3','3 — Okay'],['4','4 — Good'],['5','5 — Excellent']])}
+      ${selectHTML('intExperience','Interview experience',String(item.experienceRating||''), [['','Not rated'],['1','1 — Poor'],['2','2'],['3','3 — Average'],['4','4'],['5','5 — Excellent']])}
+    </div>
+    <div class="grid sm:grid-cols-2 gap-4 mt-4">
+      ${textareaHTML('intQuestions','Questions asked',item.questionsAsked,'Key technical and HR questions…')}
+      ${textareaHTML('intFeedback','Feedback received',item.feedback)}
+      ${textareaHTML('intNextStep','Next step',item.nextStep,'e.g. Send documents, prepare Ind AS 115…')}
+      ${textareaHTML('intNotes','Private notes',item.notes,'What went well and what to improve…')}
+    </div>
+    <div class="flex items-center gap-3 mt-4"><button data-action="interview-save" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Save interview</button><span id="interviewMsg" class="text-xs text-slate-400"></span></div>
+  </section>`;
+  holder.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function readInterviewForm(){
+  return {
+    id:editingInterviewId||'', company:profileFormValue('intCompany'), role:profileFormValue('intRole'),
+    interviewDate:profileFormValue('intDate'), round:profileFormValue('intRound'), mode:profileFormValue('intMode'),
+    interviewerName:profileFormValue('intInterviewer'), employerEmail:profileFormValue('intEmployerEmail'),
+    followUpDate:profileFormValue('intFollowUp'), status:profileFormValue('intStatus'),
+    confidenceRating:profileFormValue('intConfidence'), experienceRating:profileFormValue('intExperience'),
+    questionsAsked:profileFormValue('intQuestions'), feedback:profileFormValue('intFeedback'),
+    nextStep:profileFormValue('intNextStep'), notes:profileFormValue('intNotes')
+  };
+}
+function persistInterviews(list){
+  return portalRequest('save-interviews',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({interviews:list})})
+    .then(d=>{ portalCache.interviews=d.interviews||[]; return portalCache.interviews; });
+}
+function saveInterview(){
+  const item=readInterviewForm(); const msg=document.getElementById('interviewMsg');
+  if(!item.company){ document.getElementById('intCompany').focus(); return; }
+  msg.textContent='Saving…';
+  const list=[...(portalCache.interviews||[])];
+  const index=list.findIndex(x=>x.id===editingInterviewId);
+  if(index>=0) list[index]=item; else list.push(item);
+  persistInterviews(list).then(()=>{ editingInterviewId=null; drawInterviews(); }).catch(err=>{ msg.textContent=err.message; msg.className='text-xs text-rose-500'; });
+}
+function exportCandidateData(){
+  const headers=['Name','Email','Mobile','City','State','PIN','CA status','CA attempt','Qualification year','Experience','Current employer','Target role','Preferred firms','Preferred locations','Marketing consent','Interview company','Interview role','Interview date','Round','Status','Follow-up date','Employer email','Confidence','Questions asked','Feedback','Next step'];
+  const rows=[];
+  adminPortalRecords.forEach(record=>{
+    const p=record.profile||{}, interviews=(record.interviews&&record.interviews.length)?record.interviews:[{}];
+    interviews.forEach(item=>rows.push([
+      p.fullName,p.email,p.mobile,p.city,p.state,p.pinCode,p.caStatus,p.caAttempt,p.qualificationYear,
+      p.experienceYears,p.currentEmployer,p.targetRole,p.preferredFirms,p.preferredLocations,
+      p.marketingConsent?'Yes':'No',item.company,item.role,item.interviewDate,item.round,
+      statusLabel(item.status||''),item.followUpDate,item.employerEmail,item.confidenceRating,
+      item.questionsAsked,item.feedback,item.nextStep
+    ]));
+  });
+  const cell=value=>`"${String(value==null?'':value).replace(/"/g,'""')}"`;
+  const csv=[headers,...rows].map(row=>row.map(cell).join(',')).join('\r\n');
+  downloadBlob(new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),'mission-big4-candidate-data-'+new Date().toISOString().slice(0,10)+'.csv');
+}
+
 function renderAdmin(){
   const app=document.getElementById('app');
   if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p><button data-action="admin-login" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Admin login</button></div>`; return; }
@@ -1226,16 +1575,23 @@ function renderAdmin(){
     <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
       <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
-      <button data-action="admin-refresh" class="mt-3 text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button>
+      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button></div>
     </div>
     <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
   loadAdmin();
 }
 function loadAdmin(){
-  acct('list').then(d=>{
+  Promise.all([acct('list'),portalRequest('admin-list').catch(()=>({records:[]}))]).then(([d,portal])=>{
     const body=document.getElementById('adminBody'); if(!body) return;
     if(d && d.error){ body.innerHTML='<div class="text-center py-8 text-rose-400">'+esc(d.error)+'</div>'; return; }
     const pending=d.pending||[], users=d.users||[];
+    const records=portal.records||[];
+    adminPortalRecords=records;
+    const recordByCode={}; records.forEach(r=>{ recordByCode[r.code]=r; });
+    const profilesStarted=records.filter(r=>r.profile&&r.profile.updatedAt).length;
+    const totalInterviews=records.reduce((n,r)=>n+(r.interviews||[]).length,0);
+    const followUps=records.reduce((n,r)=>n+(r.interviews||[]).filter(x=>x.followUpDate&&Date.parse(x.followUpDate)>=Date.now()-86400000&&!['rejected','accepted','declined'].includes(x.status)).length,0);
+    const positive=records.reduce((n,r)=>n+(r.interviews||[]).filter(x=>['cleared','offer-received','accepted'].includes(x.status)).length,0);
     const pendHtml = pending.length ? pending.map(p=>`<div class="flex items-center gap-3 p-3 rounded-xl border border-amber-400/30 bg-amber-500/5">
       <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.name)}</p><p class="text-[11px] text-slate-500 truncate">${esc(p.email)} · ${esc(p.phone)} · ${fmtExpiry(p.requestedAt)}</p></div>
       <button data-action="admin-approve" data-id="${esc(p.id)}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shrink-0">✓ Approve 1yr</button>
@@ -1244,16 +1600,47 @@ function loadAdmin(){
     const nowT=Date.now();
     const userHtml = users.length ? users.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(u=>{
       const exp=Date.parse(u.expiresAt||0), expired=exp&&exp<nowT, inactive=u.active===false;
-      return `<div class="flex items-center gap-3 p-3 rounded-xl border ${inactive||expired?'border-slate-200/70 dark:border-white/10 opacity-70':'border-emerald-400/30 bg-emerald-500/5'}">
-        <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
-        <p class="text-[11px] text-slate-500 truncate">${esc(u.email||'')} · ${esc(u.phone||'')}</p>
-        <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)}</p></div>
-        <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
-        <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
-        <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
+      const rec=recordByCode[u.code]||{profile:{},interviews:[]}, p=rec.profile||{}, ints=rec.interviews||[];
+      const candidateKey=String(u.code).replace(/[^a-zA-Z0-9_-]/g,'');
+      const interviewRows=ints.length?ints.slice().sort((a,b)=>(b.interviewDate||'').localeCompare(a.interviewDate||'')).map(x=>`<div class="grid sm:grid-cols-[1.2fr_1fr_1fr_1fr] gap-1 sm:gap-3 py-2 border-t border-slate-200/60 dark:border-white/10 text-xs">
+        <span><b>${esc(x.company||'Company')}</b><span class="block text-slate-400">${esc(x.role||'')}</span></span>
+        <span>${x.interviewDate?fmtExpiry(x.interviewDate):'No date'}<span class="block text-slate-400">${esc(x.round||'')}</span></span>
+        <span><span class="inline-flex px-2 py-0.5 rounded-full ${statusClass(x.status)}">${esc(statusLabel(x.status))}</span>${x.followUpDate?`<span class="block text-slate-400 mt-1">Follow up ${fmtExpiry(x.followUpDate)}</span>`:''}</span>
+        <span class="break-all">${esc(x.employerEmail||'')} ${x.confidenceRating?`<span class="block text-slate-400">Confidence ${x.confidenceRating}/5</span>`:''}</span>
+      </div>`).join(''):'<p class="text-xs text-slate-400 py-2">No interview entries yet.</p>';
+      return `<div class="rounded-xl border ${inactive||expired?'border-slate-200/70 dark:border-white/10 opacity-70':'border-emerald-400/30 bg-emerald-500/5'}">
+        <div class="flex items-center gap-3 p-3">
+          <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white text-xs font-extrabold shrink-0">${esc(initials(p.fullName||u.name))}</div>
+          <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
+          <p class="text-[11px] text-slate-500 truncate">${esc(p.email||u.email||'')} · ${esc(p.mobile||u.phone||'')}</p>
+          <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'}</p></div>
+          <button data-action="admin-candidate-toggle" data-key="${candidateKey}" class="h-8 px-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">View data</button>
+          <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
+          <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
+          <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
+        </div>
+        <div id="candidate-${candidateKey}" class="hidden px-4 pb-4">
+          <div class="rounded-xl bg-white/60 dark:bg-black/15 p-3">
+            <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+              <div><span class="text-slate-400">Location</span><p class="font-semibold">${esc([p.city,p.state,p.pinCode].filter(Boolean).join(', ')||'Not provided')}</p></div>
+              <div><span class="text-slate-400">CA details</span><p class="font-semibold">${esc([p.caStatus,p.caAttempt,p.qualificationYear].filter(Boolean).join(' · ')||'Not provided')}</p></div>
+              <div><span class="text-slate-400">Career</span><p class="font-semibold">${esc([p.currentEmployer,p.experienceYears,p.targetRole].filter(Boolean).join(' · ')||'Not provided')}</p></div>
+              <div><span class="text-slate-400">Preferences</span><p class="font-semibold">${esc([p.preferredFirms,p.preferredLocations].filter(Boolean).join(' · ')||'Not provided')}</p></div>
+            </div>
+            ${p.skills?`<p class="text-xs mt-3"><span class="text-slate-400">Skills:</span> ${esc(p.skills)}</p>`:''}
+            <p class="text-[11px] mt-2 ${p.marketingConsent?'text-emerald-500':'text-slate-400'}">${p.marketingConsent?'✓ Consented to career updates':'No marketing consent'}</p>
+            <h4 class="font-display font-bold text-sm mt-4 mb-1">Interview history</h4>${interviewRows}
+          </div>
+        </div>
       </div>`;
     }).join('') : '<p class="text-sm text-slate-400 px-1">No subscribers yet.</p>';
-    body.innerHTML=`<div class="mb-6"><div class="flex items-center gap-2 mb-2"><span class="text-lg">📥</span><h2 class="font-display font-bold text-base">Pending requests</h2><span class="text-xs text-slate-400">${pending.length}</span></div><div class="space-y-2">${pendHtml}</div></div>
+    body.innerHTML=`<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Profiles started</p><p class="font-display text-3xl font-extrabold">${profilesStarted}<span class="text-xs text-slate-400">/${records.length}</span></p></div>
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Interviews</p><p class="font-display text-3xl font-extrabold text-brand-500">${totalInterviews}</p></div>
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Follow-ups</p><p class="font-display text-3xl font-extrabold text-amber-500">${followUps}</p></div>
+        <div class="rounded-2xl p-4 bg-white/70 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Positive outcomes</p><p class="font-display text-3xl font-extrabold text-emerald-500">${positive}</p></div>
+      </div>
+      <div class="mb-6"><div class="flex items-center gap-2 mb-2"><span class="text-lg">📥</span><h2 class="font-display font-bold text-base">Pending requests</h2><span class="text-xs text-slate-400">${pending.length}</span></div><div class="space-y-2">${pendHtml}</div></div>
       <div><div class="flex items-center gap-2 mb-2"><span class="text-lg">👥</span><h2 class="font-display font-bold text-base">Subscribers</h2><span class="text-xs text-slate-400">${users.length}</span></div><div class="space-y-2">${userHtml}</div></div>`;
   }).catch(()=>{ const b=document.getElementById('adminBody'); if(b) b.innerHTML='<div class="text-center py-8 text-rose-400">Could not load. Check connection.</div>'; });
 }
@@ -1350,6 +1737,17 @@ function renderHome(){
           </button>
         </div>
       </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 gap-3 mb-6">
+      <a href="#/profile" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 transition flex items-center gap-3">
+        <span class="h-11 w-11 grid place-items-center rounded-xl bg-brand-500/10 text-xl">👤</span>
+        <span class="flex-1"><b class="font-display text-sm">Complete your career profile</b><span class="block text-xs text-slate-500 mt-0.5">Contact details, CA journey, experience and preferences</span></span><span class="text-brand-500">→</span>
+      </a>
+      <a href="#/interviews" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 transition flex items-center gap-3">
+        <span class="h-11 w-11 grid place-items-center rounded-xl bg-cyan-500/10 text-xl">📅</span>
+        <span class="flex-1"><b class="font-display text-sm">Track interviews and follow-ups</b><span class="block text-xs text-slate-500 mt-0.5">Companies, rounds, outcomes, feedback and next steps</span></span><span class="text-brand-500">→</span>
+      </a>
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">${metricCards}</div>
@@ -1625,12 +2023,13 @@ app.addEventListener('click', e => {
   if (act==='do-request'){ doRequest(); return; }
   if (act==='logout'){ if(confirm('Log out?')) logout(); return; }
   if (act==='admin-refresh'){ loadAdmin(); return; }
+  if (act==='admin-export'){ exportCandidateData(); return; }
   if (act==='admin-dismiss'){ acct('dismiss',{id:btn.dataset.id}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-approve'){
     if(!confirm('Approve this request and generate a 1-year access code?')) return;
     btn.disabled=true; btn.textContent='…';
     acct('approve',{id:btn.dataset.id,days:365}).then(r=>{
-      if(r&&r.ok){ prompt('✅ Approved '+(r.name||'')+'!\n\nSend this login code to them on WhatsApp (valid till '+fmtExpiry(r.expiresAt)+'):', r.code); }
+      if(r&&r.ok){ showGeneratedCode(r.name,r.code,r.expiresAt); }
       else alert('Approve failed: '+((r&&r.error)||''));
       setTimeout(loadAdmin,700);
     }).catch(()=>{ alert('Network error.'); loadAdmin(); });
@@ -1640,6 +2039,24 @@ app.addEventListener('click', e => {
   if (act==='admin-extend'){ acct('extend',{code:btn.dataset.code,days:365}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-revoke'){ if(confirm('Revoke access for this subscriber?')) acct('revoke',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-reactivate'){ acct('reactivate',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
+  if (act==='profile-save'){ saveProfile(); return; }
+  if (act==='profile-avatar'){ uploadProfileAvatar(); return; }
+  if (act==='profile-avatar-remove'){ removeProfileAvatar(); return; }
+  if (act==='interview-new'){ openInterviewEditor(null); return; }
+  if (act==='interview-edit'){ openInterviewEditor(btn.dataset.id); return; }
+  if (act==='interview-cancel'){ editingInterviewId=null; const h=document.getElementById('interviewEditor'); if(h) h.innerHTML=''; return; }
+  if (act==='interview-save'){ saveInterview(); return; }
+  if (act==='interview-delete'){
+    if(!confirm('Delete this interview entry?')) return;
+    const list=(portalCache.interviews||[]).filter(x=>x.id!==btn.dataset.id);
+    persistInterviews(list).then(()=>drawInterviews()).catch(err=>alert(err.message));
+    return;
+  }
+  if (act==='admin-candidate-toggle'){
+    const panel=document.getElementById('candidate-'+btn.dataset.key);
+    if(panel) panel.classList.toggle('hidden');
+    return;
+  }
 
   if (act==='toggle'){
     const s = qs(id); s._open = !s._open; save();
@@ -1767,6 +2184,9 @@ app.addEventListener('input', e => {
 
 function refresh(){
   const hash = location.hash||'#/';
+  if(hash==='#/admin'){ renderAdmin(); setHeaderProgress(); return; }
+  if(hash==='#/profile'){ renderProfile(); setHeaderProgress(); return; }
+  if(hash==='#/interviews'){ renderInterviews(); setHeaderProgress(); return; }
   if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
   if(hash==='#/history'){ renderHistory(); setHeaderProgress(); return; }
   const m = hash.match(/^#\/a\/([\w-]+)/);
