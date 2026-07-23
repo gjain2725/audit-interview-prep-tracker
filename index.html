@@ -62,6 +62,26 @@
     .q-card.dragging { opacity:.45; }
     .q-card.drop-before { box-shadow: inset 0 3px 0 0 #3a5bef; }
     .q-card.drop-after  { box-shadow: inset 0 -3px 0 0 #3a5bef; }
+    .rich-answer, .rich-editor { overflow-wrap:anywhere; }
+    .rich-answer > :first-child, .rich-editor > :first-child { margin-top:0; }
+    .rich-answer > :last-child, .rich-editor > :last-child { margin-bottom:0; }
+    .rich-answer p, .rich-answer div, .rich-editor p, .rich-editor div { margin:.45rem 0; }
+    .rich-answer h2, .rich-editor h2 { margin:.8rem 0 .35rem; font-size:1.15rem; line-height:1.4; font-weight:800; }
+    .rich-answer h3, .rich-editor h3 { margin:.7rem 0 .3rem; font-size:1rem; line-height:1.4; font-weight:750; }
+    .rich-answer ul, .rich-editor ul { list-style:disc; padding-left:1.4rem; margin:.5rem 0; }
+    .rich-answer ol, .rich-editor ol { list-style:decimal; padding-left:1.4rem; margin:.5rem 0; }
+    .rich-answer li, .rich-editor li { margin:.18rem 0; }
+    .rich-answer blockquote, .rich-editor blockquote { margin:.6rem 0; padding:.45rem .8rem; border-left:3px solid #8eabff; background:rgba(91,124,250,.08); border-radius:0 .5rem .5rem 0; }
+    .rich-answer a, .rich-editor a { color:#3a5bef; text-decoration:underline; text-underline-offset:2px; }
+    .rich-answer table, .rich-editor table { display:block; width:max-content; min-width:100%; max-width:100%; overflow-x:auto; border-collapse:collapse; margin:.7rem 0; font-size:.82rem; }
+    .rich-answer th, .rich-answer td, .rich-editor th, .rich-editor td { min-width:7rem; border:1px solid rgba(100,116,139,.42); padding:.45rem .55rem; text-align:left; vertical-align:top; }
+    .rich-answer th, .rich-editor th { background:rgba(91,124,250,.11); font-weight:750; }
+    .rich-editor { min-height:12rem; max-height:30rem; overflow:auto; white-space:normal; }
+    .rich-editor:focus { box-shadow:0 0 0 2px #5b7cfa; border-color:transparent; }
+    .rich-editor:empty:before { content:attr(data-placeholder); color:#94a3b8; pointer-events:none; }
+    .rich-toolbar button { min-width:2rem; }
+    .rich-toolbar button:hover { background:rgba(91,124,250,.12); color:#3a5bef; }
+    .rich-color { width:2rem; height:2rem; padding:.2rem; border:0; background:transparent; cursor:pointer; }
   </style>
 </head>
 
@@ -537,6 +557,86 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
 /* Just escape — newlines/spacing are preserved by `whitespace-pre-wrap` on the container,
    so pasted paragraphs, blank lines and indentation render exactly as entered. */
 function fmt(s){ return esc(s); }
+const RICH_PREFIX='<!--mb4-rich:v1-->';
+const RICH_TAGS=new Set(['P','BR','DIV','STRONG','B','EM','I','U','S','H2','H3','UL','OL','LI','BLOCKQUOTE','A','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','SPAN','MARK','SUB','SUP']);
+function isRichAnswer(s){ return typeof s==='string' && s.startsWith(RICH_PREFIX); }
+function richBody(s){ return isRichAnswer(s) ? s.slice(RICH_PREFIX.length) : ''; }
+function plainToRichHTML(s){ return esc(s).replace(/\r\n?/g,'\n').replace(/\n/g,'<br>'); }
+function safeRichColor(value){
+  const v=String(value||'').trim().toLowerCase();
+  if(/^#[0-9a-f]{3,8}$/.test(v) || /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(v)) return v;
+  return ['black','white','red','orange','yellow','green','blue','purple','gray','grey','transparent'].includes(v) ? v : '';
+}
+function sanitizeRichHTML(html){
+  const tpl=document.createElement('template');
+  tpl.innerHTML=String(html||'');
+  tpl.content.querySelectorAll('script,style,iframe,object,embed,form,input,button,textarea,select,meta,link,img,svg,canvas,video,audio').forEach(el=>el.remove());
+  [...tpl.content.querySelectorAll('*')].forEach(el=>{
+    if(!tpl.content.contains(el)) return;
+    const tag=el.tagName;
+    if(!RICH_TAGS.has(tag)){ el.replaceWith(...el.childNodes); return; }
+    const href=tag==='A' ? (el.getAttribute('href')||'').trim() : '';
+    const colspan=(tag==='TD'||tag==='TH') ? el.getAttribute('colspan') : null;
+    const rowspan=(tag==='TD'||tag==='TH') ? el.getAttribute('rowspan') : null;
+    const color=safeRichColor(el.style&&el.style.color);
+    const background=safeRichColor(el.style&&(el.style.backgroundColor||el.style.background));
+    [...el.attributes].forEach(a=>el.removeAttribute(a.name));
+    if(tag==='A' && /^(https?:|mailto:)/i.test(href)){
+      el.setAttribute('href',href); el.setAttribute('target','_blank'); el.setAttribute('rel','noopener noreferrer');
+    }
+    if((tag==='TD'||tag==='TH') && /^\d{1,2}$/.test(colspan||'') && +colspan<=20) el.setAttribute('colspan',colspan);
+    if((tag==='TD'||tag==='TH') && /^\d{1,2}$/.test(rowspan||'') && +rowspan<=50) el.setAttribute('rowspan',rowspan);
+    if(color) el.style.color=color;
+    if(background) el.style.backgroundColor=background;
+  });
+  const walker=document.createTreeWalker(tpl.content,NodeFilter.SHOW_COMMENT);
+  const comments=[]; while(walker.nextNode()) comments.push(walker.currentNode);
+  comments.forEach(n=>n.remove());
+  return tpl.innerHTML.trim();
+}
+function answerToEditorHTML(s){ return isRichAnswer(s) ? sanitizeRichHTML(richBody(s)) : plainToRichHTML(s); }
+function fmtAnswer(s){ return isRichAnswer(s) ? sanitizeRichHTML(richBody(s)) : fmt(s); }
+function answerPlainText(s){
+  if(!isRichAnswer(s)) return String(s==null?'':s);
+  const box=document.createElement('div'); box.innerHTML=sanitizeRichHTML(richBody(s));
+  box.querySelectorAll('br').forEach(el=>el.replaceWith('\n'));
+  box.querySelectorAll('td,th').forEach(el=>el.append('\t'));
+  box.querySelectorAll('tr,p,div,h2,h3,li,blockquote').forEach(el=>el.append('\n'));
+  return (box.textContent||'').replace(/\t+\n/g,'\n').replace(/[ \t]+\n/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function markdownTableHTML(text){
+  const lines=String(text||'').trim().split(/\r?\n/).filter(line=>line.trim());
+  if(lines.length<2) return '';
+  const cells=line=>line.trim().replace(/^\||\|$/g,'').split('|').map(v=>v.trim());
+  const divider=cells(lines[1]);
+  if(divider.length<2 || !divider.every(v=>/^:?-{3,}:?$/.test(v))) return '';
+  const rows=lines.map(cells); const width=rows[0].length;
+  if(width<2 || rows.slice(2).some(r=>r.length!==width)) return '';
+  return `<table><thead><tr>${rows[0].map(v=>`<th>${esc(v)}</th>`).join('')}</tr></thead><tbody>${rows.slice(2).map(r=>`<tr>${r.map(v=>`<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+}
+function richToolbarHTML(target){
+  const t=esc(target);
+  return `<div class="rich-toolbar flex flex-wrap items-center gap-1 p-1.5 rounded-t-lg border border-b-0 border-slate-200 dark:border-white/10 bg-slate-100/80 dark:bg-black/20" data-rich-toolbar="${t}">
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="bold" title="Bold" class="h-8 rounded-md text-sm font-extrabold">B</button>
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="italic" title="Italic" class="h-8 rounded-md text-sm italic font-semibold">I</button>
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="underline" title="Underline" class="h-8 rounded-md text-sm underline font-semibold">U</button>
+    <span class="h-5 w-px bg-slate-300 dark:bg-white/10 mx-0.5"></span>
+    <select data-rich-format data-target="${t}" title="Paragraph style" class="h-8 rounded-md text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-1">
+      <option value="P">Paragraph</option><option value="H2">Heading</option><option value="H3">Subheading</option>
+    </select>
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="insertUnorderedList" title="Bulleted list" class="h-8 rounded-md text-sm">• List</button>
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="insertOrderedList" title="Numbered list" class="h-8 rounded-md text-sm">1. List</button>
+    <button type="button" data-action="rich-link" data-target="${t}" title="Add link" class="h-8 rounded-md text-sm">🔗</button>
+    <button type="button" data-action="rich-table" data-target="${t}" title="Insert a 3-column table" class="h-8 px-2 rounded-md text-xs font-semibold">▦ Table</button>
+    <label class="inline-flex items-center gap-0.5 text-[10px] text-slate-500" title="Text colour">A<input type="color" value="#2540db" data-rich-color="foreColor" data-target="${t}" class="rich-color"></label>
+    <label class="inline-flex items-center gap-0.5 text-[10px] text-slate-500" title="Highlight colour">▰<input type="color" value="#fef08a" data-rich-color="hiliteColor" data-target="${t}" class="rich-color"></label>
+    <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="removeFormat" title="Clear formatting" class="h-8 px-2 rounded-md text-xs">Clear</button>
+  </div>`;
+}
+function richEditorHTML(target, value, extraAttrs){
+  const t=esc(target);
+  return `${richToolbarHTML(t)}<div id="${t}" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="Type or paste an answer here…" ${extraAttrs||''} class="rich-editor w-full text-sm rounded-b-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-3 outline-none leading-relaxed">${answerToEditorHTML(value)}</div>`;
+}
 function setHeaderProgress(){ /* progress ring removed from header; readiness shown on home */ }
 
 /* ============================================================
@@ -767,7 +867,7 @@ function buildPrintHtml(){
       let qHtml='';
       qs.forEach((q,i)=>{
         const qt=getText(q,'q'), at=getText(q,'a'); const exs=getExamples(q);
-        qHtml+=`<div class="q"><p class="qq">${i+1}. ${pdfEsc(qt)}</p><p class="qa">${pdfEsc(at)}</p>`
+        qHtml+=`<div class="q"><p class="qq">${i+1}. ${pdfEsc(qt)}</p><div class="qa">${fmtAnswer(at)}</div>`
           + exs.map(ex=>`<p class="qe"><b>${pdfEsc(ex.label||'Example')}:</b> ${pdfEsc(ex.text)}</p>`).join('')
           + (q.tip?`<p class="qt"><b>Interviewer's tip:</b> ${pdfEsc(q.tip)}</p>`:'')
           + `</div>`;
@@ -785,6 +885,9 @@ function buildPrintHtml(){
     h3{font-size:13px;color:#1e33b8;margin:16px 0 8px;border-bottom:1px solid #cdd6f5;padding-bottom:4px;page-break-after:avoid}
     .q{margin:0 0 12px;padding:0 0 9px;border-bottom:1px dotted #dde3f0;page-break-inside:avoid}
     .qq{font-weight:700;margin:0 0 4px;color:#12203f} .qa{margin:0 0 6px;white-space:pre-wrap}
+    .qa p,.qa div{margin:4px 0}.qa h2,.qa h3{font-size:13px;margin:8px 0 3px}.qa ul,.qa ol{margin:5px 0;padding-left:20px}
+    .qa blockquote{border-left:3px solid #8eabff;background:#eef3ff;margin:6px 0;padding:5px 9px}
+    .qa table{width:100%;border-collapse:collapse;margin:7px 0;white-space:normal}.qa th,.qa td{border:1px solid #9aa8c2;padding:5px;text-align:left;vertical-align:top}.qa th{background:#eef3ff}
     .qe{margin:4px 0;padding:6px 10px;background:#eef3ff;border-left:3px solid #5b7cfa;border-radius:4px;white-space:pre-wrap}
     .qt{margin:4px 0;padding:6px 10px;background:#f5f5f5;border-left:3px solid #aaa;border-radius:4px;font-style:italic}
     .hint{background:#fffbe6;border:1px solid #ffe58f;padding:10px 14px;border-radius:6px;margin-bottom:18px}
@@ -845,7 +948,7 @@ function updateSpeakButtons(){
 function speakQA(id){
   const base=findBaseQ(id); if(!base) return;
   const exs=getExamples(base); const ex=exs[0]?exs[0].text:'';
-  const text=getText(base,'q')+'. Answer. '+getText(base,'a')+(ex?('. For example. '+ex):'');
+  const text=getText(base,'q')+'. Answer. '+answerPlainText(getText(base,'a'))+(ex?('. For example. '+ex):'');
   speakText(id, text);
 }
 
@@ -880,7 +983,7 @@ async function bulkDraftArea(areaId){
     if(bulkCancel){ stopped=' (cancelled)'; break; }
     updateBulkModal(modal, done, targets.length, getText(q,'q').slice(0,70));
     try{
-      const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:getText(q,'a')})}).then(r=>r.json());
+      const d=await fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question:getText(q,'q'),answer:answerPlainText(getText(q,'a'))})}).then(r=>r.json());
       if(d && d.error && /daily limit/i.test(d.error)){ stopped=' — daily AI limit reached'; break; }
       if(d && d.answer){ const s=qs(q.id); s.aOverride=d.answer; if(d.example) s.examples=[{id:q.id+'-ex'+Date.now(),label:'💡 Example',text:d.example}]; save(); ok++; }
       else failed++;
@@ -1793,7 +1896,7 @@ function renderHome(){
       const mm = metrics(qsList.map(q=>({q})));
       // search filter: hide card if searching and no match
       if (homeSearch){
-        const hay = (area.title+' '+area.blurb+' '+qsList.map(q=>getText(q,'q')+' '+getText(q,'a')).join(' ')).toLowerCase();
+        const hay = (area.title+' '+area.blurb+' '+qsList.map(q=>getText(q,'q')+' '+answerPlainText(getText(q,'a'))).join(' ')).toLowerCase();
         if (!hay.includes(homeSearch)) return '';
       }
       return `<a href="#/a/${area.id}" class="area-card fade group block rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:shadow-2xl hover:shadow-${cat.accent==='brand'?'brand':cat.accent}-500/10">
@@ -1903,7 +2006,7 @@ function renderArea(area){
     if (f.status==='done' && !s.done) return false;
     if (f.status==='todo' && s.done) return false;
     if (f.search){
-      const hay = (getText(q,'q')+' '+getText(q,'a')+' '+(q.ex||'')+' '+(q.tip||'')+' '+(s.note||'')).toLowerCase();
+      const hay = (getText(q,'q')+' '+answerPlainText(getText(q,'a'))+' '+(q.ex||'')+' '+(q.tip||'')+' '+(s.note||'')).toLowerCase();
       if (!hay.includes(f.search)) return false;
     }
     return true;
@@ -2026,8 +2129,8 @@ function qCard(area, q, a, i, reorderAllowed){
       ${draft?`<div class="mb-3 rounded-xl bg-gradient-to-r from-brand-500/10 to-cyan-400/10 border border-brand-400/30 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">✨ <b>AI draft ready</b> — review &amp; edit below, then <b>Save</b> to keep it (or Cancel to discard). Nothing is saved yet.</div>`:''}
       <label class="block text-xs font-semibold text-slate-500 mb-1">Question</label>
       <textarea data-edit-q="${q.id}" rows="2" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 mb-3 outline-none focus:ring-2 focus:ring-brand-400">${esc(qText)}</textarea>
-      <label class="block text-xs font-semibold text-slate-500 mb-1">Model answer</label>
-      <textarea data-edit-a="${q.id}" rows="8" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 outline-none focus:ring-2 focus:ring-brand-400 whitespace-pre-wrap">${esc(eaText)}</textarea>
+      <label class="block text-xs font-semibold text-slate-500 mb-1">Model answer <span class="text-slate-400 font-normal">— paste tables directly from Gemini, Excel or websites</span></label>
+      ${richEditorHTML('rich-answer-'+q.id,eaText,`data-edit-a="${q.id}"`)}
 
       <label class="block text-xs font-semibold text-slate-500 mb-1 mt-3">Examples <span class="text-slate-400 font-normal">— rename, edit, add or remove as many as you like</span></label>
       <div id="ex-rows-${q.id}">${exList.map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
@@ -2081,7 +2184,7 @@ function qCard(area, q, a, i, reorderAllowed){
           <div class="pl-8 pr-1 pt-3">
             ${attachBlockHTML(q.id+'::q', q.id, a, '📎 Question files')}
             <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1 mt-3">Model answer · practical</p>
-            <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmt(aText)}</p>
+            <div class="rich-answer text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmtAnswer(aText)}</div>
             ${attachBlockHTML(q.id+'::a', q.id, a, '📎 Answer files')}
             ${getExamples(q).map(ex=>`<div class="mt-3 rounded-xl ${a.soft} border-l-2 border-current ${a.text} px-3.5 py-2.5">
               <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-0.5">${esc(ex.label||'Example')}</p>
@@ -2124,11 +2227,102 @@ function qCard(area, q, a, i, reorderAllowed){
    EVENT DELEGATION
    ============================================================ */
 const app = document.getElementById('app');
+function richEditorByTarget(target){ return document.getElementById(target); }
+function captureRichSelection(target){
+  const editor=richEditorByTarget(target), sel=window.getSelection();
+  if(!editor||!sel||!sel.rangeCount) return;
+  const range=sel.getRangeAt(0);
+  if(editor.contains(range.commonAncestorContainer)) editor._richRange=range.cloneRange();
+}
+function restoreRichSelection(editor){
+  if(!editor) return;
+  editor.focus();
+  if(editor._richRange){
+    const sel=window.getSelection(); sel.removeAllRanges(); sel.addRange(editor._richRange);
+  }
+}
+function wrapRichSelection(editor,tag,styleName,styleValue,href){
+  const sel=window.getSelection(); if(!sel||!sel.rangeCount) return false;
+  const range=sel.getRangeAt(0);
+  if(range.collapsed||!editor.contains(range.commonAncestorContainer)) return false;
+  const wrap=document.createElement(tag);
+  if(styleName) wrap.style[styleName]=styleValue;
+  if(href){ wrap.href=href; wrap.target='_blank'; wrap.rel='noopener noreferrer'; }
+  try{
+    wrap.appendChild(range.extractContents()); range.insertNode(wrap);
+    range.selectNodeContents(wrap); sel.removeAllRanges(); sel.addRange(range);
+    return true;
+  }catch(_){ return false; }
+}
+function runRichCommand(target,cmd,value){
+  const editor=richEditorByTarget(target); if(!editor) return;
+  restoreRichSelection(editor);
+  let applied=false;
+  try{ applied=document.execCommand(cmd,false,value||null); }catch(_){}
+  if(!applied){
+    const tags={bold:'strong',italic:'em',underline:'u'};
+    if(tags[cmd]) wrapRichSelection(editor,tags[cmd]);
+    else if(cmd==='foreColor') wrapRichSelection(editor,'span','color',value);
+    else if(cmd==='hiliteColor') wrapRichSelection(editor,'span','backgroundColor',value);
+    else if(cmd==='createLink') wrapRichSelection(editor,'a',null,null,value);
+  }
+  captureRichSelection(target);
+}
+function insertRichHTML(target,html){
+  const editor=richEditorByTarget(target); if(!editor) return;
+  restoreRichSelection(editor);
+  try{ document.execCommand('insertHTML',false,sanitizeRichHTML(html)); }catch(_){}
+  captureRichSelection(target);
+}
+app.addEventListener('pointerdown',e=>{
+  const control=e.target.closest('.rich-toolbar [data-target]'); if(!control) return;
+  captureRichSelection(control.dataset.target);
+  if(control.tagName==='BUTTON') e.preventDefault();
+});
+app.addEventListener('mousedown',e=>{
+  const control=e.target.closest('.rich-toolbar [data-target]'); if(!control) return;
+  captureRichSelection(control.dataset.target);
+  if(control.tagName==='BUTTON') e.preventDefault();
+});
+app.addEventListener('keyup',e=>{ const ed=e.target.closest&&e.target.closest('.rich-editor'); if(ed) captureRichSelection(ed.id); });
+app.addEventListener('mouseup',e=>{ const ed=e.target.closest&&e.target.closest('.rich-editor'); if(ed) captureRichSelection(ed.id); });
+document.addEventListener('selectionchange',()=>{
+  const sel=window.getSelection(); if(!sel||!sel.rangeCount) return;
+  let node=sel.anchorNode; if(node&&node.nodeType!==1) node=node.parentElement;
+  const editor=node&&node.closest ? node.closest('.rich-editor') : null;
+  if(editor) editor._richRange=sel.getRangeAt(0).cloneRange();
+});
+app.addEventListener('change',e=>{
+  const el=e.target;
+  if(el.hasAttribute('data-rich-format')){ runRichCommand(el.dataset.target,'formatBlock',el.value); el.value='P'; }
+  if(el.hasAttribute('data-rich-color')) runRichCommand(el.dataset.target,el.getAttribute('data-rich-color'),el.value);
+});
+app.addEventListener('paste',e=>{
+  const editor=e.target.closest&&e.target.closest('.rich-editor'); if(!editor) return;
+  const clip=e.clipboardData; if(!clip) return;
+  const html=clip.getData('text/html'), text=clip.getData('text/plain');
+  const incoming=html ? sanitizeRichHTML(html) : (markdownTableHTML(text)||plainToRichHTML(text));
+  e.preventDefault();
+  try{ document.execCommand('insertHTML',false,incoming); }catch(_){}
+});
 app.addEventListener('click', e => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const act = btn.dataset.action;
   const id = btn.dataset.id;
+
+  // ---- rich-text answer editor ----
+  if(act==='rich-cmd'){ runRichCommand(btn.dataset.target,btn.dataset.cmd); return; }
+  if(act==='rich-table'){
+    insertRichHTML(btn.dataset.target,'<table><thead><tr><th>Heading 1</th><th>Heading 2</th><th>Heading 3</th></tr></thead><tbody><tr><td>Text</td><td>Text</td><td>Text</td></tr><tr><td>Text</td><td>Text</td><td>Text</td></tr></tbody></table><p><br></p>');
+    return;
+  }
+  if(act==='rich-link'){
+    const url=prompt('Paste the link address (https://… or mailto:…):');
+    if(url && /^(https?:|mailto:)/i.test(url.trim())) runRichCommand(btn.dataset.target,'createLink',url.trim());
+    else if(url) alert('Please enter a link beginning with https://, http:// or mailto:.');
+    return;
+  }
 
   // ---- auth / request / admin ----
   if (act==='do-login'){ doLogin(); return; }
@@ -2189,7 +2383,7 @@ app.addEventListener('click', e => {
   if (act==='ai-draft'){
     const base=findBaseQ(id); if(!base){ return; }
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Drafting… <span class="inline-block animate-spin">◌</span>';
-    const question=getText(base,'q'), existing=getText(base,'a');
+    const question=getText(base,'q'), existing=answerPlainText(getText(base,'a'));
     fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'draft',question,answer:existing})})
       .then(r=>r.json()).then(d=>{
         if(d.error || !d.answer){ alert('AI draft failed: '+(d.error||'no answer returned')+'\\nPlease try again.'); btn.disabled=false; btn.innerHTML=orig; return; }
@@ -2206,7 +2400,7 @@ app.addEventListener('click', e => {
     const qEl=document.querySelector(`[data-edit-q="${id}"]`), aEl=document.querySelector(`[data-edit-a="${id}"]`);
     if(!aEl) return;
     const question=qEl?qEl.value:(getText(findBaseQ(id)||{q:''},'q'));
-    const curAnswer=aEl.value;
+    const curAnswer=answerPlainText(RICH_PREFIX+sanitizeRichHTML(aEl.innerHTML));
     const firstEx=document.querySelector(`#ex-rows-${id} .ex-text`);
     const curExample=firstEx?firstEx.value:'';
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Refining…';
@@ -2214,7 +2408,7 @@ app.addEventListener('click', e => {
       .then(r=>r.json()).then(d=>{
         btn.disabled=false; btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result returned')); return; }
-        aEl.value=d.answer;
+        aEl.innerHTML=plainToRichHTML(d.answer);
         if(d.example){ if(firstEx){ firstEx.value=d.example; } else { const cont=document.getElementById('ex-rows-'+id); if(cont) cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example', d.example)); } }
         if(inp) inp.value='';
         aEl.focus();
@@ -2229,7 +2423,9 @@ app.addEventListener('click', e => {
   if (act==='ex-remove'){ const row = btn.closest('.ex-row'); if(row) row.remove(); return; }
   if (act==='edit-save'){
     const qv = document.querySelector(`[data-edit-q="${id}"]`).value;
-    const av = document.querySelector(`[data-edit-a="${id}"]`).value;
+    const answerEditor=document.querySelector(`[data-edit-a="${id}"]`);
+    const cleanAnswer=sanitizeRichHTML(answerEditor.innerHTML);
+    const av = RICH_PREFIX+cleanAnswer;
     const cont = document.getElementById('ex-rows-'+id);
     const rows = cont ? [...cont.querySelectorAll('.ex-row')].map(r=>({
       id: r.dataset.exid,
@@ -2269,7 +2465,7 @@ app.addEventListener('click', e => {
     if(!instruction || !instruction.trim()) return;
     const orig=btn.innerHTML; btn.innerHTML='✨ …';
     const exs=getExamples(base); const example=exs[0]?exs[0].text:'';
-    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'refine',question:getText(base,'q'),answer:getText(base,'a'),example,instruction})})
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'refine',question:getText(base,'q'),answer:answerPlainText(getText(base,'a')),example,instruction})})
       .then(r=>r.json()).then(d=>{
         btn.innerHTML=orig;
         if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result')); return; }
@@ -2382,24 +2578,26 @@ function openAdd(areaId){
   const wrap = document.createElement('div');
   wrap.id='addModal';
   wrap.className='fixed inset-0 z-50 grid place-items-center p-4 bg-black/50 backdrop-blur-sm';
-  wrap.innerHTML = `<div class="w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
+  wrap.innerHTML = `<div class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-5">
     <h3 class="font-display font-extrabold text-lg mb-3">Add your own question</h3>
     <label class="block text-xs font-semibold text-slate-500 mb-1">Question</label>
     <textarea id="addQ" rows="2" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 mb-3 outline-none focus:ring-2 focus:ring-brand-400" placeholder="e.g. How would you audit related-party transactions?"></textarea>
-    <label class="block text-xs font-semibold text-slate-500 mb-1">Your answer / notes</label>
-    <textarea id="addA" rows="5" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 outline-none focus:ring-2 focus:ring-brand-400" placeholder="Write the model answer you want to practise…"></textarea>
+    <label class="block text-xs font-semibold text-slate-500 mb-1">Your answer / notes <span class="text-slate-400 font-normal">— formatted text and tables are supported</span></label>
+    ${richEditorHTML('addA','')}
     <div class="flex gap-2 mt-4">
       <button id="addSave" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Add question</button>
       <button id="addCancel" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Cancel</button>
     </div>
   </div>`;
-  document.body.appendChild(wrap);
+  app.appendChild(wrap);
   const close=()=>wrap.remove();
   wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
   document.getElementById('addCancel').onclick=close;
   document.getElementById('addSave').onclick=()=>{
     const q=document.getElementById('addQ').value.trim();
-    const aTxt=document.getElementById('addA').value.trim();
+    const aEl=document.getElementById('addA');
+    const cleanAnswer=sanitizeRichHTML(aEl.innerHTML);
+    const aTxt=answerPlainText(RICH_PREFIX+cleanAnswer) ? RICH_PREFIX+cleanAnswer : '(add your answer)';
     if(!q){ document.getElementById('addQ').focus(); return; }
     const nid = areaId+'-c'+Date.now();
     (store.custom[areaId]||(store.custom[areaId]=[])).push({id:nid,q,a:aTxt||'(add your answer)'});
