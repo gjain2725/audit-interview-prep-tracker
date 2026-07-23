@@ -1280,6 +1280,7 @@ function doRequest(){
 let portalCache=null;
 let avatarObjectUrl=null;
 let headerAvatarObjectUrl=null;
+let headerAvatarRequest=0;
 let editingInterviewId=null;
 let adminPortalRecords=[];
 const AVATAR_CHOICES=['🐶','🐱','🦁','🐼','🦊','🐨','🐯','🐰','🦉','🐸','🦄','🐧'];
@@ -1326,6 +1327,7 @@ function setHeaderAvatarFallback(profile){
 function refreshHeaderAvatar(){
   const text=document.getElementById('headerAvatarText'), img=document.getElementById('headerAvatarImg');
   if(!text||!img) return;
+  const requestId=++headerAvatarRequest;
   if(!authed()){
     if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;}
     setHeaderAvatarFallback(null); return;
@@ -1335,14 +1337,15 @@ function refreshHeaderAvatar(){
     if(!r.ok) throw new Error('no avatar');
     return r.blob();
   }).then(blob=>{
-    if(auth.token!==token) return;
+    if(auth.token!==token||requestId!==headerAvatarRequest) return;
     if(headerAvatarObjectUrl) URL.revokeObjectURL(headerAvatarObjectUrl);
     headerAvatarObjectUrl=URL.createObjectURL(blob);
     img.src=headerAvatarObjectUrl; img.classList.remove('hidden'); text.textContent='';
   }).catch(()=>{
+    if(auth.token!==token||requestId!==headerAvatarRequest) return;
     const cached=portalCache&&portalCache.profile;
     if(cached){ setHeaderAvatarFallback(cached); return; }
-    portalRequest('me').then(d=>{ if(auth.token===token) setHeaderAvatarFallback(d.profile||{}); }).catch(()=>setHeaderAvatarFallback({fullName:auth.name}));
+    portalRequest('me').then(d=>{ if(auth.token===token&&requestId===headerAvatarRequest) setHeaderAvatarFallback(d.profile||{}); }).catch(()=>{ if(requestId===headerAvatarRequest) setHeaderAvatarFallback({fullName:auth.name}); });
   });
 }
 function loadOwnAvatar(){
@@ -1361,7 +1364,7 @@ function loadOwnAvatar(){
 function renderProfile(){
   const app=document.getElementById('app');
   app.innerHTML=`<div class="text-center py-14 text-slate-400">Loading your profile…</div>`;
-  loadPortalRecord().then(drawProfile).catch(err=>{
+  loadPortalRecord().then(record=>{ drawProfile(record); refreshHeaderAvatar(); }).catch(err=>{
     app.innerHTML=`<div class="max-w-lg mx-auto text-center py-12"><p class="text-4xl mb-3">⚠️</p><p class="font-semibold">Could not load profile.</p><p class="text-sm text-slate-500 mt-1">${esc(err.message)}</p></div>`;
   });
 }
