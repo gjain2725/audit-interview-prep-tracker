@@ -33,6 +33,17 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['\\(', '\\)']],
+        displayMath: [['$$', '$$'], ['\\[', '\\]']],
+        processEscapes: true
+      },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-svg.js" onload="scheduleMathTypeset()"></script>
   <style>
     html { scroll-behavior: smooth; }
     body { font-feature-settings: "cv02","cv03","cv04","cv11"; -webkit-font-smoothing: antialiased; }
@@ -76,6 +87,9 @@
     .rich-answer table, .rich-editor table { display:block; width:max-content; min-width:100%; max-width:100%; overflow-x:auto; border-collapse:collapse; margin:.7rem 0; font-size:.82rem; }
     .rich-answer th, .rich-answer td, .rich-editor th, .rich-editor td { min-width:7rem; border:1px solid rgba(100,116,139,.42); padding:.45rem .55rem; text-align:left; vertical-align:top; }
     .rich-answer th, .rich-editor th { background:rgba(91,124,250,.11); font-weight:750; }
+    .rich-answer img, .rich-editor img { display:block; max-width:100%; max-height:34rem; object-fit:contain; margin:.75rem auto; border-radius:.75rem; border:1px solid rgba(100,116,139,.28); box-shadow:0 8px 24px rgba(15,23,42,.12); }
+    .rich-editor img { cursor:pointer; }
+    .rich-answer mjx-container[display="true"] { max-width:100%; overflow-x:auto; overflow-y:hidden; padding:.25rem 0; }
     .rich-editor { min-height:12rem; max-height:30rem; overflow:auto; white-space:normal; }
     .rich-editor:focus { box-shadow:0 0 0 2px #5b7cfa; border-color:transparent; }
     .rich-editor:empty:before { content:attr(data-placeholder); color:#94a3b8; pointer-events:none; }
@@ -111,6 +125,7 @@
 
   <main id="app" class="max-w-6xl mx-auto px-4 sm:px-6 py-6"></main>
   <input type="file" id="fileInput" multiple class="hidden" />
+  <input type="file" id="richImageInput" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
 
   <footer class="max-w-6xl mx-auto px-4 sm:px-6 mt-8 mb-10 pt-6 border-t border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
     <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · Crack that Big 4 interview 🚀</p>
@@ -558,7 +573,7 @@ function esc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</
    so pasted paragraphs, blank lines and indentation render exactly as entered. */
 function fmt(s){ return esc(s); }
 const RICH_PREFIX='<!--mb4-rich:v1-->';
-const RICH_TAGS=new Set(['P','BR','DIV','STRONG','B','EM','I','U','S','H2','H3','UL','OL','LI','BLOCKQUOTE','A','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','SPAN','MARK','SUB','SUP']);
+const RICH_TAGS=new Set(['P','BR','DIV','STRONG','B','EM','I','U','S','H2','H3','UL','OL','LI','BLOCKQUOTE','A','TABLE','THEAD','TBODY','TFOOT','TR','TH','TD','SPAN','MARK','SUB','SUP','IMG']);
 function isRichAnswer(s){ return typeof s==='string' && s.startsWith(RICH_PREFIX); }
 function richBody(s){ return isRichAnswer(s) ? s.slice(RICH_PREFIX.length) : ''; }
 function plainToRichHTML(s){ return esc(s).replace(/\r\n?/g,'\n').replace(/\n/g,'<br>'); }
@@ -567,19 +582,26 @@ function safeRichColor(value){
   if(/^#[0-9a-f]{3,8}$/.test(v) || /^rgba?\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}(?:\s*,\s*(?:0|1|0?\.\d+))?\s*\)$/.test(v)) return v;
   return ['black','white','red','orange','yellow','green','blue','purple','gray','grey','transparent'].includes(v) ? v : '';
 }
+function safeRichSize(value){
+  const v=String(value||'').trim().toLowerCase();
+  return ['0.78rem','0.88rem','1rem','1.15rem','1.35rem','1.6rem'].includes(v) ? v : '';
+}
 function sanitizeRichHTML(html){
   const tpl=document.createElement('template');
   tpl.innerHTML=String(html||'');
-  tpl.content.querySelectorAll('script,style,iframe,object,embed,form,input,button,textarea,select,meta,link,img,svg,canvas,video,audio').forEach(el=>el.remove());
+  tpl.content.querySelectorAll('script,style,iframe,object,embed,form,input,button,textarea,select,meta,link,svg,canvas,video,audio').forEach(el=>el.remove());
   [...tpl.content.querySelectorAll('*')].forEach(el=>{
     if(!tpl.content.contains(el)) return;
     const tag=el.tagName;
     if(!RICH_TAGS.has(tag)){ el.replaceWith(...el.childNodes); return; }
     const href=tag==='A' ? (el.getAttribute('href')||'').trim() : '';
+    const imageId=tag==='IMG' ? (el.getAttribute('data-mb4-image')||'').trim() : '';
+    const imageAlt=tag==='IMG' ? (el.getAttribute('alt')||'Snapshot').slice(0,160) : '';
     const colspan=(tag==='TD'||tag==='TH') ? el.getAttribute('colspan') : null;
     const rowspan=(tag==='TD'||tag==='TH') ? el.getAttribute('rowspan') : null;
     const color=safeRichColor(el.style&&el.style.color);
     const background=safeRichColor(el.style&&(el.style.backgroundColor||el.style.background));
+    const fontSize=safeRichSize(el.style&&el.style.fontSize);
     [...el.attributes].forEach(a=>el.removeAttribute(a.name));
     if(tag==='A' && /^(https?:|mailto:)/i.test(href)){
       el.setAttribute('href',href); el.setAttribute('target','_blank'); el.setAttribute('rel','noopener noreferrer');
@@ -588,14 +610,26 @@ function sanitizeRichHTML(html){
     if((tag==='TD'||tag==='TH') && /^\d{1,2}$/.test(rowspan||'') && +rowspan<=50) el.setAttribute('rowspan',rowspan);
     if(color) el.style.color=color;
     if(background) el.style.backgroundColor=background;
+    if(fontSize) el.style.fontSize=fontSize;
+    if(tag==='IMG'){
+      if(!/^att-\d+-\d+$/.test(imageId)){ el.remove(); return; }
+      el.setAttribute('data-mb4-image',imageId);
+      el.setAttribute('alt',imageAlt||'Snapshot');
+      el.setAttribute('loading','lazy');
+    }
   });
   const walker=document.createTreeWalker(tpl.content,NodeFilter.SHOW_COMMENT);
   const comments=[]; while(walker.nextNode()) comments.push(walker.currentNode);
   comments.forEach(n=>n.remove());
   return tpl.innerHTML.trim();
 }
-function answerToEditorHTML(s){ return isRichAnswer(s) ? sanitizeRichHTML(richBody(s)) : plainToRichHTML(s); }
-function fmtAnswer(s){ return isRichAnswer(s) ? sanitizeRichHTML(richBody(s)) : fmt(s); }
+function richHTMLWithImages(html){
+  const box=document.createElement('div'); box.innerHTML=sanitizeRichHTML(html);
+  box.querySelectorAll('img[data-mb4-image]').forEach(img=>{ img.src=fileViewUrl(img.getAttribute('data-mb4-image')); });
+  return box.innerHTML;
+}
+function answerToEditorHTML(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : plainToRichHTML(s); }
+function fmtAnswer(s){ return isRichAnswer(s) ? richHTMLWithImages(richBody(s)) : fmt(s); }
 function answerPlainText(s){
   if(!isRichAnswer(s)) return String(s==null?'':s);
   const box=document.createElement('div'); box.innerHTML=sanitizeRichHTML(richBody(s));
@@ -624,10 +658,15 @@ function richToolbarHTML(target){
     <select data-rich-format data-target="${t}" title="Paragraph style" class="h-8 rounded-md text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-1">
       <option value="P">Paragraph</option><option value="H2">Heading</option><option value="H3">Subheading</option>
     </select>
+    <select data-rich-size data-target="${t}" title="Text size" class="h-8 rounded-md text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-1">
+      <option value="">Size</option><option value="0.78rem">Tiny</option><option value="0.88rem">Small</option><option value="1rem">Normal</option><option value="1.15rem">Large</option><option value="1.35rem">X-Large</option><option value="1.6rem">XX-Large</option>
+    </select>
     <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="insertUnorderedList" title="Bulleted list" class="h-8 rounded-md text-sm">• List</button>
     <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="insertOrderedList" title="Numbered list" class="h-8 rounded-md text-sm">1. List</button>
     <button type="button" data-action="rich-link" data-target="${t}" title="Add link" class="h-8 rounded-md text-sm">🔗</button>
     <button type="button" data-action="rich-table" data-target="${t}" title="Insert a 3-column table" class="h-8 px-2 rounded-md text-xs font-semibold">▦ Table</button>
+    <button type="button" data-action="rich-image" data-target="${t}" title="Insert or paste a screenshot" class="h-8 px-2 rounded-md text-xs font-semibold">🖼 Image</button>
+    <button type="button" data-action="rich-formula" data-target="${t}" title="Insert a LaTeX formula block" class="h-8 px-2 rounded-md text-xs font-semibold">∑ Formula</button>
     <label class="inline-flex items-center gap-0.5 text-[10px] text-slate-500" title="Text colour">A<input type="color" value="#2540db" data-rich-color="foreColor" data-target="${t}" class="rich-color"></label>
     <label class="inline-flex items-center gap-0.5 text-[10px] text-slate-500" title="Highlight colour">▰<input type="color" value="#fef08a" data-rich-color="hiliteColor" data-target="${t}" class="rich-color"></label>
     <button type="button" data-action="rich-cmd" data-target="${t}" data-cmd="removeFormat" title="Clear formatting" class="h-8 px-2 rounded-md text-xs">Clear</button>
@@ -636,6 +675,16 @@ function richToolbarHTML(target){
 function richEditorHTML(target, value, extraAttrs){
   const t=esc(target);
   return `${richToolbarHTML(t)}<div id="${t}" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="Type or paste an answer here…" ${extraAttrs||''} class="rich-editor w-full text-sm rounded-b-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-3 outline-none leading-relaxed">${answerToEditorHTML(value)}</div>`;
+}
+let _mathTypesetTimer=null;
+function scheduleMathTypeset(){
+  clearTimeout(_mathTypesetTimer);
+  _mathTypesetTimer=setTimeout(()=>{
+    const nodes=[...document.querySelectorAll('.rich-answer')];
+    if(nodes.length && window.MathJax && typeof window.MathJax.typesetPromise==='function'){
+      window.MathJax.typesetPromise(nodes).catch(()=>{});
+    }
+  },60);
 }
 function setHeaderProgress(){ /* progress ring removed from header; readiness shown on home */ }
 
@@ -725,7 +774,7 @@ function attachTo(slot,qid,file){
   const type=file.type||'application/octet-stream';
   return fetch(FILES_URL,{method:'POST',headers:{'x-auth':auth.token,'x-att-id':id,'x-file-name':encodeURIComponent(file.name),'x-file-type':type},body:file})
     .then(r=>{ if(!r.ok) throw new Error('upload failed'); return r.json(); })
-    .then(()=>{ if(!store.attach) store.attach={}; (store.attach[slot]||(store.attach[slot]=[])).push({id,name:file.name,type,size:file.size}); save(); });
+    .then(()=>{ const meta={id,name:file.name,type,size:file.size}; if(!store.attach) store.attach={}; (store.attach[slot]||(store.attach[slot]=[])).push(meta); save(); return meta; });
 }
 function removeAttach(id,slot){
   // SOFT delete: keep the cloud blob, move metadata to Trash so it can be retrieved
@@ -2081,6 +2130,7 @@ function renderArea(area){
     const ns = document.getElementById('areaSearch'); if(ns){ ns.focus(); ns.setSelectionRange(pos,pos); }
   });
   updateSpeakButtons();
+  scheduleMathTypeset();
 }
 
 /* Examples: user override (array) wins; else fall back to the base single example.
@@ -2129,8 +2179,9 @@ function qCard(area, q, a, i, reorderAllowed){
       ${draft?`<div class="mb-3 rounded-xl bg-gradient-to-r from-brand-500/10 to-cyan-400/10 border border-brand-400/30 px-3 py-2 text-xs text-slate-600 dark:text-slate-300">✨ <b>AI draft ready</b> — review &amp; edit below, then <b>Save</b> to keep it (or Cancel to discard). Nothing is saved yet.</div>`:''}
       <label class="block text-xs font-semibold text-slate-500 mb-1">Question</label>
       <textarea data-edit-q="${q.id}" rows="2" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 mb-3 outline-none focus:ring-2 focus:ring-brand-400">${esc(qText)}</textarea>
-      <label class="block text-xs font-semibold text-slate-500 mb-1">Model answer <span class="text-slate-400 font-normal">— paste tables directly from Gemini, Excel or websites</span></label>
+      <label class="block text-xs font-semibold text-slate-500 mb-1">Model answer <span class="text-slate-400 font-normal">— formatted text, tables, screenshots and formulas are supported</span></label>
       ${richEditorHTML('rich-answer-'+q.id,eaText,`data-edit-a="${q.id}"`)}
+      <p class="text-[10px] text-slate-400 mt-1">Paste a screenshot with Ctrl/⌘ + V, or use <b>Image</b>. Paste formulas between <code class="px-1 rounded bg-slate-500/10">$$ … $$</code>; they render after Save.</p>
 
       <label class="block text-xs font-semibold text-slate-500 mb-1 mt-3">Examples <span class="text-slate-400 font-normal">— rename, edit, add or remove as many as you like</span></label>
       <div id="ex-rows-${q.id}">${exList.map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
@@ -2274,6 +2325,79 @@ function insertRichHTML(target,html){
   try{ document.execCommand('insertHTML',false,sanitizeRichHTML(html)); }catch(_){}
   captureRichSelection(target);
 }
+function applyRichStyle(target,styleName,value){
+  const editor=richEditorByTarget(target); if(!editor||!value) return;
+  restoreRichSelection(editor);
+  if(!wrapRichSelection(editor,'span',styleName,value)){
+    const sel=window.getSelection(); if(!sel||!sel.rangeCount) return;
+    const range=sel.getRangeAt(0); if(!editor.contains(range.commonAncestorContainer)) return;
+    const span=document.createElement('span'); span.style[styleName]=value; span.append('\u200B');
+    range.insertNode(span); range.setStart(span.firstChild,1); range.collapse(true); sel.removeAllRanges(); sel.addRange(range);
+  }
+  captureRichSelection(target);
+}
+const INLINE_IMAGE_TYPES=new Set(['image/png','image/jpeg','image/webp','image/gif']);
+let pendingRichImageTarget=null;
+function normalizeInlineImageFile(file){
+  if(file.name) return file;
+  const ext=file.type==='image/jpeg'?'jpg':file.type.split('/')[1]||'png';
+  return new File([file],`snapshot-${Date.now()}.${ext}`,{type:file.type||'image/png'});
+}
+async function optimizeInlineImage(file){
+  file=normalizeInlineImageFile(file);
+  if(!INLINE_IMAGE_TYPES.has(file.type)) throw new Error('Please choose a PNG, JPG, WEBP or GIF image.');
+  if(file.size>15*1024*1024) throw new Error('That image is too large. Please use an image below 15 MB.');
+  if(file.type==='image/gif'){
+    if(file.size>5*1024*1024) throw new Error('Animated GIFs must be below 5 MB.');
+    return file;
+  }
+  let bitmap;
+  try{ bitmap=await createImageBitmap(file); }catch(_){ return file; }
+  const scale=Math.min(1,1800/Math.max(bitmap.width,bitmap.height));
+  if(scale===1 && file.size<=4.5*1024*1024){ bitmap.close(); return file; }
+  const canvas=document.createElement('canvas');
+  canvas.width=Math.max(1,Math.round(bitmap.width*scale)); canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+  canvas.getContext('2d').drawImage(bitmap,0,0,canvas.width,canvas.height); bitmap.close();
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.88));
+  if(!blob) throw new Error('Could not prepare that image.');
+  if(blob.size>5*1024*1024) throw new Error('The optimized image is still too large. Please crop it and try again.');
+  const base=file.name.replace(/\.[^.]+$/,'')||'snapshot';
+  return new File([blob],base+'.webp',{type:'image/webp'});
+}
+function insertPendingRichImage(target,file){
+  const editor=richEditorByTarget(target); if(!editor) return;
+  file=normalizeInlineImageFile(file);
+  if(!INLINE_IMAGE_TYPES.has(file.type)){ alert('Please choose a PNG, JPG, WEBP or GIF image.'); return; }
+  if(file.size>15*1024*1024){ alert('That image is too large. Please use an image below 15 MB.'); return; }
+  const key='pending-'+Date.now()+'-'+Math.round(Math.random()*1e9);
+  const objectUrl=URL.createObjectURL(file);
+  if(!editor._pendingImages) editor._pendingImages=new Map();
+  editor._pendingImages.set(key,{file,objectUrl});
+  restoreRichSelection(editor);
+  const img=document.createElement('img'); img.src=objectUrl; img.alt=file.name||'Snapshot'; img.setAttribute('data-mb4-pending',key);
+  const sel=window.getSelection();
+  if(sel&&sel.rangeCount&&editor.contains(sel.getRangeAt(0).commonAncestorContainer)){
+    const range=sel.getRangeAt(0); range.deleteContents(); range.insertNode(img); range.setStartAfter(img); range.collapse(true); sel.removeAllRanges(); sel.addRange(range);
+  }else editor.appendChild(img);
+  captureRichSelection(target);
+}
+function discardPendingRichImages(editor){
+  if(!editor||!editor._pendingImages) return;
+  editor._pendingImages.forEach(v=>URL.revokeObjectURL(v.objectUrl));
+  editor._pendingImages.clear();
+}
+async function savePendingRichImages(editor,qid){
+  if(!editor||!editor._pendingImages||!editor._pendingImages.size) return;
+  for(const [key,item] of [...editor._pendingImages]){
+    const img=editor.querySelector(`img[data-mb4-pending="${key}"]`);
+    if(!img){ URL.revokeObjectURL(item.objectUrl); editor._pendingImages.delete(key); continue; }
+    const prepared=await optimizeInlineImage(item.file);
+    const meta=await attachTo(qid+'::a',qid,prepared);
+    img.removeAttribute('data-mb4-pending'); img.setAttribute('data-mb4-image',meta.id); img.alt=meta.name; img.src=fileViewUrl(meta.id);
+    URL.revokeObjectURL(item.objectUrl); editor._pendingImages.delete(key);
+  }
+}
+function cleanRichEditorHTML(editor){ return sanitizeRichHTML((editor.innerHTML||'').replace(/\u200B/g,'')); }
 app.addEventListener('pointerdown',e=>{
   const control=e.target.closest('.rich-toolbar [data-target]'); if(!control) return;
   captureRichSelection(control.dataset.target);
@@ -2295,17 +2419,29 @@ document.addEventListener('selectionchange',()=>{
 app.addEventListener('change',e=>{
   const el=e.target;
   if(el.hasAttribute('data-rich-format')){ runRichCommand(el.dataset.target,'formatBlock',el.value); el.value='P'; }
+  if(el.hasAttribute('data-rich-size')){ if(el.value) applyRichStyle(el.dataset.target,'fontSize',el.value); el.value=''; }
   if(el.hasAttribute('data-rich-color')) runRichCommand(el.dataset.target,el.getAttribute('data-rich-color'),el.value);
 });
 app.addEventListener('paste',e=>{
   const editor=e.target.closest&&e.target.closest('.rich-editor'); if(!editor) return;
   const clip=e.clipboardData; if(!clip) return;
+  const imageItem=[...(clip.items||[])].find(item=>item.kind==='file'&&INLINE_IMAGE_TYPES.has(item.type));
+  if(imageItem){
+    const file=imageItem.getAsFile(); if(!file) return;
+    e.preventDefault(); insertPendingRichImage(editor.id,file); return;
+  }
   const html=clip.getData('text/html'), text=clip.getData('text/plain');
-  const incoming=html ? sanitizeRichHTML(html) : (markdownTableHTML(text)||plainToRichHTML(text));
+  const hasFormula=/\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]/.test(text);
+  const incoming=hasFormula ? plainToRichHTML(text) : (html ? sanitizeRichHTML(html) : (markdownTableHTML(text)||plainToRichHTML(text)));
   e.preventDefault();
   try{ document.execCommand('insertHTML',false,incoming); }catch(_){}
 });
-app.addEventListener('click', e => {
+document.getElementById('richImageInput').addEventListener('change',e=>{
+  const file=e.target.files&&e.target.files[0];
+  if(file&&pendingRichImageTarget) insertPendingRichImage(pendingRichImageTarget,file);
+  e.target.value=''; pendingRichImageTarget=null;
+});
+app.addEventListener('click', async e => {
   const btn = e.target.closest('[data-action]');
   if (!btn) return;
   const act = btn.dataset.action;
@@ -2316,6 +2452,13 @@ app.addEventListener('click', e => {
   if(act==='rich-table'){
     insertRichHTML(btn.dataset.target,'<table><thead><tr><th>Heading 1</th><th>Heading 2</th><th>Heading 3</th></tr></thead><tbody><tr><td>Text</td><td>Text</td><td>Text</td></tr><tr><td>Text</td><td>Text</td><td>Text</td></tr></tbody></table><p><br></p>');
     return;
+  }
+  if(act==='rich-image'){
+    pendingRichImageTarget=btn.dataset.target;
+    const input=document.getElementById('richImageInput'); input.value=''; input.click(); return;
+  }
+  if(act==='rich-formula'){
+    insertRichHTML(btn.dataset.target,'<p>$$\\text{Type or paste your formula here}$$</p><p><br></p>'); return;
   }
   if(act==='rich-link'){
     const url=prompt('Paste the link address (https://… or mailto:…):');
@@ -2379,7 +2522,7 @@ app.addEventListener('click', e => {
   if (act==='flag'){ const s=qs(id); s.flag=!s.flag; save(); refresh(); return; }
   if (act==='done'){ const s=qs(id); s.done=!s.done; if(s.done) s.flag=s.flag; save(); refresh(); return; }
   if (act==='edit-open'){ const s=qs(id); s._editing=true; s._open=true; save(); refresh(); return; }
-  if (act==='edit-cancel'){ const s=qs(id); s._editing=false; delete s._draft; save(); refresh(); return; }
+  if (act==='edit-cancel'){ discardPendingRichImages(document.querySelector(`[data-edit-a="${id}"]`)); const s=qs(id); s._editing=false; delete s._draft; save(); refresh(); return; }
   if (act==='ai-draft'){
     const base=findBaseQ(id); if(!base){ return; }
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Drafting… <span class="inline-block animate-spin">◌</span>';
@@ -2400,7 +2543,7 @@ app.addEventListener('click', e => {
     const qEl=document.querySelector(`[data-edit-q="${id}"]`), aEl=document.querySelector(`[data-edit-a="${id}"]`);
     if(!aEl) return;
     const question=qEl?qEl.value:(getText(findBaseQ(id)||{q:''},'q'));
-    const curAnswer=answerPlainText(RICH_PREFIX+sanitizeRichHTML(aEl.innerHTML));
+    const curAnswer=answerPlainText(RICH_PREFIX+cleanRichEditorHTML(aEl));
     const firstEx=document.querySelector(`#ex-rows-${id} .ex-text`);
     const curExample=firstEx?firstEx.value:'';
     btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Refining…';
@@ -2424,7 +2567,10 @@ app.addEventListener('click', e => {
   if (act==='edit-save'){
     const qv = document.querySelector(`[data-edit-q="${id}"]`).value;
     const answerEditor=document.querySelector(`[data-edit-a="${id}"]`);
-    const cleanAnswer=sanitizeRichHTML(answerEditor.innerHTML);
+    const originalLabel=btn.textContent; btn.disabled=true; btn.textContent=answerEditor._pendingImages&&answerEditor._pendingImages.size?'Uploading image…':'Saving…';
+    try{ await savePendingRichImages(answerEditor,id); }
+    catch(err){ btn.disabled=false; btn.textContent=originalLabel; alert((err&&err.message)||'Image upload failed. Please try again.'); return; }
+    const cleanAnswer=cleanRichEditorHTML(answerEditor);
     const av = RICH_PREFIX+cleanAnswer;
     const cont = document.getElementById('ex-rows-'+id);
     const rows = cont ? [...cont.querySelectorAll('.ex-row')].map(r=>({
@@ -2432,9 +2578,9 @@ app.addEventListener('click', e => {
       label: (r.querySelector('.ex-label').value.trim()) || '💡 Example',
       text: r.querySelector('.ex-text').value.trim()
     })).filter(e=>e.text) : [];
-    const s=qs(id); s.qOverride=qv; s.aOverride=av; s.examples=rows; s._editing=false; s._open=true; delete s._draft; save(); refresh(); return;
+    const s=qs(id); s.qOverride=qv; s.aOverride=av; s.examples=rows; s._editing=false; s._open=true; delete s._draft; save(); refresh(); scheduleMathTypeset(); return;
   }
-  if (act==='edit-reset'){ const s=qs(id); delete s.qOverride; delete s.aOverride; delete s.examples; s._editing=false; delete s._draft; save(); refresh(); return; }
+  if (act==='edit-reset'){ discardPendingRichImages(document.querySelector(`[data-edit-a="${id}"]`)); const s=qs(id); delete s.qOverride; delete s.aOverride; delete s.examples; s._editing=false; delete s._draft; save(); refresh(); return; }
   if (act==='area-filter'){ const ar=btn.dataset.area; (areaFilter[ar]||(areaFilter[ar]={status:'all',search:''})).status=btn.dataset.status; renderArea(AREA_BY_ID[ar]); return; }
   if (act==='add-open'){ openAdd(btn.dataset.area); return; }
   if (act==='order-reset'){ const ar=btn.dataset.area; if(store.order) delete store.order[ar]; save(); renderArea(AREA_BY_ID[ar]); return; }
@@ -2582,24 +2728,30 @@ function openAdd(areaId){
     <h3 class="font-display font-extrabold text-lg mb-3">Add your own question</h3>
     <label class="block text-xs font-semibold text-slate-500 mb-1">Question</label>
     <textarea id="addQ" rows="2" class="w-full text-sm rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-2.5 mb-3 outline-none focus:ring-2 focus:ring-brand-400" placeholder="e.g. How would you audit related-party transactions?"></textarea>
-    <label class="block text-xs font-semibold text-slate-500 mb-1">Your answer / notes <span class="text-slate-400 font-normal">— formatted text and tables are supported</span></label>
+    <label class="block text-xs font-semibold text-slate-500 mb-1">Your answer / notes <span class="text-slate-400 font-normal">— text sizes, tables, screenshots and formulas are supported</span></label>
     ${richEditorHTML('addA','')}
+    <p class="text-[10px] text-slate-400 mt-1">Paste screenshots directly. Put LaTeX formulas between <code class="px-1 rounded bg-slate-500/10">$$ … $$</code>.</p>
     <div class="flex gap-2 mt-4">
       <button id="addSave" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Add question</button>
       <button id="addCancel" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Cancel</button>
     </div>
   </div>`;
   app.appendChild(wrap);
-  const close=()=>wrap.remove();
+  const close=()=>{ discardPendingRichImages(document.getElementById('addA')); wrap.remove(); };
   wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
   document.getElementById('addCancel').onclick=close;
-  document.getElementById('addSave').onclick=()=>{
+  document.getElementById('addSave').onclick=async()=>{
     const q=document.getElementById('addQ').value.trim();
     const aEl=document.getElementById('addA');
-    const cleanAnswer=sanitizeRichHTML(aEl.innerHTML);
-    const aTxt=answerPlainText(RICH_PREFIX+cleanAnswer) ? RICH_PREFIX+cleanAnswer : '(add your answer)';
     if(!q){ document.getElementById('addQ').focus(); return; }
     const nid = areaId+'-c'+Date.now();
+    const saveBtn=document.getElementById('addSave'); const originalLabel=saveBtn.textContent;
+    saveBtn.disabled=true; saveBtn.textContent=aEl._pendingImages&&aEl._pendingImages.size?'Uploading image…':'Adding…';
+    try{ await savePendingRichImages(aEl,nid); }
+    catch(err){ saveBtn.disabled=false; saveBtn.textContent=originalLabel; alert((err&&err.message)||'Image upload failed. Please try again.'); return; }
+    const cleanAnswer=cleanRichEditorHTML(aEl);
+    const hasAnswer=!!answerPlainText(RICH_PREFIX+cleanAnswer)||cleanAnswer.includes('data-mb4-image');
+    const aTxt=hasAnswer ? RICH_PREFIX+cleanAnswer : '(add your answer)';
     (store.custom[areaId]||(store.custom[areaId]=[])).push({id:nid,q,a:aTxt||'(add your answer)'});
     save(); close(); renderArea(AREA_BY_ID[areaId]);
   };
