@@ -845,6 +845,53 @@ function makeZip(files){ // files: [{name, data:Uint8Array}]
   return new Blob(chunks,{type:'application/zip'});
 }
 function downloadBlob(blob,name){ const u=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),8000); }
+
+/* ---- Export all Q&A as a print-ready PDF (preserves ₹, emoji, formatting) ---- */
+function pdfEsc(s){ return (s==null?'':String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function buildPrintHtml(){
+  let dateStr=''; try{ dateStr=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'}); }catch(e){}
+  let sections='';
+  CATEGORIES.forEach(cat=>{
+    let areaHtml='';
+    AREAS.filter(a=>a.cat===cat.id).forEach(area=>{
+      const qs=orderedAreaQuestions(area); if(!qs.length) return;
+      let qHtml='';
+      qs.forEach((q,i)=>{
+        const qt=getText(q,'q'), at=getText(q,'a'); const exs=getExamples(q);
+        qHtml+=`<div class="q"><p class="qq">${i+1}. ${pdfEsc(qt)}</p><p class="qa">${pdfEsc(at)}</p>`
+          + exs.map(ex=>`<p class="qe"><b>${pdfEsc(ex.label||'Example')}:</b> ${pdfEsc(ex.text)}</p>`).join('')
+          + (q.tip?`<p class="qt"><b>Interviewer's tip:</b> ${pdfEsc(q.tip)}</p>`:'')
+          + `</div>`;
+      });
+      areaHtml+=`<h3>${pdfEsc(area.icon+'  '+area.title)}</h3>${qHtml}`;
+    });
+    if(areaHtml) sections+=`<h2>${pdfEsc(cat.icon+'  '+cat.label)}</h2>${areaHtml}`;
+  });
+  const total=allQuestions().length;
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Mission Big 4 — Audit Interview Prep</title><style>
+    *{box-sizing:border-box} body{font-family:'Segoe UI',system-ui,Arial,sans-serif;color:#1a2233;margin:0;padding:28px;line-height:1.5;font-size:12px}
+    .cover{text-align:center;padding:40px 0 24px;border-bottom:3px solid #2540db;margin-bottom:20px}
+    .cover h1{font-size:24px;margin:0;color:#1e33b8} .cover p{margin:5px 0;color:#555}
+    h2{font-size:15px;color:#fff;background:#2540db;padding:8px 12px;border-radius:6px;margin:24px 0 12px;page-break-after:avoid}
+    h3{font-size:13px;color:#1e33b8;margin:16px 0 8px;border-bottom:1px solid #cdd6f5;padding-bottom:4px;page-break-after:avoid}
+    .q{margin:0 0 12px;padding:0 0 9px;border-bottom:1px dotted #dde3f0;page-break-inside:avoid}
+    .qq{font-weight:700;margin:0 0 4px;color:#12203f} .qa{margin:0 0 6px;white-space:pre-wrap}
+    .qe{margin:4px 0;padding:6px 10px;background:#eef3ff;border-left:3px solid #5b7cfa;border-radius:4px;white-space:pre-wrap}
+    .qt{margin:4px 0;padding:6px 10px;background:#f5f5f5;border-left:3px solid #aaa;border-radius:4px;font-style:italic}
+    .hint{background:#fffbe6;border:1px solid #ffe58f;padding:10px 14px;border-radius:6px;margin-bottom:18px}
+    @media print{ .hint{display:none} body{padding:0} @page{margin:14mm} }
+  </style></head><body>
+    <div class="hint">📄 <b>To save as PDF:</b> the print dialog should open automatically — choose <b>"Save as PDF"</b> as the destination. If it didn't open, press <b>Ctrl/⌘ + P</b>.</div>
+    <div class="cover"><h1>Mission Big 4 — Audit Interview Prep</h1><p>Himanshi Garg · Chartered Accountant</p><p>${total} questions · model answers &amp; examples</p><p>Generated ${pdfEsc(dateStr)}</p></div>
+    ${sections}
+  </body></html>`;
+}
+function downloadPdf(){
+  const w=window.open('','_blank');
+  if(!w){ alert('Please allow pop-ups for this site, then click "Download PDF" again.'); return; }
+  w.document.write(buildPrintHtml()); w.document.close();
+  setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 500);
+}
 function uniqueName(name,seen){ if(seen[name]==null){ seen[name]=0; return name; } seen[name]++; const d=name.lastIndexOf('.'); return d>0? name.slice(0,d)+' ('+seen[name]+')'+name.slice(d) : name+' ('+seen[name]+')'; }
 
 async function zipAttachments(list, prefix){
@@ -1140,8 +1187,8 @@ function renderHome(){
         </div>
         <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">Practice like it's the <span class="gradient-text">real panel.</span></h1>
         <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">Pick an area to open its question bank. On each question you can <b>🚩 flag</b> it for revision, tick it <b>✅ done</b>, add your own <b>📝 notes</b>, and <b>✏️ edit</b> the question or model answer to sound like you. Answers are written practically, with examples.</p>
-        <div class="mt-4 flex items-center gap-3 text-sm">
-          <div class="flex-1 max-w-md">
+        <div class="mt-4 flex items-end gap-3 text-sm flex-wrap">
+          <div class="flex-1 max-w-md min-w-[200px]">
             <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
               <span class="uppercase tracking-wider">Overall readiness</span><span class="${ACCENTS.brand.text} font-display">${m.pct}% · ${m.done}/${totalQ}</span>
             </div>
@@ -1149,6 +1196,10 @@ function renderHome(){
               <div class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500 shadow-[0_0_12px_rgba(58,91,239,.5)] transition-all duration-700" style="width:${m.pct}%"></div>
             </div>
           </div>
+          <button data-action="download-pdf" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-white/70 dark:bg-white/5 glass border border-slate-200/70 dark:border-white/10 hover:border-brand-400 hover:${ACCENTS.brand.text.split(' ')[0]} transition shadow-sm">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+            Download all Q&amp;A (PDF)
+          </button>
         </div>
       </div>
     </div>
@@ -1320,6 +1371,15 @@ function qCard(area, q, a, i, reorderAllowed){
       <div id="ex-rows-${q.id}">${exList.map(ex=>exRowHTML(ex.id, ex.label, ex.text)).join('')}</div>
       <button type="button" data-action="ex-add" data-id="${q.id}" class="text-xs font-semibold ${a.text} hover:underline">+ Add another example</button>
 
+      <div class="mt-4 rounded-xl bg-gradient-to-r from-brand-500/8 to-cyan-400/8 border border-brand-400/25 p-3">
+        <label class="block text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1.5">✨ Not happy? Tell AI how to change it</label>
+        <div class="flex gap-2">
+          <input id="refine-${q.id}" type="text" placeholder="e.g. make it shorter · add a numeric example · more on cut-off · simpler language" class="flex-1 text-sm rounded-lg bg-white dark:bg-black/20 border border-slate-200 dark:border-white/10 px-2.5 py-2 outline-none focus:ring-2 focus:ring-brand-400" />
+          <button type="button" data-action="ai-refine" data-id="${q.id}" class="px-3.5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow shrink-0">✨ Refine</button>
+        </div>
+        <p class="text-[10px] text-slate-400 mt-1">Rewrites the answer above in place — review, then Save.</p>
+      </div>
+
       <div class="flex gap-2 mt-4">
         <button data-action="edit-save" data-id="${q.id}" class="px-4 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow">Save</button>
         <button data-action="edit-cancel" data-id="${q.id}" class="px-4 py-2 rounded-lg text-sm font-semibold border border-slate-200 dark:border-white/10">Cancel</button>
@@ -1426,6 +1486,28 @@ app.addEventListener('click', e => {
       }).catch(()=>{ alert('AI draft failed — check your connection and try again.'); btn.disabled=false; btn.innerHTML=orig; });
     return;
   }
+  if (act==='ai-refine'){
+    const inp=document.getElementById('refine-'+id);
+    const instruction=inp?(inp.value||'').trim():'';
+    if(!instruction){ if(inp) inp.focus(); return; }
+    const qEl=document.querySelector(`[data-edit-q="${id}"]`), aEl=document.querySelector(`[data-edit-a="${id}"]`);
+    if(!aEl) return;
+    const question=qEl?qEl.value:(getText(findBaseQ(id)||{q:''},'q'));
+    const curAnswer=aEl.value;
+    const firstEx=document.querySelector(`#ex-rows-${id} .ex-text`);
+    const curExample=firstEx?firstEx.value:'';
+    btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Refining…';
+    fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({task:'refine',question,answer:curAnswer,example:curExample,instruction})})
+      .then(r=>r.json()).then(d=>{
+        btn.disabled=false; btn.innerHTML=orig;
+        if(d.error || !d.answer){ alert('Refine failed: '+(d.error||'no result returned')); return; }
+        aEl.value=d.answer;
+        if(d.example){ if(firstEx){ firstEx.value=d.example; } else { const cont=document.getElementById('ex-rows-'+id); if(cont) cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example', d.example)); } }
+        if(inp) inp.value='';
+        aEl.focus();
+      }).catch(()=>{ btn.disabled=false; btn.innerHTML=orig; alert('Refine failed — check your connection and try again.'); });
+    return;
+  }
   if (act==='ex-add'){
     const cont = document.getElementById('ex-rows-'+id);
     if (cont){ cont.insertAdjacentHTML('beforeend', exRowHTML(id+'-ex'+Date.now(),'💡 Example','')); cont.lastElementChild.querySelector('.ex-text').focus(); }
@@ -1465,6 +1547,7 @@ app.addEventListener('click', e => {
   if (act==='trash-restore'){ restoreTrash(btn.dataset.id); pushNow(); renderVault(); return; }
   if (act==='trash-purge'){ if(confirm('Permanently delete this file? This cannot be undone and it will no longer be retrievable.')){ purgeTrash(btn.dataset.id).then(()=>{ pushNow(); renderVault(); }); } return; }
   if (act==='hist-restore'){ restoreVersion(btn.dataset.ts); return; }
+  if (act==='download-pdf'){ downloadPdf(); return; }
   if (act==='delete-custom'){
     const ar=btn.dataset.area;
     if (confirm('Delete this custom question?')){

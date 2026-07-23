@@ -73,32 +73,56 @@ export default async (req) => {
     await store.setJSON('count:' + day, n + 1);
   } catch (e) { /* best-effort */ }
 
-  // ---------- DRAFT mode: generate a model answer + example for a question ----------
-  if (body.task === 'draft') {
+  // ---------- DRAFT / REFINE: generate or revise a model answer + example ----------
+  if (body.task === 'draft' || body.task === 'refine') {
     const question = String(body.question || '').slice(0, 2000);
-    if (!question) return json({ error: 'no question' }, 400);
-    const existing = String(body.answer || '').slice(0, 4000);
-    const prompt = `Interview question: "${question}"
+    if (!question && body.task === 'draft') return json({ error: 'no question' }, 400);
+    let prompt;
+    if (body.task === 'refine') {
+      const answer = String(body.answer || '').slice(0, 6000);
+      const example = String(body.example || '').slice(0, 3000);
+      const instruction = String(body.instruction || '').slice(0, 1000);
+      if (!instruction) return json({ error: 'no instruction' }, 400);
+      prompt = `Interview question: "${question}"
 
-${existing ? 'There is an existing answer to improve and enrich (keep what is correct, make it sharper and more complete):\n"""' + existing + '"""\n\n' : ''}Write (1) a strong model answer the candidate can speak in the interview, and (2) ONE concrete example that aids memory.`;
+Current model answer:
+"""${answer}"""
+
+${example ? 'Current example:\n"""' + example + '"""\n\n' : ''}Revise the answer (and the example if relevant) according to this instruction from the candidate: "${instruction}"
+
+Keep everything correct and useful; apply the instruction faithfully. Output EXACTLY in this format — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, or code fences:
+
+<the revised model answer>
+###EXAMPLE###
+<the revised or new example>`;
+    } else {
+      const existing = String(body.answer || '').slice(0, 4000);
+      prompt = `Interview question: "${question}"
+
+${existing ? 'There is an existing answer to improve and enrich (keep what is correct, make it sharper and more complete):\n"""' + existing + '"""\n\n' : ''}Produce TWO things:
+1) A strong model answer the candidate can speak in the interview.
+2) ONE concrete example that aids memory.
+
+Format your reply EXACTLY like this — the answer first, then the delimiter on its own line, then the example. Do NOT use JSON, headings, or code fences:
+
+<the model answer>
+###EXAMPLE###
+<the example>`;
+    }
     const payload = {
       system_instruction: { parts: [{ text: DRAFT_SYSTEM }] },
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.6, maxOutputTokens: 1600,
-        responseMimeType: 'application/json',
-        responseSchema: { type: 'object', properties: { answer: { type: 'string' }, example: { type: 'string' } }, required: ['answer', 'example'] },
-      },
+      generationConfig: { temperature: 0.6, maxOutputTokens: 2048 },
     };
     const res = await callGemini(key, payload, [DRAFT_MODEL, 'gemini-flash-latest', 'gemini-flash-lite-latest']);
     if (res.error) return json({ error: res.error });
-    let parsed = null;
-    try { parsed = JSON.parse(res.text); } catch (e) {
-      const m = res.text && res.text.match(/\{[\s\S]*\}/);
-      if (m) { try { parsed = JSON.parse(m[0]); } catch (e2) {} }
-    }
-    if (!parsed || !parsed.answer) return json({ answer: res.text || '', example: '', model: res.model });
-    return json({ answer: String(parsed.answer || ''), example: String(parsed.example || ''), model: res.model });
+    let answer = (res.text || '').trim();
+    let example = '';
+    const idx = answer.indexOf('###EXAMPLE###');
+    if (idx >= 0) { example = answer.slice(idx + 13).trim(); answer = answer.slice(0, idx).trim(); }
+    answer = answer.replace(/^(answer|model answer)\s*[:.-]\s*/i, '').trim();
+    example = example.replace(/^(example)\s*[:.-]\s*/i, '').trim();
+    return json({ answer, example, model: res.model });
   }
 
   // ---------- CHAT mode ----------
