@@ -277,19 +277,20 @@ Evaluate the candidate's answer as instructed.`;
       generationConfig: { temperature: 0.3, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
     };
     const models = [CHAT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+    const genericError = 'Could not check your answer right now — please try again.';
     let res = await callGemini(key, payload, models, 15000);
-    if (res.error) return json({ error: res.error });
+    if (res.error) return json({ error: genericError });
     let parsed = parseGradeResponse(res.text);
     if (!gradeIsComplete(parsed, res)) {
       const retryPayload = JSON.parse(JSON.stringify(payload));
       retryPayload.contents[0].parts[0].text += `\n\nCRITICAL: Your previous attempt did not follow the exact SCORE/STRENGTHS/IMPROVEMENTS format, or was incomplete. Redo it fully with all three sections present and complete.`;
       retryPayload.generationConfig.maxOutputTokens = 1536;
       res = await callGemini(key, retryPayload, models, 15000);
-      if (res.error) return json({ error: res.error });
+      if (res.error) return json({ error: genericError });
       parsed = parseGradeResponse(res.text);
     }
     if (!gradeIsComplete(parsed, res)) {
-      return json({ error: 'The AI evaluation was incomplete. Please try again.', incomplete: true }, 502);
+      return json({ error: genericError, incomplete: true }, 502);
     }
     return json({ score: parsed.score, strengths: parsed.strengths, improvements: parsed.improvements, model: res.model });
   }
