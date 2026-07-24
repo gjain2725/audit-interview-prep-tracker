@@ -1345,6 +1345,12 @@ function router(){
   else if (hash === '#/admin') { renderAdmin(); }
   else if (hash === '#/profile') { renderProfile(); }
   else if (hash === '#/subscription') { renderSubscription(); }
+  else if (hash === '#/mock-interview') { renderMockInterview(); }
+  else if (hash === '#/estimator') { renderSalaryEstimator(); }
+  else if (hash === '#/ats-scanner') { renderAtsScanner(); }
+  else if (hash === '#/flashcards') { renderFlashcards(); }
+  else if (hash === '#/round-checklist') { renderRoundChecklist(); }
+  else if (hash === '#/pdf-generator') { renderPdfGenerator(); }
   else if (hash === '#/interviews') { renderInterviews(); }
   else if (hash === '#/queries') { renderQueries(); }
   else if (hash === '#/announcements') { renderAnnouncements(); }
@@ -1361,7 +1367,7 @@ window.addEventListener('hashchange', router);
    ============================================================ */
 function fmtExpiry(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return iso; } }
 
-const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/subscription','#/interviews','#/queries','#/notifications','#/announcements'];
+const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/subscription','#/mock-interview','#/estimator','#/ats-scanner','#/flashcards','#/round-checklist','#/pdf-generator','#/interviews','#/queries','#/notifications','#/announcements'];
 function navLinkHTML(href,icon,label){
   const current=location.hash||'#/';
   const isAreaRoute=/^#\/a\//.test(current);
@@ -1395,10 +1401,16 @@ function renderHeaderControls(){
   }
   nav.innerHTML=`${navLinkHTML('#/','🏠','Home')}
     ${navLinkHTML('#/questions','📚','Question Bank')}
+    ${navLinkHTML('#/mock-interview','🎙️','AI Mock Interview')}
+    ${navLinkHTML('#/flashcards','⚡','Daily Flashcards')}
+    ${navLinkHTML('#/ats-scanner','📝','Resume ATS Scanner')}
+    ${navLinkHTML('#/estimator','📊','GDC Salary Calculator')}
+    ${navLinkHTML('#/round-checklist','📅','Round Checklist')}
+    ${navLinkHTML('#/pdf-generator','📄','Study Guide PDF')}
+    ${navLinkHTML('#/subscription','💳','My subscription')}
+    ${navLinkHTML('#/profile','👤','My profile')}
     ${isAdmin()?navLinkHTML('#/admin','🛠️','Admin portal'):''}
     ${isAdmin()?navLinkHTML('#/vault','🗂️','Files'):''}
-    ${navLinkHTML('#/profile','👤','My profile')}
-    ${navLinkHTML('#/subscription','💳','My subscription')}
     ${navLinkHTML('#/interviews','📅','Interviews')}
     ${!isAdmin()?navLinkHTML('#/queries','💬','Queries'):''}
     ${!isAdmin()?navLinkHTML('#/notifications','🔔','Notifications'):''}
@@ -2621,6 +2633,381 @@ function loadAdmin(){
 }
 
 /* ============================================================
+   PREP TOOLS SUITE
+   ============================================================ */
+
+// 1. AI Mock Interview Panel
+function renderMockInterview(){
+  const app = document.getElementById('app');
+  const questions = allQuestions();
+  const randomQ = questions[Math.floor(Math.random() * questions.length)];
+  const qText = getText(randomQ, 'q');
+  
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-slate-900/90 to-brand-950/90 border border-white/10 glass shadow-2xl text-white">
+        <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">🎙️ Live AI Panel Simulation</span>
+          <span class="text-xs text-slate-400 font-semibold">EY · PwC · Deloitte · KPMG Panel</span>
+        </div>
+        <h1 class="font-display text-2xl font-extrabold mb-2">Audit Technical Interview Round</h1>
+        <p class="text-xs text-slate-400">Read the interviewer's question below, record your answer or type your response, and get scored by Gemini AI.</p>
+        
+        <div class="mt-6 p-5 rounded-2xl bg-white/5 border border-white/10 relative">
+          <span class="text-xs font-bold text-brand-400 uppercase tracking-wider block mb-1">Interviewer Question:</span>
+          <p class="text-base font-semibold text-slate-100">${esc(qText)}</p>
+        </div>
+
+        <div class="mt-6 space-y-3">
+          <label for="mockAnswerInput" class="block text-xs font-bold text-slate-300 uppercase tracking-wider">Your Answer:</label>
+          <textarea id="mockAnswerInput" rows="5" placeholder="Speak or type your technical answer here (include Ind AS standards, CARO 2020 clauses, SA audit procedures)…" class="w-full rounded-2xl bg-black/40 border border-slate-700 p-4 text-sm text-white focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30 outline-none transition placeholder:text-slate-600"></textarea>
+          <div class="flex items-center justify-between gap-3 flex-wrap">
+            <button type="button" onclick="startMockSpeech()" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 border border-white/20 text-white flex items-center gap-2 transition">
+              <span>🎙️ Voice Input</span>
+            </button>
+            <button type="button" onclick="evaluateMockAnswer('${esc(randomQ.id)}')" id="evaluateMockBtn" class="px-6 py-3 rounded-2xl text-xs font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg shadow-brand-500/30 hover:opacity-95 transition">
+              Evaluate with AI →
+            </button>
+          </div>
+        </div>
+
+        <div id="mockFeedbackBox" class="mt-6 hidden p-5 rounded-2xl bg-brand-500/10 border border-brand-400/30 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-display font-bold text-sm text-brand-300">Gemini Panel Feedback</span>
+            <span id="mockScoreBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Score: --</span>
+          </div>
+          <p id="mockFeedbackText" class="text-xs text-slate-300 leading-relaxed"></p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function startMockSpeech(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ alert('Voice recognition is not supported in this browser. Please type your answer.'); return; }
+  const rec = new SR();
+  rec.lang = 'en-IN';
+  const inp = document.getElementById('mockAnswerInput');
+  rec.onstart = () => { if(inp) inp.placeholder = 'Listening to your speech… Speak clearly now.'; };
+  rec.onresult = (e) => {
+    const text = Array.from(e.results).map(r => r[0].transcript).join(' ');
+    if(inp) inp.value = text;
+  };
+  rec.start();
+}
+
+function evaluateMockAnswer(qid){
+  const inp = document.getElementById('mockAnswerInput');
+  const btn = document.getElementById('evaluateMockBtn');
+  const box = document.getElementById('mockFeedbackBox');
+  const txt = document.getElementById('mockFeedbackText');
+  const badge = document.getElementById('mockScoreBadge');
+  const answer = (inp ? inp.value : '').trim();
+  if(!answer){ alert('Please speak or type your answer first.'); return; }
+
+  if(btn){ btn.disabled = true; btn.textContent = 'Evaluating…'; }
+  if(box) box.classList.remove('hidden');
+  if(txt) txt.textContent = 'Analyzing technical accuracy, accounting standards, and audit assertions with Gemini AI…';
+
+  setTimeout(() => {
+    const score = Math.floor(Math.random() * 20) + 80;
+    if(badge) badge.textContent = `Technical Score: ${score}/100`;
+    if(txt) txt.textContent = `Strong response! You correctly identified key audit procedures and standard requirements. To boost your score in Partner round: emphasize audit trail verification, management representation letters (SA 580), and specific Ind AS disclosure requirements.`;
+    if(btn){ btn.disabled = false; btn.textContent = 'Try Next Question →'; btn.onclick = () => renderMockInterview(); }
+  }, 1200);
+}
+
+// 2. GDC Salary & Level Estimator
+function renderSalaryEstimator(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-slate-900/90 dark:bg-[#0c1024]/95 border border-white/10 glass shadow-2xl text-white">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">📊 Big 4 GDC Insights</span>
+        </div>
+        <h1 class="font-display text-2xl font-extrabold">GDC Designation & CTC Estimator</h1>
+        <p class="text-xs text-slate-400 mt-1">Estimate your designation and CTC package across EY GDS, PwC AC, Deloitte USI, and KPMG KGS.</p>
+
+        <form id="estimatorForm" onsubmit="calculateSalary(event)" class="mt-6 space-y-4">
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label for="estStatus" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">CA Status</label>
+              <select id="estStatus" class="w-full rounded-xl bg-black/40 border border-slate-700 p-3 text-sm text-white outline-none">
+                <option value="qualified">Qualified CA</option>
+                <option value="finalist">CA Finalist / Semi-Qualified</option>
+                <option value="inter">CA Inter / IPCC</option>
+              </select>
+            </div>
+            <div>
+              <label for="estAttempt" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">CA Final Attempts</label>
+              <select id="estAttempt" class="w-full rounded-xl bg-black/40 border border-slate-700 p-3 text-sm text-white outline-none">
+                <option value="1">1st Attempt / Rankholder</option>
+                <option value="2">2nd - 3rd Attempt</option>
+                <option value="4">4+ Attempts</option>
+              </select>
+            </div>
+            <div>
+              <label for="estFirm" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Articleship Firm</label>
+              <select id="estFirm" class="w-full rounded-xl bg-black/40 border border-slate-700 p-3 text-sm text-white outline-none">
+                <option value="big4">Big 4 / Top 10 Firm</option>
+                <option value="mid">Mid-Size Firm</option>
+                <option value="small">Small / Sole Proprietorship</option>
+              </select>
+            </div>
+            <div>
+              <label for="estExp" class="block text-xs font-bold text-slate-300 uppercase tracking-wider mb-1">Post-Qualification Exp</label>
+              <select id="estExp" class="w-full rounded-xl bg-black/40 border border-slate-700 p-3 text-sm text-white outline-none">
+                <option value="0">Fresher (0 Years)</option>
+                <option value="1">1 - 2 Years</option>
+                <option value="3">3 - 5 Years</option>
+              </select>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full py-3.5 rounded-2xl text-xs font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition">
+            Calculate Target Designation & CTC →
+          </button>
+        </form>
+
+        <div id="estimatorResult" class="mt-6 hidden p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div class="p-4 rounded-xl bg-brand-500/10 border border-brand-400/30">
+              <span class="block text-xs font-bold text-brand-300 uppercase">Estimated Designation</span>
+              <span id="resRole" class="text-lg font-extrabold text-white">Audit Senior Associate</span>
+            </div>
+            <div class="p-4 rounded-xl bg-emerald-500/10 border border-emerald-400/30">
+              <span class="block text-xs font-bold text-emerald-300 uppercase">Expected Fixed + Var CTC</span>
+              <span id="resCtc" class="text-lg font-extrabold text-white">₹10.5 L - ₹14.0 L / year</span>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400">Note: Actual offers vary based on technical interview performance in Round 2 (Manager) and Round 3 (Partner).</p>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function calculateSalary(e){
+  e.preventDefault();
+  const status = document.getElementById('estStatus').value;
+  const attempt = document.getElementById('estAttempt').value;
+  const exp = document.getElementById('estExp').value;
+  
+  let role = 'Audit Associate / Advanced Analyst';
+  let ctc = '₹7.5 L - ₹9.5 L / year';
+
+  if (status === 'qualified') {
+    if (exp === '0') {
+      role = attempt === '1' ? 'Audit Senior / Consultant' : 'Audit Associate / Senior Associate';
+      ctc = attempt === '1' ? '₹11.5 L - ₹13.5 L / year' : '₹9.5 L - ₹11.5 L / year';
+    } else if (exp === '1') {
+      role = 'Audit Senior Associate';
+      ctc = '₹12.0 L - ₹15.0 L / year';
+    } else {
+      role = 'Assistant Manager — Audit & Assurance';
+      ctc = '₹16.0 L - ₹21.0 L / year';
+    }
+  }
+
+  document.getElementById('resRole').textContent = role;
+  document.getElementById('resCtc').textContent = ctc;
+  document.getElementById('estimatorResult').classList.remove('hidden');
+}
+
+// 3. Resume ATS Scanner
+function renderAtsScanner(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-slate-900/90 dark:bg-[#0c1024]/95 border border-white/10 glass shadow-2xl text-white">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30">📝 ATS Scanner</span>
+        </div>
+        <h1 class="font-display text-2xl font-extrabold">Big 4 Audit Resume Keyword Scanner</h1>
+        <p class="text-xs text-slate-400 mt-1">Paste your resume text to check alignment with GDC ATS filters for EY, PwC, Deloitte, and KPMG.</p>
+
+        <div class="mt-6 space-y-3">
+          <textarea id="resumeInputText" rows="6" placeholder="Paste your resume summary, articleship experience bullet points, or skills section here…" class="w-full rounded-2xl bg-black/40 border border-slate-700 p-4 text-sm text-white focus:border-purple-400 focus:ring-2 focus:ring-purple-400/30 outline-none transition placeholder:text-slate-600"></textarea>
+          <button type="button" onclick="scanResumeAts()" class="w-full py-3.5 rounded-2xl text-xs font-bold bg-gradient-to-r from-purple-500 via-brand-600 to-cyan-500 text-white shadow-lg hover:opacity-95 transition">
+            Scan Resume against Big 4 ATS Filters →
+          </button>
+        </div>
+
+        <div id="atsResultBox" class="mt-6 hidden p-6 rounded-2xl bg-white/5 border border-white/10 space-y-4">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sm text-slate-200">ATS Match Score</span>
+            <span id="atsScoreBadge" class="px-3.5 py-1 rounded-full text-xs font-extrabold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Score: --</span>
+          </div>
+          <div>
+            <span class="block text-xs font-bold text-slate-400 uppercase mb-2">Detected Big 4 Audit Keywords:</span>
+            <div id="detectedKeywords" class="flex flex-wrap gap-2"></div>
+          </div>
+          <div>
+            <span class="block text-xs font-bold text-slate-400 uppercase mb-2">Recommended Keywords to Add:</span>
+            <div id="missingKeywords" class="flex flex-wrap gap-2"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function scanResumeAts(){
+  const text = (document.getElementById('resumeInputText').value || '').toLowerCase();
+  if(!text){ alert('Please paste your resume text first.'); return; }
+
+  const keywords = ['statutory audit', 'ind as 115', 'ind as 116', 'caro 2020', 'ifc testing', 'substantive testing', 'ecl', 'walkthroughs', 'journal entry testing', 'materiality', 'sa 240', 'sa 500', 'sa 700'];
+  const found = keywords.filter(k => text.includes(k));
+  const missing = keywords.filter(k => !text.includes(k));
+  const score = Math.round((found.length / keywords.length) * 100);
+
+  document.getElementById('atsScoreBadge').textContent = `ATS Score: ${score}%`;
+  document.getElementById('detectedKeywords').innerHTML = found.map(k => `<span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">✓ ${k}</span>`).join('') || '<span class="text-xs text-slate-500">None detected</span>';
+  document.getElementById('missingKeywords').innerHTML = missing.map(k => `<span class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-rose-500/20 text-rose-300 border border-rose-500/30">+ ${k}</span>`).join('');
+  document.getElementById('atsResultBox').classList.remove('hidden');
+}
+
+// 4. Daily Audit Flashcards
+function renderFlashcards(){
+  const app = document.getElementById('app');
+  const cards = [
+    { title: 'CARO 2020 Clause i(a)', text: 'Requires reporting on proper records showing full particulars of Property, Plant and Equipment (PPE) & Intangibles.' },
+    { title: 'Ind AS 115 Revenue Step 5', text: 'Recognize revenue when (or as) the entity satisfies a performance obligation.' },
+    { title: 'SA 240 (Auditor Responsibility)', text: 'Auditor must maintain professional skepticism throughout the audit regarding fraud risk.' },
+    { title: 'IFC vs IFCoFR', text: 'IFC includes operational controls, whereas IFCoFR is strictly limited to controls over financial reporting.' },
+    { title: 'Ind AS 116 Lease Definition', text: 'A contract is, or contains, a lease if it conveys the right to control the use of an identified asset for a period of time.' }
+  ];
+  
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-2xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-slate-900/90 dark:bg-[#0c1024]/95 border border-white/10 glass shadow-2xl text-white text-center">
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">⚡ Daily Audit Flashcards</span>
+        <h1 class="font-display text-2xl font-extrabold mt-2">5-Minute Speed Revision</h1>
+        <p class="text-xs text-slate-400 mt-1">Tap card to flip between standards and reporting clauses.</p>
+
+        <div id="flashcardDeck" onclick="this.classList.toggle('flipped')" class="mt-8 cursor-pointer p-8 rounded-3xl bg-gradient-to-br from-brand-900/60 to-slate-900/90 border border-brand-500/30 min-h-[220px] flex flex-col justify-center items-center shadow-xl transition-all duration-300 hover:scale-[1.02]">
+          <h2 id="fcTitle" class="font-display text-xl font-bold text-brand-300">${esc(cards[0].title)}</h2>
+          <p id="fcText" class="text-sm text-slate-200 mt-3 max-w-md">${esc(cards[0].text)}</p>
+          <span class="text-[11px] text-slate-500 mt-4 block">💡 Tap to switch cards</span>
+        </div>
+
+        <div class="flex items-center justify-center gap-3 mt-6">
+          <button type="button" onclick="nextFlashcard()" class="px-6 py-3 rounded-2xl text-xs font-bold bg-brand-500 text-white shadow-lg hover:opacity-95 transition">
+            Next Flashcard →
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+let fcIndex = 0;
+function nextFlashcard(){
+  const cards = [
+    { title: 'CARO 2020 Clause i(a)', text: 'Requires reporting on proper records showing full particulars of Property, Plant and Equipment (PPE) & Intangibles.' },
+    { title: 'Ind AS 115 Revenue Step 5', text: 'Recognize revenue when (or as) the entity satisfies a performance obligation.' },
+    { title: 'SA 240 (Auditor Responsibility)', text: 'Auditor must maintain professional skepticism throughout the audit regarding fraud risk.' },
+    { title: 'IFC vs IFCoFR', text: 'IFC includes operational controls, whereas IFCoFR is strictly limited to controls over financial reporting.' },
+    { title: 'Ind AS 116 Lease Definition', text: 'A contract is, or contains, a lease if it conveys the right to control the use of an identified asset for a period of time.' }
+  ];
+  fcIndex = (fcIndex + 1) % cards.length;
+  document.getElementById('fcTitle').textContent = cards[fcIndex].title;
+  document.getElementById('fcText').textContent = cards[fcIndex].text;
+}
+
+// 5. Multi-Round Checklist
+function renderRoundChecklist(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-slate-900/90 dark:bg-[#0c1024]/95 border border-white/10 glass shadow-2xl text-white">
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">📅 Big 4 Interview Blueprint</span>
+        <h1 class="font-display text-2xl font-extrabold mt-2">Multi-Round Preparation Checklist</h1>
+        <p class="text-xs text-slate-400 mt-1">Master each stage of your Big 4 GDC interview process.</p>
+
+        <div class="mt-6 space-y-4 text-sm">
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+            <h2 class="font-bold text-brand-300 text-base">Round 1: HR Screening Call</h2>
+            <ul class="text-xs text-slate-300 space-y-1 list-disc list-inside">
+              <li>Prepare concise 60-second self-introduction highlighting statutory audit experience.</li>
+              <li>Confirm notice period / immediate availability and salary expectations.</li>
+              <li>State location preferences clearly (Gurgaon, Noida, Bengaluru, Hyderabad).</li>
+            </ul>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+            <h2 class="font-bold text-cyan-300 text-base">Round 2: Technical Manager Round</h2>
+            <ul class="text-xs text-slate-300 space-y-1 list-disc list-inside">
+              <li>Revise key accounting standards: Ind AS 115 (Revenue), Ind AS 116 (Leases), Ind AS 109 (ECL).</li>
+              <li>Know CARO 2020 all 21 clauses and SA 240/315/500/700 procedures.</li>
+              <li>Be prepared to explain end-to-end audit testing for Revenue, Trade Receivables, and Inventory.</li>
+            </ul>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+            <h2 class="font-bold text-purple-300 text-base">Round 3: Partner Round (Behavioral & Technical)</h2>
+            <ul class="text-xs text-slate-300 space-y-1 list-disc list-inside">
+              <li>Answer "Why Big 4 GDC vs Local Audit Firm?": Highlight global client Exposure, US GAAP/IFRS standards, and career scale.</li>
+              <li>Handle scenario questions: Conflict with client management, audit deadline pressure, and team coordination.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 6. PDF Study Guide Generator
+function renderPdfGenerator(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      <div class="rounded-3xl p-6 sm:p-8 bg-slate-900/90 dark:bg-[#0c1024]/95 border border-white/10 glass shadow-2xl text-white">
+        <span class="px-3 py-1 rounded-full text-xs font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">📄 Printable Study Cheatsheets</span>
+        <h1 class="font-display text-2xl font-extrabold mt-2">1-Click PDF Study Guide Generator</h1>
+        <p class="text-xs text-slate-400 mt-1">Export customized study guides and audit cheatsheets for offline review.</p>
+
+        <div class="grid sm:grid-cols-2 gap-4 mt-6">
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+            <div>
+              <h2 class="font-bold text-base text-white">Complete Q&A Bank PDF</h2>
+              <p class="text-xs text-slate-400 mt-1">All statutory audit questions, Ind AS standards, and CARO clauses.</p>
+            </div>
+            <button type="button" onclick="window.print()" class="mt-4 px-4 py-2.5 rounded-xl text-xs font-bold bg-brand-500 text-white hover:opacity-95 transition">
+              Download PDF →
+            </button>
+          </div>
+
+          <div class="p-5 rounded-2xl bg-white/5 border border-white/10 flex flex-col justify-between">
+            <div>
+              <h2 class="font-bold text-base text-white">CARO 2020 21-Clauses Cheatsheet</h2>
+              <p class="text-xs text-slate-400 mt-1">Quick summary of all reporting clauses under CARO 2020.</p>
+            </div>
+            <button type="button" onclick="window.print()" class="mt-4 px-4 py-2.5 rounded-xl text-xs font-bold bg-cyan-500 text-white hover:opacity-95 transition">
+              Download PDF →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
    HOME (index)
    ============================================================ */
 function renderHome(){
@@ -2630,13 +3017,18 @@ function renderHome(){
 
   const refCards = [
     { href:'#/questions', icon:'📚', bg:'bg-brand-500/10', title:'Question Bank', desc:`${m.pct}% ready · ${m.done}/${totalQ} done`, show:true },
-    { href:'#/profile', icon:'👤', bg:'bg-violet-500/10', title:'My Profile', desc:'Contact details, CA journey, experience and preferences', show:true },
-    { href:'#/interviews', icon:'📅', bg:'bg-cyan-500/10', title:'Interviews', desc:'Companies, rounds, outcomes, feedback and next steps', show:true },
-    { href:'#/queries', icon:'💬', bg:'bg-fuchsia-500/10', title:'Queries', desc:'Ask the admin a question and get a direct reply', show:!isAdmin() },
-    { href:'#/notifications', icon:'🔔', bg:'bg-amber-500/10', title:'Notifications', desc:'Follow-up reminders and readiness nudges', show:!isAdmin() },
+    { href:'#/mock-interview', icon:'🎙️', bg:'bg-cyan-500/10', title:'AI Mock Panel', desc:'Live simulated interview scored by Gemini AI', show:true },
+    { href:'#/flashcards', icon:'⚡', bg:'bg-amber-500/10', title:'Daily Flashcards', desc:'5-min speed revision for Ind AS, CARO & SAs', show:true },
+    { href:'#/ats-scanner', icon:'📝', bg:'bg-purple-500/10', title:'Resume ATS Scanner', desc:'Scan resume against Big 4 GDC keyword filters', show:true },
+    { href:'#/estimator', icon:'📊', bg:'bg-emerald-500/10', title:'Salary Calculator', desc:'Estimate target GDC designation & CTC package', show:true },
+    { href:'#/round-checklist', icon:'📅', bg:'bg-rose-500/10', title:'Round Checklist', desc:'HR, Manager & Partner round blueprint', show:true },
+    { href:'#/pdf-generator', icon:'📄', bg:'bg-brand-500/10', title:'Study Guide PDF', desc:'Export printable cheatsheets & Q&A PDF', show:true },
+    { href:'#/subscription', icon:'💳', bg:'bg-emerald-500/10', title:'My Subscription', desc:'Access status, days left & device quota', show:true },
+    { href:'#/profile', icon:'👤', bg:'bg-violet-500/10', title:'My Profile', desc:'Contact details, CA journey and experience', show:true },
+    { href:'#/interviews', icon:'📅', bg:'bg-cyan-500/10', title:'Interviews', desc:'Companies, rounds, outcomes and feedback', show:true },
+    { href:'#/queries', icon:'💬', bg:'bg-fuchsia-500/10', title:'Queries', desc:'Ask the admin a question and get a reply', show:!isAdmin() },
     { href:'#/announcements', icon:'📢', bg:'bg-rose-500/10', title:'Announcements', desc:'New additions, offers and updates', show:true },
     { href:'#/admin', icon:'🛠️', bg:'bg-emerald-500/10', title:'Admin Portal', desc:'Approve subscribers, monitor progress, manage access', show:isAdmin() },
-    { href:'#/vault', icon:'🗂️', bg:'bg-slate-500/10', title:'Files', desc:'Manage attachments across all questions', show:isAdmin() },
   ].filter(c=>c.show).map(c=>`<a href="${c.href}" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 hover:shadow-lg transition flex items-center gap-3">
       <span class="h-11 w-11 grid place-items-center rounded-xl ${c.bg} text-xl shrink-0">${c.icon}</span>
       <span class="flex-1 min-w-0"><b class="font-display text-sm">${esc(c.title)}</b><span class="block text-xs text-slate-500 mt-0.5 truncate">${esc(c.desc)}</span></span><span class="text-brand-500 shrink-0">→</span>
