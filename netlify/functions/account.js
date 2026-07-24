@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import { OAuth2Client } from 'google-auth-library';
 
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -12,6 +13,8 @@ function genCode() {
 }
 const usersOf = async (store) => (await store.get('users', { type: 'json' })) || {};
 const pendingOf = async (store) => (await store.get('pending', { type: 'json' })) || [];
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '415640736608-v21kq5d32csvtqovptdcg1l4ckdjesjt.apps.googleusercontent.com';
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 function authRole(token, users) {
   const admin = process.env.ADMIN_SECRET;
@@ -23,12 +26,16 @@ function authRole(token, users) {
   return { role: 'none' };
 }
 
-function decodeJwt(token) {
+async function verifyGoogleCredential(token) {
   try {
-    const parts = String(token || '').split('.');
-    if (parts.length !== 3) return null;
-    const payloadStr = Buffer.from(parts[1], 'base64url').toString('utf8');
-    return JSON.parse(payloadStr);
+    if (!token || String(token).length > 10000) return null;
+    const ticket = await googleClient.verifyIdToken({
+      idToken: String(token),
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    if (!payload || !payload.email || payload.email_verified !== true) return null;
+    return payload;
   } catch (e) {
     return null;
   }
@@ -46,7 +53,7 @@ export default async (req) => {
   // ----- public -----
   if (action === 'google-login') {
     const credential = body.credential;
-    const payload = decodeJwt(credential);
+    const payload = await verifyGoogleCredential(credential);
     if (!payload || !payload.email) {
       return json({ ok: false, error: 'Invalid Google credential token.' }, 400);
     }
@@ -150,6 +157,9 @@ export default async (req) => {
     const pending = await pendingOf(store);
     const p = pending.find(x => x.id === body.id);
     const days = parseInt(body.days || '365', 10);
+    if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      return json({ error: 'Access duration must be between 1 and 3650 days.' }, 400);
+    }
     const code = genCode();
     users[code] = {
       name: (body.name || (p && p.name) || 'Member'),
@@ -167,6 +177,9 @@ export default async (req) => {
   if (action === 'reactivate') { if (users[body.code]) { users[body.code].active = true; await store.setJSON('users', users); } return json({ ok: true }); }
   if (action === 'extend') {
     const days = parseInt(body.days || '365', 10);
+    if (!Number.isFinite(days) || days < 1 || days > 3650) {
+      return json({ error: 'Extension must be between 1 and 3650 days.' }, 400);
+    }
     if (users[body.code]) { const base = Math.max(Date.now(), Date.parse(users[body.code].expiresAt || 0) || Date.now()); users[body.code].expiresAt = new Date(base + days * 86400000).toISOString(); await store.setJSON('users', users); }
     return json({ ok: true, expiresAt: users[body.code] && users[body.code].expiresAt });
   }

@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Audit interview prep tracker with Netlify Blobs cloud sync",
   "dependencies": {
-    "@netlify/blobs": "^8.1.0"
+    "@netlify/blobs": "^8.1.0",
+    "google-auth-library": "10.9.1"
   }
 }
