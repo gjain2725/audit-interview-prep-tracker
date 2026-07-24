@@ -1584,27 +1584,41 @@ function doAdminPaneLogin(){
   const button=document.getElementById('adminPaneSubmitBtn');
   const pass=(input.value||'').trim();
   if(!pass){ input.focus(); return; }
-  if(button){ button.disabled=true; button.textContent='Checking…'; }
-  acct('login',{token:pass}).then(r=>{
-    if(!r||!r.ok||r.role!=='admin'){
-      if(m) m.textContent='Invalid admin passphrase.'; if(err) err.classList.remove('hidden');
+  if(button){ button.disabled=true; button.textContent='Verifying…'; }
+  acct('login',{token:pass,device:getDeviceId()}).then(r=>{
+    if(!r||!r.ok){
+      if(m) m.textContent=(r&&r.error)||'Invalid passphrase or code.'; if(err) err.classList.remove('hidden');
       if(button){ button.disabled=false; button.textContent='Log in as Admin →'; } input.select(); return;
     }
-    auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null }; saveAuth();
-    renderHeaderControls(); location.hash='#/admin'; router(); loadFromCloud();
+    auth={ token:pass, role:r.role, name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
+    renderHeaderControls();
+    if(r.role==='admin'){ location.hash='#/admin'; } else { location.hash='#/'; }
+    router(); loadFromCloud();
   }).catch(()=>{
     if(m) m.textContent='Network error — please try again.'; if(err) err.classList.remove('hidden');
     if(button){ button.disabled=false; button.textContent='Log in as Admin →'; }
   });
 }
+
 function doLogin(){
   const code=(document.getElementById('loginCode').value||'').trim();
   if(!code) return;
+  const btn=document.getElementById('loginSubmitBtn');
+  if(btn){ btn.disabled=true; btn.innerHTML='<span>Verifying…</span>'; }
   acct('login',{token:code,device:getDeviceId()}).then(r=>{
-    if(!r || !r.ok){ showLoginErr((r&&r.error)||'Login failed.'); return; }
+    if(!r || !r.ok){
+      showLoginErr((r&&r.error)||'Login failed.');
+      if(btn){ btn.disabled=false; btn.innerHTML='<span>Enter Workspace</span><span class="group-hover:translate-x-1 transition-transform">→</span>'; }
+      return;
+    }
     auth={ token:code, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
-    renderHeaderControls(); location.hash='#/'; router(); loadFromCloud();
-  }).catch(()=>showLoginErr('Network error — please try again.'));
+    renderHeaderControls();
+    if(r.role==='admin'){ location.hash='#/admin'; } else { location.hash='#/'; }
+    router(); loadFromCloud();
+  }).catch(()=>{
+    showLoginErr('Network error — please try again.');
+    if(btn){ btn.disabled=false; btn.innerHTML='<span>Enter Workspace</span><span class="group-hover:translate-x-1 transition-transform">→</span>'; }
+  });
 }
 function adminLoginPrompt(){
   if(document.getElementById('adminLoginModal')) return;
