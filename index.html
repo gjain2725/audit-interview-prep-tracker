@@ -1344,6 +1344,7 @@ function router(){
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
   else if (hash === '#/profile') { renderProfile(); }
+  else if (hash === '#/subscription') { renderSubscription(); }
   else if (hash === '#/interviews') { renderInterviews(); }
   else if (hash === '#/queries') { renderQueries(); }
   else if (hash === '#/announcements') { renderAnnouncements(); }
@@ -1360,7 +1361,7 @@ window.addEventListener('hashchange', router);
    ============================================================ */
 function fmtExpiry(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return iso; } }
 
-const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/interviews','#/queries','#/notifications','#/announcements'];
+const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/subscription','#/interviews','#/queries','#/notifications','#/announcements'];
 function navLinkHTML(href,icon,label){
   const current=location.hash||'#/';
   const isAreaRoute=/^#\/a\//.test(current);
@@ -1397,6 +1398,7 @@ function renderHeaderControls(){
     ${isAdmin()?navLinkHTML('#/admin','🛠️','Admin portal'):''}
     ${isAdmin()?navLinkHTML('#/vault','🗂️','Files'):''}
     ${navLinkHTML('#/profile','👤','My profile')}
+    ${navLinkHTML('#/subscription','💳','My subscription')}
     ${navLinkHTML('#/interviews','📅','Interviews')}
     ${!isAdmin()?navLinkHTML('#/queries','💬','Queries'):''}
     ${!isAdmin()?navLinkHTML('#/notifications','🔔','Notifications'):''}
@@ -1890,6 +1892,92 @@ function loadOwnAvatar(){
     const fallback=document.getElementById('profileAvatarFallback'); if(fallback) fallback.classList.add('hidden');
   }).catch(()=>{});
 }
+function renderSubscription(){
+  const app=document.getElementById('app');
+  const exp=auth.expiresAt ? new Date(auth.expiresAt) : null;
+  const daysLeft = exp ? Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
+  const isExpired = daysLeft !== null && daysLeft <= 0;
+  const isUnlimited = isAdmin() || !exp;
+
+  app.innerHTML = `
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4 transition">← Back to home</a>
+    
+    <div class="fade max-w-3xl mx-auto space-y-6">
+      
+      <!-- Subscription Hero Card -->
+      <div class="relative rounded-3xl p-0.5 bg-gradient-to-r from-brand-500 via-cyan-400 to-fuchsia-600 shadow-xl shadow-brand-500/10">
+        <div class="rounded-[23px] bg-slate-900/90 dark:bg-[#0c1024]/95 backdrop-blur-2xl p-6 sm:p-8 border border-white/10 text-white">
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2 mb-2 flex-wrap">
+                <span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${isExpired ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+                  ${isExpired ? '⚠️ Subscription Expired' : '⚡ Active Access Plan'}
+                </span>
+                ${isAdmin() ? '<span class="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30">Admin Portal</span>' : ''}
+              </div>
+              <h1 class="font-display text-2xl sm:text-3xl font-black">
+                ${isAdmin() ? 'Administrator Access Pass' : '1-Year CA Audit Prep Access'}
+              </h1>
+              <p class="text-xs text-slate-400 mt-1">Full access to 100+ Real Big 4 Questions, Gemini AI Tutor & Cloud Sync.</p>
+            </div>
+            
+            <a href="#/request" class="px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg shadow-brand-500/30 hover:opacity-95 transition shrink-0 flex items-center gap-2">
+              <span>Extend / Upgrade</span>
+              <span>→</span>
+            </a>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8 pt-6 border-t border-white/10">
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Expiration Date</p>
+              <p class="text-lg font-bold text-white mt-1">${isUnlimited ? 'Lifetime / Custom' : fmtExpiry(auth.expiresAt)}</p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Days Remaining</p>
+              <p class="text-lg font-bold mt-1 ${daysLeft !== null && daysLeft < 30 ? 'text-amber-400' : 'text-emerald-400'}">
+                ${isUnlimited ? 'Unlimited' : (daysLeft > 0 ? daysLeft + ' days left' : '0 days (Expired)')}
+              </p>
+            </div>
+
+            <div class="p-4 rounded-2xl bg-white/5 border border-white/10">
+              <p class="text-xs text-slate-400 font-semibold uppercase tracking-wider">Cloud Device Limit</p>
+              <p class="text-lg font-bold text-cyan-300 mt-1">2 Synchronized Devices</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account & Subscription Details -->
+      <div class="rounded-2xl p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm space-y-4">
+        <h2 class="font-display font-bold text-lg">Account & Authentication Details</h2>
+        <div class="grid sm:grid-cols-2 gap-4 text-sm">
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+            <span class="block text-xs font-semibold text-slate-400 uppercase">Subscriber Name</span>
+            <span class="font-bold text-slate-800 dark:text-slate-100">${esc(auth.name || 'Member')}</span>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+            <span class="block text-xs font-semibold text-slate-400 uppercase">Registered Email</span>
+            <span class="font-bold text-slate-800 dark:text-slate-100">${esc(auth.email || 'Not specified')}</span>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+            <span class="block text-xs font-semibold text-slate-400 uppercase">Access Code / Token</span>
+            <span class="font-mono text-xs font-bold text-brand-600 dark:text-brand-300">${esc(auth.token ? auth.token.slice(0, 8) + '••••••••' : 'Active Session')}</span>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-50 dark:bg-white/5 border border-slate-200/60 dark:border-white/10">
+            <span class="block text-xs font-semibold text-slate-400 uppercase">Account Status</span>
+            <span class="font-bold ${isExpired ? 'text-rose-500' : 'text-emerald-500'}">✓ Verified Member Access</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
 function renderProfile(){
   const app=document.getElementById('app');
   app.innerHTML=`<div class="text-center py-14 text-slate-400">Loading your profile…</div>`;
@@ -1916,7 +2004,10 @@ function drawProfile(record){
         <div class="flex-1 min-w-0 text-center sm:text-left">
           <h1 class="font-display text-2xl font-extrabold">My <span class="gradient-text">profile</span></h1>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Keep your career profile current. Only you and the Mission Big 4 administrator can view it.</p>
-          <a href="#/interviews" class="inline-flex mt-3 px-3 py-2 rounded-xl text-xs font-semibold bg-brand-500/10 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/20">📅 Open interview tracker →</a>
+          <div class="flex items-center gap-2 flex-wrap mt-3 justify-center sm:justify-start">
+            <a href="#/interviews" class="inline-flex px-3 py-2 rounded-xl text-xs font-semibold bg-brand-500/10 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/20">📅 Open interview tracker →</a>
+            <a href="#/subscription" class="inline-flex px-3 py-2 rounded-xl text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 ring-1 ring-emerald-400/20">💳 View My Subscription →</a>
+          </div>
         </div>
       </div>
       <div class="mt-5 pt-4 border-t border-slate-200/70 dark:border-white/10">
