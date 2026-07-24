@@ -1347,6 +1347,7 @@ function router(){
   else if (hash === '#/queries') { renderQueries(); }
   else if (hash === '#/announcements') { renderAnnouncements(); }
   else if (hash === '#/notifications') { renderNotifications(); }
+  else if (hash === '#/questions') { renderQuestions(); }
   else if (hash === '#/vault') { if(isAdmin()){ vaultSel=new Set(); renderVault(); } else { location.hash='#/'; renderHome(); } }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
@@ -1358,10 +1359,14 @@ window.addEventListener('hashchange', router);
    ============================================================ */
 function fmtExpiry(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return iso; } }
 
-const NAV_PAGE_HASHES=['#/admin','#/vault','#/profile','#/interviews','#/queries','#/notifications','#/announcements'];
+const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/interviews','#/queries','#/notifications','#/announcements'];
 function navLinkHTML(href,icon,label){
   const current=location.hash||'#/';
-  const active = href==='#/' ? !NAV_PAGE_HASHES.includes(current) : current===href;
+  const isAreaRoute=/^#\/a\//.test(current);
+  let active;
+  if(href==='#/questions') active = current===href || isAreaRoute;
+  else if(href==='#/') active = !NAV_PAGE_HASHES.includes(current) && !isAreaRoute;
+  else active = current===href;
   return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${active?'bg-brand-500/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/25':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}"><span class="text-lg w-5 text-center shrink-0">${icon}</span><span class="truncate">${label}</span></a>`;
 }
 function closeSidebar(){
@@ -1387,6 +1392,7 @@ function renderHeaderControls(){
     wireTheme(); return;
   }
   nav.innerHTML=`${navLinkHTML('#/','🏠','Home')}
+    ${navLinkHTML('#/questions','📚','Question Bank')}
     ${isAdmin()?navLinkHTML('#/admin','🛠️','Admin portal'):''}
     ${isAdmin()?navLinkHTML('#/vault','🗂️','Files'):''}
     ${navLinkHTML('#/profile','👤','My profile')}
@@ -2272,8 +2278,51 @@ function loadAdmin(){
 /* ============================================================
    HOME (index)
    ============================================================ */
-let homeSearch = '';
 function renderHome(){
+  const app = document.getElementById('app');
+  const m = metrics(allQuestions());
+  const totalQ = allQuestions().length;
+
+  const refCards = [
+    { href:'#/questions', icon:'📚', bg:'bg-brand-500/10', title:'Question Bank', desc:`${m.pct}% ready · ${m.done}/${totalQ} done`, show:true },
+    { href:'#/profile', icon:'👤', bg:'bg-violet-500/10', title:'My Profile', desc:'Contact details, CA journey, experience and preferences', show:true },
+    { href:'#/interviews', icon:'📅', bg:'bg-cyan-500/10', title:'Interviews', desc:'Companies, rounds, outcomes, feedback and next steps', show:true },
+    { href:'#/queries', icon:'💬', bg:'bg-fuchsia-500/10', title:'Queries', desc:'Ask the admin a question and get a direct reply', show:!isAdmin() },
+    { href:'#/notifications', icon:'🔔', bg:'bg-amber-500/10', title:'Notifications', desc:'Follow-up reminders and readiness nudges', show:!isAdmin() },
+    { href:'#/announcements', icon:'📢', bg:'bg-rose-500/10', title:'Announcements', desc:'New additions, offers and updates', show:true },
+    { href:'#/admin', icon:'🛠️', bg:'bg-emerald-500/10', title:'Admin Portal', desc:'Approve subscribers, monitor progress, manage access', show:isAdmin() },
+    { href:'#/vault', icon:'🗂️', bg:'bg-slate-500/10', title:'Files', desc:'Manage attachments across all questions', show:isAdmin() },
+  ].filter(c=>c.show).map(c=>`<a href="${c.href}" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 hover:shadow-lg transition flex items-center gap-3">
+      <span class="h-11 w-11 grid place-items-center rounded-xl ${c.bg} text-xl shrink-0">${c.icon}</span>
+      <span class="flex-1 min-w-0"><b class="font-display text-sm">${esc(c.title)}</b><span class="block text-xs text-slate-500 mt-0.5 truncate">${esc(c.desc)}</span></span><span class="text-brand-500 shrink-0">→</span>
+    </a>`).join('');
+
+  app.innerHTML = `
+    <div class="fade rounded-3xl overflow-hidden mb-6 relative bg-gradient-to-br from-brand-500/10 via-cyan-400/5 to-fuchsia-500/10 border border-white/40 dark:border-white/10 glass">
+      <div class="p-5 sm:p-7">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-500/15 to-cyan-400/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/30">🎯 Big 4 GDC · Audit Interview Prep</span>
+          ${auth.expiresAt?`<span class="text-xs text-slate-500 dark:text-slate-400">Access till ${fmtExpiry(auth.expiresAt)}</span>`:''}
+        </div>
+        <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">${esc((auth.name||'there').split(' ')[0])}, practice like it's the <span class="gradient-text">real panel.</span></h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">Everything to prepare, track and manage your Big 4 interview journey, in one place.</p>
+        <div class="mt-4 max-w-md">
+          <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+            <span class="uppercase tracking-wider">Overall readiness</span><span class="${ACCENTS.brand.text} font-display">${m.pct}% · ${m.done}/${totalQ}</span>
+          </div>
+          <div class="h-2.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
+            <div class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500 shadow-[0_0_12px_rgba(58,91,239,.5)] transition-all duration-700" style="width:${m.pct}%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">${refCards}</div>
+  `;
+}
+
+let homeSearch = '';
+function renderQuestions(){
   const app = document.getElementById('app');
   const m = metrics(allQuestions());
   const totalQ = allQuestions().length;
@@ -2339,44 +2388,17 @@ function renderHome(){
   if (!catHtml.trim()) catHtml = `<div class="text-center py-16 text-slate-400"><p class="text-4xl mb-3">🔍</p><p class="font-semibold">No areas match "${esc(homeSearch)}".</p></div>`;
 
   app.innerHTML = `
-    <div class="fade rounded-3xl overflow-hidden mb-6 relative bg-gradient-to-br from-brand-500/10 via-cyan-400/5 to-fuchsia-500/10 border border-white/40 dark:border-white/10 glass">
-      <div class="p-5 sm:p-7">
-        <div class="flex flex-wrap items-center gap-2 mb-2">
-          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-gradient-to-r from-brand-500/15 to-cyan-400/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/30">🎯 Big 4 GDC · Audit Interview Prep</span>
-          ${auth.expiresAt?`<span class="text-xs text-slate-500 dark:text-slate-400">Access till ${fmtExpiry(auth.expiresAt)}</span>`:''}
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div>
+          <h1 class="font-display text-2xl font-extrabold">📚 <span class="gradient-text">Question Bank</span></h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">Pick an area to open its question bank. On each question you can <b>🚩 flag</b> it for revision, tick it <b>✅ done</b>, add your own <b>📝 notes</b>, and listen to it. ${isAdmin()?'As admin you can also edit answers, draft with AI, and manage subscribers.':'Answers are written practically, with real examples.'}</p>
         </div>
-        <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">${esc((auth.name||'there').split(' ')[0])}, practice like it's the <span class="gradient-text">real panel.</span></h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">Pick an area to open its question bank. On each question you can <b>🚩 flag</b> it for revision, tick it <b>✅ done</b>, add your own <b>📝 notes</b>, and listen to it. ${isAdmin()?'As admin you can also edit answers, draft with AI, and manage subscribers.':'Answers are written practically, with real examples.'}</p>
-        <div class="mt-4 flex items-end gap-3 text-sm flex-wrap">
-          <div class="flex-1 max-w-md min-w-[200px]">
-            <div class="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-              <span class="uppercase tracking-wider">Overall readiness</span><span class="${ACCENTS.brand.text} font-display">${m.pct}% · ${m.done}/${totalQ}</span>
-            </div>
-            <div class="h-2.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden">
-              <div class="h-full rounded-full bg-gradient-to-r from-cyan-400 via-brand-500 to-fuchsia-500 shadow-[0_0_12px_rgba(58,91,239,.5)] transition-all duration-700" style="width:${m.pct}%"></div>
-            </div>
-          </div>
-          <button data-action="download-pdf" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-sm font-semibold bg-white/70 dark:bg-white/5 glass border border-slate-200/70 dark:border-white/10 hover:border-brand-400 hover:${ACCENTS.brand.text.split(' ')[0]} transition shadow-sm">
-            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
-            Download all Q&amp;A (PDF)
-          </button>
-        </div>
+        <button data-action="download-pdf" class="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-white/70 dark:bg-white/5 glass border border-slate-200/70 dark:border-white/10 hover:border-brand-400 hover:${ACCENTS.brand.text.split(' ')[0]} transition shadow-sm shrink-0">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+          Download all Q&amp;A (PDF)
+        </button>
       </div>
-    </div>
-
-    <div class="grid sm:grid-cols-2 ${isAdmin()?'':'lg:grid-cols-3'} gap-3 mb-6">
-      <a href="#/profile" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 transition flex items-center gap-3">
-        <span class="h-11 w-11 grid place-items-center rounded-xl bg-brand-500/10 text-xl">👤</span>
-        <span class="flex-1"><b class="font-display text-sm">Complete your career profile</b><span class="block text-xs text-slate-500 mt-0.5">Contact details, CA journey, experience and preferences</span></span><span class="text-brand-500">→</span>
-      </a>
-      <a href="#/interviews" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 transition flex items-center gap-3">
-        <span class="h-11 w-11 grid place-items-center rounded-xl bg-cyan-500/10 text-xl">📅</span>
-        <span class="flex-1"><b class="font-display text-sm">Track interviews and follow-ups</b><span class="block text-xs text-slate-500 mt-0.5">Companies, rounds, outcomes, feedback and next steps</span></span><span class="text-brand-500">→</span>
-      </a>
-      ${!isAdmin()?`<a href="#/queries" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-brand-400/50 transition flex items-center gap-3">
-        <span class="h-11 w-11 grid place-items-center rounded-xl bg-fuchsia-500/10 text-xl">💬</span>
-        <span class="flex-1"><b class="font-display text-sm">Ask the admin a question</b><span class="block text-xs text-slate-500 mt-0.5">Raise a query and get a direct reply</span></span><span class="text-brand-500">→</span>
-      </a>`:''}
     </div>
 
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">${metricCards}</div>
@@ -2394,7 +2416,7 @@ function renderHome(){
   si.addEventListener('input', e => {
     homeSearch = e.target.value.trim().toLowerCase();
     const pos = e.target.selectionStart;
-    renderHome();
+    renderQuestions();
     const ns = document.getElementById('homeSearch'); ns.focus(); ns.setSelectionRange(pos,pos);
   });
 }
@@ -2435,7 +2457,7 @@ function renderArea(area){
     `<div class="text-center py-14 text-slate-400"><p class="text-3xl mb-2">🗂️</p><p class="font-semibold">Nothing here with this filter.</p></div>`;
 
   app.innerHTML = `
-    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:${a.text.split(' ')[0]} mb-4 transition">
+    <a href="#/questions" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:${a.text.split(' ')[0]} mb-4 transition">
       <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> All areas
     </a>
 
@@ -3070,6 +3092,7 @@ function refresh(){
   if(hash==='#/queries'){ renderQueries(); setHeaderProgress(); return; }
   if(hash==='#/announcements'){ renderAnnouncements(); setHeaderProgress(); return; }
   if(hash==='#/notifications'){ renderNotifications(); setHeaderProgress(); return; }
+  if(hash==='#/questions'){ renderQuestions(); setHeaderProgress(); return; }
   if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
   if(hash==='#/history'){ renderHistory(); setHeaderProgress(); return; }
   const m = hash.match(/^#\/a\/([\w-]+)/);
