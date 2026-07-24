@@ -32,6 +32,18 @@ const VALID_STATUSES = new Set([
 
 const trim = (value, max = 250) => String(value == null ? '' : value).trim().slice(0, max);
 
+function cleanQuery(input = {}) {
+  return {
+    id: `q-${Date.now()}-${Math.round(Math.random() * 1e7)}`,
+    subject: trim(input.subject, 150),
+    message: trim(input.message, 2000),
+    status: 'open',
+    reply: '',
+    repliedAt: null,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function cleanProfile(input = {}) {
   const profile = {};
   for (const field of PROFILE_FIELDS) {
@@ -98,9 +110,11 @@ async function resolveAuth(req) {
 async function recordFor(key, account = {}) {
   const profileStore = getStore('tracker-profiles');
   const interviewStore = getStore('tracker-interviews');
-  const [savedProfile, savedInterviews] = await Promise.all([
+  const queryStore = getStore('tracker-queries');
+  const [savedProfile, savedInterviews, savedQueries] = await Promise.all([
     profileStore.get(`profile:${key}`, { type: 'json' }),
     interviewStore.get(`interviews:${key}`, { type: 'json' }),
+    queryStore.get(`queries:${key}`, { type: 'json' }),
   ]);
   const profile = savedProfile || {
     fullName: account.name || '',
@@ -112,6 +126,7 @@ async function recordFor(key, account = {}) {
   return {
     profile,
     interviews: Array.isArray(savedInterviews) ? savedInterviews : [],
+    queries: Array.isArray(savedQueries) ? savedQueries : [],
   };
 }
 
@@ -143,6 +158,7 @@ async function adminRecords() {
       createdAt: user.createdAt || null,
       profile: record.profile,
       interviews: record.interviews,
+      queries: record.queries,
       progress: {
         q: progressQ,
         updatedAt: (savedProgress && savedProgress.updatedAt) || null,
@@ -159,6 +175,7 @@ export default async (req) => {
   const action = url.searchParams.get('action') || 'me';
   const profileStore = getStore('tracker-profiles');
   const interviewStore = getStore('tracker-interviews');
+  const queryStore = getStore('tracker-queries');
   const avatarStore = getStore('tracker-profile-files');
 
   if (req.method === 'GET' && action === 'me') {
@@ -223,6 +240,49 @@ export default async (req) => {
     const interviews = source.map(cleanInterview);
     await interviewStore.setJSON(`interviews:${auth.key}`, interviews);
     return json({ ok: true, interviews });
+  }
+
+  if (req.method === 'POST' && action === 'submit-query') {
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const subject = trim(body.subject, 150);
+    const message = trim(body.message, 2000);
+    if (!subject || !message) return json({ error: 'Please enter a subject and your question.' }, 400);
+    const list = (await queryStore.get(`queries:${auth.key}`, { type: 'json' })) || [];
+    if (list.length >= 50) return json({ error: 'Maximum 50 queries reached. Please wait for replies before sending more.' }, 400);
+    list.push(cleanQuery({ subject, message }));
+    await queryStore.setJSON(`queries:${auth.key}`, list);
+    return json({ ok: true, queries: list });
+  }
+
+  if (req.method === 'POST' && action === 'close-query') {
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const id = trim(body.id, 100);
+    const list = (await queryStore.get(`queries:${auth.key}`, { type: 'json' })) || [];
+    const item = list.find((x) => x.id === id);
+    if (!item) return json({ error: 'Query not found.' }, 404);
+    item.status = 'closed';
+    await queryStore.setJSON(`queries:${auth.key}`, list);
+    return json({ ok: true, queries: list });
+  }
+
+  if (req.method === 'POST' && action === 'reply-query') {
+    if (auth.role !== 'admin') return json({ error: 'admin only' }, 403);
+    let body;
+    try { body = await req.json(); } catch { body = {}; }
+    const code = trim(body.code, 100);
+    const id = trim(body.id, 100);
+    const reply = trim(body.reply, 3000);
+    if (!code || !id || !reply) return json({ error: 'Missing reply details.' }, 400);
+    const list = (await queryStore.get(`queries:${code}`, { type: 'json' })) || [];
+    const item = list.find((x) => x.id === id);
+    if (!item) return json({ error: 'Query not found.' }, 404);
+    item.reply = reply;
+    item.status = 'answered';
+    item.repliedAt = new Date().toISOString();
+    await queryStore.setJSON(`queries:${code}`, list);
+    return json({ ok: true, queries: list });
   }
 
   if (req.method === 'POST' && action === 'avatar') {
