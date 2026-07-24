@@ -23,6 +23,17 @@ function authRole(token, users) {
   return { role: 'none' };
 }
 
+function decodeJwt(token) {
+  try {
+    const parts = String(token || '').split('.');
+    if (parts.length !== 3) return null;
+    const payloadStr = Buffer.from(parts[1], 'base64url').toString('utf8');
+    return JSON.parse(payloadStr);
+  } catch (e) {
+    return null;
+  }
+}
+
 export default async (req) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const store = getStore('tracker-users');
@@ -33,6 +44,62 @@ export default async (req) => {
   const auth = authRole(token, users);
 
   // ----- public -----
+  if (action === 'google-login') {
+    const credential = body.credential;
+    const payload = decodeJwt(credential);
+    if (!payload || !payload.email) {
+      return json({ ok: false, error: 'Invalid Google credential token.' }, 400);
+    }
+    const email = String(payload.email).toLowerCase().trim();
+    const adminEmail = (process.env.ADMIN_EMAIL || 'gjain2725@gmail.com').toLowerCase().trim();
+    const adminSecret = process.env.ADMIN_SECRET;
+
+    if (adminEmail && email === adminEmail && adminSecret) {
+      return json({ ok: true, role: 'admin', token: adminSecret, name: payload.name || 'Gaurav Jain', email: payload.email });
+    }
+
+    let foundCode = null;
+    let foundUser = null;
+    for (const [code, u] of Object.entries(users)) {
+      if (u && u.email && String(u.email).toLowerCase().trim() === email && u.active !== false) {
+        if (!u.expiresAt || Date.parse(u.expiresAt) > Date.now()) {
+          foundCode = code;
+          foundUser = u;
+          break;
+        }
+      }
+    }
+
+    if (!foundCode || !foundUser) {
+      return json({ ok: false, error: 'unregistered', email: payload.email, name: payload.name || '' });
+    }
+
+    const deviceId = String(body.device || '').trim().slice(0, 100);
+    if (deviceId) {
+      const devices = Array.isArray(foundUser.devices) ? foundUser.devices : [];
+      const existing = devices.find((d) => d.id === deviceId);
+      if (existing) {
+        existing.lastSeen = new Date().toISOString();
+        await store.setJSON('users', users);
+      } else if (devices.length >= 2) {
+        return json({ ok: false, error: 'This account is in use on 2 devices. Ask admin to reset devices.' });
+      } else {
+        devices.push({ id: deviceId, lastSeen: new Date().toISOString() });
+        foundUser.devices = devices;
+        await store.setJSON('users', users);
+      }
+    }
+
+    return json({
+      ok: true,
+      role: 'member',
+      token: foundCode,
+      name: foundUser.name || payload.name,
+      email: payload.email,
+      expiresAt: foundUser.expiresAt || null
+    });
+  }
+
   if (action === 'request') {
     const name = String(body.name || '').slice(0, 80).trim();
     const email = String(body.email || '').slice(0, 120).trim();
