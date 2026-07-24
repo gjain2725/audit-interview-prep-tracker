@@ -31,6 +31,20 @@ Rules:
 - The answer should be interview-ready and confident, roughly 130–260 words.
 - The example must be ONE concrete, memorable, real-world scenario (with small illustrative numbers if useful) that reinforces the answer.`;
 
+const GRADE_SYSTEM = `You are an expert Chartered Accountant and a Big 4 (EY/KPMG/PwC/Deloitte) audit interview panelist in India, evaluating a candidate's spoken or typed practice answer.
+
+Rules:
+- Score the candidate's answer from 0 to 10 based on technical accuracy, completeness, structure/clarity, and correct use of Indian audit context (Ind AS, SA, CARO 2020, Companies Act, Schedule III) where relevant.
+- Be fair but rigorous, like a real interviewer — do not inflate scores; a vague or incorrect answer should score low.
+- Always find at least one genuine strength to compliment, even in a weak answer.
+- Always give specific, actionable improvement points — not generic advice like "add more detail".
+- Tone: encouraging and constructive, like a mentor, never harsh or dismissive.
+- Output ONLY in this exact format, nothing else. No JSON, no markdown emphasis, no extra headings:
+
+SCORE: <integer 0-10>
+STRENGTHS: <1-2 sentences>
+IMPROVEMENTS: <1-3 sentences>`;
+
 async function roleFor(token) {
   if (!token) return 'none';
   if (process.env.ADMIN_SECRET && token === process.env.ADMIN_SECRET) return 'admin';
@@ -42,11 +56,13 @@ async function roleFor(token) {
   return 'none';
 }
 
-async function callGemini(key, payload, models) {
+async function callGemini(key, payload, models, timeoutMs = 20000) {
   const list = models.filter((m, i, a) => m && a.indexOf(m) === i);
   const baseUrl = (process.env.GOOGLE_GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/+$/, '');
   let lastErr = '';
   for (const model of list) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const url = `${baseUrl}/v1beta/models/${model}:generateContent`;
       const requestPayload = JSON.parse(JSON.stringify(payload));
@@ -59,6 +75,7 @@ async function callGemini(key, payload, models) {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
         body: JSON.stringify(requestPayload),
+        signal: controller.signal,
       });
       const d = await r.json().catch(() => ({}));
       if (r.ok) {
@@ -74,7 +91,13 @@ async function callGemini(key, payload, models) {
       }
       lastErr = (d && d.error && d.error.message) || ('HTTP ' + r.status);
       if (/api key not valid|invalid api key|api_key_invalid|permission denied on resource/i.test(lastErr)) return { error: lastErr, fatal: true };
-    } catch (e) { lastErr = e.message; }
+    } catch (e) {
+      // A stuck/slow model aborts here after timeoutMs and the loop moves on
+      // to the next fallback model instead of leaving the request hanging.
+      lastErr = e.name === 'AbortError' ? `${model} took too long to respond` : e.message;
+    } finally {
+      clearTimeout(timer);
+    }
   }
   return { error: lastErr };
 }
@@ -102,6 +125,28 @@ function draftIsComplete(parsed, response, task) {
   const minExampleWords = task === 'refine' ? 8 : 12;
   if (answerWords < minAnswerWords || exampleWords < minExampleWords) return false;
   if (/[:;,(\-–—]$/.test(parsed.answer)) return false;
+  return true;
+}
+
+function parseGradeResponse(text) {
+  const t = String(text || '').trim();
+  const scoreMatch = t.match(/SCORE\s*[:.-]?\s*(\d{1,2})/i);
+  const strengthsMatch = t.match(/STRENGTHS?\s*[:.-]?\s*([\s\S]*?)(?=\n\s*IMPROVEMENTS?\s*[:.-]|$)/i);
+  const improvementsMatch = t.match(/IMPROVEMENTS?\s*[:.-]?\s*([\s\S]*)$/i);
+  let score = scoreMatch ? parseInt(scoreMatch[1], 10) : null;
+  if (score != null) score = Math.max(0, Math.min(10, score));
+  return {
+    score,
+    strengths: ((strengthsMatch && strengthsMatch[1]) || '').trim(),
+    improvements: ((improvementsMatch && improvementsMatch[1]) || '').trim(),
+  };
+}
+
+function gradeIsComplete(parsed, response) {
+  if (parsed.score == null || !parsed.strengths || !parsed.improvements) return false;
+  if (response.finishReason && response.finishReason !== 'STOP') return false;
+  if (parsed.strengths.split(/\s+/).filter(Boolean).length < 4) return false;
+  if (parsed.improvements.split(/\s+/).filter(Boolean).length < 4) return false;
   return true;
 }
 
@@ -212,6 +257,41 @@ Your previous attempt was incomplete. Start again from the beginning.
       }, 502);
     }
     return json({ answer: parsed.answer, example: parsed.example, model: res.model, retried });
+  }
+
+  // ---------- GRADE: score a candidate's practice answer ----------
+  if (body.task === 'grade') {
+    const question = String(body.question || '').slice(0, 2000);
+    const candidateAnswer = String(body.candidateAnswer || '').slice(0, 4000);
+    const referenceAnswer = String(body.referenceAnswer || '').slice(0, 4000);
+    if (!question || !candidateAnswer) return json({ error: 'Please write or record an answer first.' }, 400);
+    const prompt = `Interview question: "${question}"
+
+${referenceAnswer ? 'Reference model answer (for your calibration only — the candidate has NOT seen this, so do not require them to match it word for word):\n"""' + referenceAnswer + '"""\n\n' : ''}Candidate's answer:
+"""${candidateAnswer}"""
+
+Evaluate the candidate's answer as instructed.`;
+    const payload = {
+      system_instruction: { parts: [{ text: GRADE_SYSTEM }] },
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.3, maxOutputTokens: 1024, thinkingConfig: { thinkingBudget: 0 } },
+    };
+    const models = [CHAT_MODEL, 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-flash-lite-latest'];
+    let res = await callGemini(key, payload, models, 15000);
+    if (res.error) return json({ error: res.error });
+    let parsed = parseGradeResponse(res.text);
+    if (!gradeIsComplete(parsed, res)) {
+      const retryPayload = JSON.parse(JSON.stringify(payload));
+      retryPayload.contents[0].parts[0].text += `\n\nCRITICAL: Your previous attempt did not follow the exact SCORE/STRENGTHS/IMPROVEMENTS format, or was incomplete. Redo it fully with all three sections present and complete.`;
+      retryPayload.generationConfig.maxOutputTokens = 1536;
+      res = await callGemini(key, retryPayload, models, 15000);
+      if (res.error) return json({ error: res.error });
+      parsed = parseGradeResponse(res.text);
+    }
+    if (!gradeIsComplete(parsed, res)) {
+      return json({ error: 'The AI evaluation was incomplete. Please try again.', incomplete: true }, 502);
+    }
+    return json({ score: parsed.score, strengths: parsed.strengths, improvements: parsed.improvements, model: res.model });
   }
 
   // ---------- CHAT mode ----------

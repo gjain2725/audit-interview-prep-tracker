@@ -132,7 +132,7 @@
         <button id="sidebarOpen" title="Open menu" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
         </button>
-        <p class="font-display font-bold text-sm flex-1 truncate">Mission <span class="gradient-text">Big 4</span></p>
+        <a href="#/" class="font-display font-bold text-sm flex-1 truncate">Mission <span class="gradient-text">Big 4</span></a>
       </div>
     </header>
 
@@ -141,7 +141,7 @@
     <input type="file" id="richImageInput" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
 
     <footer class="max-w-6xl mx-auto w-full px-4 sm:px-6 mt-8 mb-10 pt-6 border-t border-slate-200/70 dark:border-white/10 text-center text-xs text-slate-400">
-      <p class="font-display font-semibold text-sm gradient-text mb-1">Mission Big 4 · Crack that Big 4 interview 🚀</p>
+      <a href="#/" class="font-display font-semibold text-sm gradient-text mb-1 inline-block hover:underline">Mission Big 4 · Crack that Big 4 interview 🚀</a>
       <p>Your flags, notes &amp; progress sync securely to your account.</p>
     </footer>
   </div>
@@ -2552,6 +2552,58 @@ function exRowHTML(id, label, text){
 }
 
 /* One question card */
+function practiceScoreClass(score){
+  if(score>=8) return 'border-emerald-400/30 bg-emerald-500/5';
+  if(score>=5) return 'border-amber-400/30 bg-amber-500/5';
+  return 'border-rose-400/30 bg-rose-500/5';
+}
+let practiceRecognition=null, practiceRecordingId=null;
+function togglePracticeMic(id, btn){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ alert("Voice input isn't supported in this browser. Please type your answer instead, or try Chrome or Edge."); return; }
+  const ta=document.querySelector(`[data-practice="${id}"]`); if(!ta) return;
+  if(practiceRecognition && practiceRecordingId===id){ practiceRecognition.stop(); return; }
+  if(practiceRecognition){ practiceRecognition.stop(); }
+  const recog=new SR();
+  recog.lang='en-IN'; recog.continuous=true; recog.interimResults=true;
+  let finalText = ta.value ? ta.value.trim()+' ' : '';
+  practiceRecognition=recog; practiceRecordingId=id;
+  btn.classList.add('text-rose-500','bg-rose-500/10'); btn.title='Stop recording';
+  recog.onresult=(e)=>{
+    let interim='';
+    for(let idx=e.resultIndex; idx<e.results.length; idx++){
+      const transcript=e.results[idx][0].transcript;
+      if(e.results[idx].isFinal) finalText += transcript + ' ';
+      else interim += transcript;
+    }
+    ta.value=(finalText+interim).trim();
+  };
+  recog.onerror=()=>{};
+  recog.onend=()=>{
+    practiceRecognition=null; practiceRecordingId=null;
+    btn.classList.remove('text-rose-500','bg-rose-500/10'); btn.title='Speak your answer';
+    const st=qs(id); st.practiceAnswer=ta.value; save();
+  };
+  recog.start();
+}
+function submitPracticeAnswer(id, btn){
+  const ta=document.querySelector(`[data-practice="${id}"]`);
+  const candidateAnswer=(ta?ta.value:'').trim();
+  const msg=document.getElementById('practiceMsg-'+id);
+  if(!candidateAnswer){ if(ta) ta.focus(); if(msg){ msg.textContent='Please write or speak your answer first.'; msg.className='text-xs text-rose-500'; } return; }
+  const base=findBaseQ(id); if(!base) return;
+  const question=getText(base,'q'), referenceAnswer=answerPlainText(getText(base,'a'));
+  btn.disabled=true; const orig=btn.innerHTML; btn.innerHTML='✨ Grading… <span class="inline-block animate-spin">◌</span>';
+  if(msg){ msg.textContent=''; msg.className='text-xs text-slate-400'; }
+  fetch('/.netlify/functions/chat',{method:'POST',headers:{'content-type':'application/json','x-auth':auth.token},body:JSON.stringify({task:'grade',question,candidateAnswer,referenceAnswer})})
+    .then(r=>r.json()).then(d=>{
+      btn.disabled=false; btn.innerHTML=orig;
+      if(d.error || d.score==null){ if(msg){ msg.textContent=d.error||'Could not grade — please try again.'; msg.className='text-xs text-rose-500'; } return; }
+      const st=qs(id);
+      st.practiceAnswer=candidateAnswer; st.practiceScore=d.score; st.practiceStrengths=d.strengths; st.practiceImprovements=d.improvements; st.practiceGradedAt=new Date().toISOString();
+      save(); refresh();
+    }).catch(()=>{ btn.disabled=false; btn.innerHTML=orig; if(msg){ msg.textContent='Network error — please try again.'; msg.className='text-xs text-rose-500'; } });
+}
 function qCard(area, q, a, i, reorderAllowed){
   const s = store.q[q.id] || {};
   const qText = getText(q,'q'), aText = getText(q,'a');
@@ -2622,16 +2674,47 @@ function qCard(area, q, a, i, reorderAllowed){
         <div class="accordion-inner">
           <div class="pl-8 pr-1 pt-3">
             ${attachBlockHTML(q.id+'::q', q.id, a, '📎 Question files')}
-            <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1 mt-3">Model answer · practical</p>
-            <div class="rich-answer text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmtAnswer(aText)}</div>
-            ${attachBlockHTML(q.id+'::a', q.id, a, '📎 Answer files')}
-            ${getExamples(q).map(ex=>`<div class="mt-3 rounded-xl ${a.soft} border-l-2 border-current ${a.text} px-3.5 py-2.5">
-              <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-0.5">${esc(ex.label||'Example')}</p>
-              <p class="text-sm text-slate-600 dark:text-slate-200 whitespace-pre-wrap">${fmt(ex.text)}</p>
-              ${attachBlockHTML(q.id+'::e:'+ex.id, q.id, a, '📎')}</div>`).join('')}
-            ${q.tip?`<div class="mt-2.5 rounded-xl bg-slate-500/5 border border-slate-300/40 dark:border-white/10 px-3.5 py-2.5">
-              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
-              <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
+
+            ${!isAdmin()?`<div class="rounded-xl bg-slate-500/5 border border-slate-200/70 dark:border-white/10 p-3.5 mt-3">
+              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">🎙️ Practice your answer</p>
+              <textarea data-practice="${q.id}" rows="4" placeholder="Type your answer, or tap the mic to speak it…" class="w-full text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 p-3 outline-none focus:ring-2 focus:ring-brand-400 resize-y transition">${esc(s.practiceAnswer||'')}</textarea>
+              <div class="flex items-center gap-2 mt-2 flex-wrap">
+                <button data-action="practice-mic" data-id="${q.id}" id="mic-${q.id}" title="Speak your answer" class="h-9 w-9 grid place-items-center rounded-lg border border-slate-200 dark:border-white/10 text-slate-500 hover:${a.text.split(' ')[0]} transition shrink-0">
+                  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><path d="M12 18v4M8 22h8"/></svg>
+                </button>
+                <button data-action="practice-grade" data-id="${q.id}" class="px-3.5 py-2 rounded-lg text-sm font-semibold bg-gradient-to-r ${a.grad} text-white shadow">✨ Get AI feedback</button>
+                <span id="practiceMsg-${q.id}" class="text-xs text-slate-400"></span>
+              </div>
+              ${s.practiceScore!=null?`<div class="mt-3 rounded-xl border ${practiceScoreClass(s.practiceScore)} p-3">
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-sm font-bold">🤖 AI rating: ${s.practiceScore}/10</p>
+                  <span class="text-[10px] text-slate-400">${fmtLastActive(s.practiceGradedAt)}</span>
+                </div>
+                <p class="text-xs text-emerald-600 dark:text-emerald-300 mt-2"><b>👍 What's working:</b> ${esc(s.practiceStrengths)}</p>
+                <p class="text-xs text-amber-600 dark:text-amber-300 mt-1.5"><b>📈 To improve:</b> ${esc(s.practiceImprovements)}</p>
+              </div>`:''}
+            </div>`:''}
+
+            <div class="mt-3">
+            ${(isAdmin()||s._answerShown)?`
+              <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1">Model answer · practical</p>
+              <div class="rich-answer text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">${fmtAnswer(aText)}</div>
+              ${attachBlockHTML(q.id+'::a', q.id, a, '📎 Answer files')}
+              ${getExamples(q).map(ex=>`<div class="mt-3 rounded-xl ${a.soft} border-l-2 border-current ${a.text} px-3.5 py-2.5">
+                <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-0.5">${esc(ex.label||'Example')}</p>
+                <p class="text-sm text-slate-600 dark:text-slate-200 whitespace-pre-wrap">${fmt(ex.text)}</p>
+                ${attachBlockHTML(q.id+'::e:'+ex.id, q.id, a, '📎')}</div>`).join('')}
+              ${q.tip?`<div class="mt-2.5 rounded-xl bg-slate-500/5 border border-slate-300/40 dark:border-white/10 px-3.5 py-2.5">
+                <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
+                <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
+              ${!isAdmin()?`<button data-action="reveal-answer" data-id="${q.id}" class="mt-3 text-xs font-semibold text-slate-400 hover:${a.text.split(' ')[0]} transition">🙈 Hide answer again</button>`:''}
+            `:`
+              <button data-action="reveal-answer" data-id="${q.id}" class="w-full py-5 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 text-sm font-semibold text-slate-500 hover:${a.text.split(' ')[0]} hover:border-current transition flex items-center justify-center gap-2">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                Show model answer
+              </button>
+            `}
+            </div>
 
             ${isAdmin()?`<div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
               <button data-action="ai-draft" data-id="${q.id}" class="inline-flex items-center gap-1 font-semibold px-2 py-1 rounded-lg bg-gradient-to-r from-brand-500/15 to-cyan-400/15 ring-1 ring-brand-400/30 ${a.text} hover:from-brand-500/25 hover:to-cyan-400/25 transition">
@@ -2963,6 +3046,9 @@ app.addEventListener('click', async e => {
   }
   if (act==='flag'){ const s=qs(id); s.flag=!s.flag; save(); refresh(); return; }
   if (act==='done'){ const s=qs(id); s.done=!s.done; if(s.done) s.flag=s.flag; save(); refresh(); return; }
+  if (act==='reveal-answer'){ const s=qs(id); s._answerShown=!s._answerShown; save(); refresh(); return; }
+  if (act==='practice-mic'){ togglePracticeMic(id, btn); return; }
+  if (act==='practice-grade'){ submitPracticeAnswer(id, btn); return; }
   if (act==='edit-open'){ const s=qs(id); s._editing=true; s._open=true; save(); refresh(); return; }
   if (act==='edit-cancel'){ discardPendingRichImages(document.querySelector(`[data-edit-a="${id}"]`)); const s=qs(id); s._editing=false; delete s._draft; save(); refresh(); return; }
   if (act==='ai-draft'){
@@ -3081,6 +3167,11 @@ app.addEventListener('input', e => {
     const id = ta.getAttribute('data-note');
     clearTimeout(ta._t);
     ta._t = setTimeout(()=>{ qs(id).note = ta.value; save(); setHeaderProgress(); }, 350);
+  }
+  if (ta.dataset && ta.dataset.practice!=null && ta.hasAttribute('data-practice')){
+    const id = ta.getAttribute('data-practice');
+    clearTimeout(ta._t);
+    ta._t = setTimeout(()=>{ qs(id).practiceAnswer = ta.value; save(); }, 350);
   }
 });
 
