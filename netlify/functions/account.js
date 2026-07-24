@@ -46,6 +46,25 @@ export default async (req) => {
   if (action === 'login') {
     const a = authRole(body.token || '', users);
     if (a.role === 'none') return json({ ok: false, error: 'Invalid, inactive or expired code.' });
+    if (a.role === 'member') {
+      const code = body.token;
+      const user = users[code];
+      const deviceId = String(body.device || '').trim().slice(0, 100);
+      if (deviceId) {
+        const devices = Array.isArray(user.devices) ? user.devices : [];
+        const existing = devices.find((d) => d.id === deviceId);
+        if (existing) {
+          existing.lastSeen = new Date().toISOString();
+          await store.setJSON('users', users);
+        } else if (devices.length >= 2) {
+          return json({ ok: false, error: 'This access code is already in use on 2 devices. Ask the admin to reset devices for this code.' });
+        } else {
+          devices.push({ id: deviceId, lastSeen: new Date().toISOString() });
+          user.devices = devices;
+          await store.setJSON('users', users);
+        }
+      }
+    }
     return json({ ok: true, role: a.role, name: a.name, email: a.email || null, expiresAt: a.expiresAt || null });
   }
   if (action === 'me') {
@@ -83,6 +102,20 @@ export default async (req) => {
     const days = parseInt(body.days || '365', 10);
     if (users[body.code]) { const base = Math.max(Date.now(), Date.parse(users[body.code].expiresAt || 0) || Date.now()); users[body.code].expiresAt = new Date(base + days * 86400000).toISOString(); await store.setJSON('users', users); }
     return json({ ok: true, expiresAt: users[body.code] && users[body.code].expiresAt });
+  }
+  if (action === 'set-expiry') {
+    if (!users[body.code]) return json({ error: 'Unknown code.' }, 404);
+    const time = Date.parse(body.expiresAt || '');
+    if (!time) return json({ error: 'Invalid date.' }, 400);
+    users[body.code].expiresAt = new Date(time).toISOString();
+    await store.setJSON('users', users);
+    return json({ ok: true, expiresAt: users[body.code].expiresAt });
+  }
+  if (action === 'reset-devices') {
+    if (!users[body.code]) return json({ error: 'Unknown code.' }, 404);
+    users[body.code].devices = [];
+    await store.setJSON('users', users);
+    return json({ ok: true });
   }
   if (action === 'delete') { delete users[body.code]; await store.setJSON('users', users); return json({ ok: true }); }
   if (action === 'dismiss') { const pending = await pendingOf(store); await store.setJSON('pending', pending.filter(x => x.id !== body.id)); return json({ ok: true }); }

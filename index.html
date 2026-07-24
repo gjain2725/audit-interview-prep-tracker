@@ -754,7 +754,14 @@ const CONTENT_URL='/.netlify/functions/content';
 const PSTATE_URL='/.netlify/functions/pstate';
 const FILES_URL='/.netlify/functions/files';
 const PORTAL_URL='/.netlify/functions/portal';
+const ANNOUNCEMENTS_URL='/.netlify/functions/announcements';
 const AUTH_KEY='mb4_auth';
+const DEVICE_KEY='mb4_device_id';
+function getDeviceId(){
+  let id=localStorage.getItem(DEVICE_KEY);
+  if(!id){ id=(crypto.randomUUID?crypto.randomUUID():('dev-'+Date.now()+'-'+Math.random().toString(36).slice(2))); localStorage.setItem(DEVICE_KEY,id); }
+  return id;
+}
 const SYNC_ON = location.protocol==='http:' || location.protocol==='https:';
 let pendingSlot=null, pendingQid=null;
 let _syncTimer=null, _lastContent=null, _lastPstate=null;
@@ -1324,6 +1331,8 @@ function router(){
   else if (hash === '#/profile') { renderProfile(); }
   else if (hash === '#/interviews') { renderInterviews(); }
   else if (hash === '#/queries') { renderQueries(); }
+  else if (hash === '#/announcements') { renderAnnouncements(); }
+  else if (hash === '#/notifications') { renderNotifications(); }
   else if (hash === '#/vault') { if(isAdmin()){ vaultSel=new Set(); renderVault(); } else { location.hash='#/'; renderHome(); } }
   else if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]);
   else renderHome();
@@ -1348,6 +1357,8 @@ function renderHeaderControls(){
     <a href="#/profile" title="My profile" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>👤</span><span class="hidden md:inline text-xs font-semibold">Profile</span></a>
     <a href="#/interviews" title="Interview tracker" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>📅</span><span class="hidden md:inline text-xs font-semibold">Interviews</span></a>
     ${!isAdmin()?`<a href="#/queries" title="Ask admin a question" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>💬</span><span class="hidden md:inline text-xs font-semibold">Queries</span></a>`:''}
+    ${!isAdmin()?`<a href="#/notifications" title="Reminders" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>🔔</span><span class="hidden md:inline text-xs font-semibold">Notifications</span></a>`:''}
+    <a href="#/announcements" title="Announcements" class="h-10 px-3 flex items-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><span>📢</span><span class="hidden md:inline text-xs font-semibold">Announcements</span></a>
     <span class="hidden sm:flex items-center gap-1.5 h-10 px-2.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5"><span id="syncDot" class="h-2 w-2 rounded-full bg-slate-400"></span><span id="syncStatus" class="text-xs font-semibold text-slate-400">·</span></span>
     <button id="themeToggle" title="Toggle theme" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg></button>
     <button data-action="logout" title="Log out" class="h-10 w-10 grid place-items-center rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-rose-500/10 hover:text-rose-500 transition"><svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></button>`;
@@ -1383,7 +1394,7 @@ function showLoginErr(msg){ const e=document.getElementById('loginErr'); if(e){ 
 function doLogin(){
   const code=(document.getElementById('loginCode').value||'').trim();
   if(!code) return;
-  acct('login',{token:code}).then(r=>{
+  acct('login',{token:code,device:getDeviceId()}).then(r=>{
     if(!r || !r.ok){ showLoginErr((r&&r.error)||'Login failed.'); return; }
     auth={ token:code, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
     renderHeaderControls(); location.hash='#/'; router(); loadFromCloud();
@@ -1497,6 +1508,7 @@ let editingInterviewId=null;
 let adminPortalRecords=[];
 let adminLiveTimer=null;
 const adminOpenCandidates=new Set();
+const adminExpiryEditing=new Set();
 const AVATAR_CHOICES=['🐶','🐱','🦁','🐼','🦊','🐨','🐯','🐰','🦉','🐸','🦄','🐧'];
 
 function portalRequest(action, options={}){
@@ -1897,6 +1909,153 @@ function closeQuery(id){
     .then(d=>{ portalCache.queries=d.queries||[]; drawQueries(); })
     .catch(err=>alert(err.message));
 }
+
+/* ============================================================
+   ANNOUNCEMENTS (admin → everyone)
+   ============================================================ */
+const ANNOUNCEMENT_TYPES={
+  update:{icon:'✨',label:'New addition',cls:'bg-cyan-500/10 text-cyan-600 dark:text-cyan-300'},
+  offer:{icon:'🎁',label:'Offer',cls:'bg-amber-500/10 text-amber-600 dark:text-amber-300'},
+  general:{icon:'📢',label:'Announcement',cls:'bg-brand-500/10 text-brand-600 dark:text-brand-300'},
+};
+let announcementsCache=[];
+function announcementsRequest(options={}){
+  const method=options.method||'GET';
+  const headers=Object.assign({}, auth.token?{'x-auth':auth.token}:{}, options.headers||{});
+  return fetch(ANNOUNCEMENTS_URL,{method,headers,body:options.body}).then(async r=>{
+    const data=await r.json().catch(()=>({error:'Unexpected server response.'}));
+    if(!r.ok) throw new Error(data.error||'Request failed.');
+    return data;
+  });
+}
+function renderAnnouncements(){
+  const app=document.getElementById('app');
+  app.innerHTML='<div class="text-center py-14 text-slate-400">Loading announcements…</div>';
+  announcementsRequest().then(d=>{ announcementsCache=d.announcements||[]; drawAnnouncements(); }).catch(err=>{
+    app.innerHTML=`<div class="text-center py-12 text-rose-500">${esc(err.message)}</div>`;
+  });
+}
+function drawAnnouncements(){
+  const list=announcementsCache;
+  const rows=list.length?list.map(item=>{
+    const meta=ANNOUNCEMENT_TYPES[item.type]||ANNOUNCEMENT_TYPES.general;
+    return `<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start gap-3">
+        <div class="h-11 w-11 grid place-items-center rounded-xl ${meta.cls} text-xl shrink-0">${meta.icon}</div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 flex-wrap"><h3 class="font-display font-bold">${esc(item.title)}</h3><span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${meta.cls}">${meta.label}</span></div>
+          <p class="text-[11px] text-slate-400 mt-0.5">${fmtLastActive(item.createdAt)}</p>
+          <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 whitespace-pre-wrap">${esc(item.message)}</p>
+        </div>
+        ${isAdmin()?`<button data-action="ann-delete" data-id="${esc(item.id)}" title="Delete" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 shrink-0">🗑️</button>`:''}
+      </div>
+    </div>`;
+  }).join(''):`<div class="text-center py-12 rounded-2xl border border-dashed border-slate-300 dark:border-white/15 text-slate-400"><p class="text-4xl mb-2">📢</p><p class="font-semibold">No announcements yet.</p>${isAdmin()?'<p class="text-xs mt-1">Post your first update, offer or news for members.</p>':''}</div>`;
+  const app=document.getElementById('app');
+  app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4">← Back to tracker</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
+        <div><h1 class="font-display text-2xl font-extrabold">📢 <span class="gradient-text">Announcements</span></h1><p class="text-sm text-slate-500 mt-1">New question additions, offers and updates from Mission Big 4.</p></div>
+        ${isAdmin()?`<button data-action="ann-new" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow-lg shadow-brand-500/20">＋ New announcement</button>`:''}
+      </div>
+    </div>
+    <div id="announcementEditor" class="mb-5"></div>
+    <div class="space-y-3">${rows}</div>`;
+}
+function openAnnouncementEditor(){
+  const holder=document.getElementById('announcementEditor'); if(!holder) return;
+  holder.innerHTML=`<section class="fade rounded-2xl p-5 bg-white/90 dark:bg-slate-900/90 border border-brand-400/30 shadow-xl">
+    <div class="flex justify-between gap-3 mb-4"><div><h2 class="font-display font-bold">New announcement</h2><p class="text-xs text-slate-500">Visible to every member the moment you post it.</p></div><button data-action="ann-cancel" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400">✕</button></div>
+    <div class="grid sm:grid-cols-2 gap-4">
+      ${fieldHTML('annTitle','Title','','text','e.g. 5 new FR questions added',true)}
+      ${selectHTML('annType','Type','general',[['general','General'],['update','New addition'],['offer','Offer']])}
+    </div>
+    <div class="mt-4">${textareaHTML('annMessage','Message','','What should members know?')}</div>
+    <div class="flex items-center gap-3 mt-4"><button data-action="ann-submit" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Post announcement</button><span id="annMsg" class="text-xs text-slate-400"></span></div>
+  </section>`;
+  holder.scrollIntoView({behavior:'smooth',block:'start'});
+}
+function submitAnnouncement(){
+  const title=profileFormValue('annTitle'), message=profileFormValue('annMessage'), type=profileFormValue('annType');
+  const msg=document.getElementById('annMsg');
+  if(!title){ document.getElementById('annTitle').focus(); return; }
+  if(!message){ document.getElementById('annMessage').focus(); return; }
+  msg.textContent='Posting…';
+  announcementsRequest({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'create',title,message,type})})
+    .then(d=>{ announcementsCache=d.announcements||[]; const h=document.getElementById('announcementEditor'); if(h) h.innerHTML=''; drawAnnouncements(); })
+    .catch(err=>{ msg.textContent=err.message; msg.className='text-xs text-rose-500'; });
+}
+function deleteAnnouncement(id){
+  announcementsRequest({method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'delete',id})})
+    .then(d=>{ announcementsCache=d.announcements||[]; drawAnnouncements(); })
+    .catch(err=>alert(err.message));
+}
+
+/* ============================================================
+   NOTIFICATIONS (follow-up reminders + progress nudges)
+   ============================================================ */
+function renderNotifications(){
+  if(isAdmin()){ location.hash='#/'; renderHome(); return; }
+  const app=document.getElementById('app');
+  app.innerHTML='<div class="text-center py-14 text-slate-400">Loading your reminders…</div>';
+  loadPortalRecord().then(()=>drawNotifications()).catch(err=>{
+    app.innerHTML=`<div class="text-center py-12 text-rose-500">${esc(err.message)}</div>`;
+  });
+}
+function progressNudge(){
+  const m=metrics(allQuestions());
+  if(!m.total) return null;
+  if(m.pct>=100) return { icon:'🎉', title:'You have completed every question!', detail:'100% done — keep revisiting your 🚩 flagged questions so nothing goes cold before the real panel.', tone:'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300' };
+  if(m.pct>=75) return { icon:'🔥', title:`So close — you're at ${m.pct}%`, detail:`Only ${m.todo} question${m.todo===1?'':'s'} left. Finish the set today and walk into interviews fully prepared.`, tone:'bg-amber-500/10 text-amber-600 dark:text-amber-300' };
+  if(m.pct>=40) return { icon:'💪', title:`Keep the momentum — ${m.pct}% done`, detail:`${m.todo} questions still to go. A little every day adds up fast — don't lose the streak now.`, tone:'bg-amber-500/10 text-amber-600 dark:text-amber-300' };
+  if(m.pct>0) return { icon:'⏳', title:`Only ${m.pct}% complete so far`, detail:`${m.todo} of ${m.total} questions are still untouched. Block 30 minutes today and start closing the gap.`, tone:'bg-rose-500/10 text-rose-600 dark:text-rose-300' };
+  return { icon:'🚀', title:"You haven't started yet", detail:`${m.total} questions are waiting for you. Pick an area on the home page and tick off your first one right now.`, tone:'bg-rose-500/10 text-rose-600 dark:text-rose-300' };
+}
+function drawNotifications(){
+  const interviews=(portalCache&&portalCache.interviews)||[];
+  const now=Date.now();
+  const followUps=interviews.filter(x=>x.followUpDate && !['rejected','accepted','declined'].includes(x.status))
+    .map(x=>({...x, due:Date.parse(x.followUpDate)}))
+    .filter(x=>!isNaN(x.due))
+    .sort((a,b)=>a.due-b.due);
+  const nudge=progressNudge();
+  const cards=[];
+  followUps.forEach(x=>{
+    const overdue=x.due<now-86400000;
+    const dueSoon=!overdue && x.due<=now+3*86400000;
+    if(!overdue && !dueSoon) return;
+    cards.push(`<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] border ${overdue?'border-rose-400/40':'border-amber-400/30'} shadow-sm">
+      <div class="flex items-start gap-3">
+        <div class="h-11 w-11 grid place-items-center rounded-xl ${overdue?'bg-rose-500/10':'bg-amber-500/10'} text-xl shrink-0">🔔</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-bold">${overdue?'Overdue follow-up':'Follow-up due soon'} — ${esc(x.company||'Company')}</p>
+          <p class="text-xs text-slate-500 mt-0.5">${esc(x.role||'')} ${x.round?'· '+esc(x.round):''} · Follow up ${fmtExpiry(x.followUpDate)}</p>
+        </div>
+        <a href="#/interviews" class="text-xs font-semibold ${overdue?'text-rose-500':'text-amber-500'} shrink-0">Open →</a>
+      </div>
+    </div>`);
+  });
+  if(nudge){
+    cards.push(`<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start gap-3">
+        <div class="h-11 w-11 grid place-items-center rounded-xl ${nudge.tone} text-xl shrink-0">${nudge.icon}</div>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-bold">${esc(nudge.title)}</p>
+          <p class="text-xs text-slate-500 mt-1">${esc(nudge.detail)}</p>
+        </div>
+        <a href="#/" class="text-xs font-semibold text-brand-500 shrink-0">Practice →</a>
+      </div>
+    </div>`);
+  }
+  const app=document.getElementById('app');
+  app.innerHTML=`<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4">← Back to tracker</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-2xl font-extrabold">🔔 <span class="gradient-text">Notifications</span></h1>
+      <p class="text-sm text-slate-500 mt-1">Follow-up reminders and nudges to keep your preparation on track.</p>
+    </div>
+    <div class="space-y-3">${cards.length?cards.join(''):'<div class="text-center py-12 rounded-2xl border border-dashed border-slate-300 dark:border-white/15 text-slate-400"><p class="text-4xl mb-2">✅</p><p class="font-semibold">Nothing needs your attention right now.</p></div>'}</div>`;
+}
+
 function exportCandidateData(){
   const headers=['Name','Email','Mobile','City','State','PIN','CA status','CA attempt','Qualification year','Experience','Current employer','Target role','Preferred firms','Preferred locations','Marketing consent','Readiness %','Questions completed','Flagged questions','Last progress sync','Interview company','Interview role','Interview date','Round','Status','Follow-up date','Employer email','Confidence','Questions asked','Feedback','Next step'];
   const rows=[];
@@ -1991,7 +2150,7 @@ function loadAdmin(){
     </div>`).join(''):'<p class="text-sm text-slate-400 px-1">No queries yet.</p>';
     const pendHtml = pending.length ? pending.map(p=>`<div class="flex items-center gap-3 p-3 rounded-xl border border-amber-400/30 bg-amber-500/5">
       <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.name)}</p><p class="text-[11px] text-slate-500 truncate">${esc(p.email)} · ${esc(p.phone)} · ${fmtExpiry(p.requestedAt)}</p></div>
-      <button data-action="admin-approve" data-id="${esc(p.id)}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shrink-0">✓ Approve 1yr</button>
+      <button data-action="admin-approve" data-id="${esc(p.id)}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-500 text-white shrink-0">✓ Approve</button>
       <button data-action="admin-dismiss" data-id="${esc(p.id)}" title="Dismiss" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-rose-500 shrink-0">✕</button>
     </div>`).join('') : '<p class="text-sm text-slate-400 px-1">No pending requests.</p>';
     const nowT=Date.now();
@@ -2011,12 +2170,20 @@ function loadAdmin(){
           <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white ${p.avatarChoice?'text-xl':'text-xs'} font-extrabold shrink-0">${esc(p.avatarChoice||initials(p.fullName||u.name))}</div>
           <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
           <p class="text-[11px] text-slate-500 truncate">${esc(p.email||u.email||'')} · ${esc(p.mobile||u.phone||'')}</p>
-          <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'}</p>
+          <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'} · 📱 ${(u.devices||[]).length}/2 devices</p>
           <div class="mt-1.5 flex items-center gap-2"><div class="h-1.5 w-24 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-400 to-brand-500" style="width:${prog.pct}%"></div></div><span class="text-[11px] font-semibold text-brand-500">${prog.pct}% ready</span><span class="text-[10px] text-slate-400">· ${fmtLastActive(prog.updatedAt)}</span></div></div>
           <button data-action="admin-candidate-toggle" data-key="${candidateKey}" class="h-8 px-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">View data</button>
           <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
           <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
+          <button data-action="admin-expiry-edit" data-code="${esc(u.code)}" data-key="${candidateKey}" title="Set a custom expiry date (extend or reduce validity)" class="h-8 px-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">🗓️ Set date</button>
+          <button data-action="admin-reset-devices" data-code="${esc(u.code)}" title="Reset device lock so this code can log in on new devices again" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">📱⟲</button>
           <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
+        </div>
+        <div id="expiryEditor-${candidateKey}" class="${adminExpiryEditing.has(u.code)?'':'hidden'} px-4 pb-3 flex flex-wrap items-center gap-2 border-t border-slate-200/60 dark:border-white/10 pt-3">
+          <label class="text-xs font-semibold text-slate-500">New expiry date</label>
+          <input type="date" id="expiryDate-${candidateKey}" value="${u.expiresAt?String(u.expiresAt).slice(0,10):''}" class="rounded-lg bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-2 py-1.5 text-xs outline-none focus:ring-2 focus:ring-brand-400" />
+          <button data-action="admin-expiry-save" data-code="${esc(u.code)}" data-key="${candidateKey}" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Save</button>
+          <button data-action="admin-expiry-cancel" data-key="${candidateKey}" data-code="${esc(u.code)}" class="px-2 py-1.5 rounded-lg text-xs font-semibold text-slate-400">Cancel</button>
         </div>
         <div id="candidate-${candidateKey}" class="${adminOpenCandidates.has(candidateKey)?'':'hidden'} px-4 pb-4">
           <div class="rounded-xl bg-white/60 dark:bg-black/15 p-3">
@@ -2632,9 +2799,13 @@ app.addEventListener('click', async e => {
   if (act==='admin-export'){ exportCandidateData(); return; }
   if (act==='admin-dismiss'){ acct('dismiss',{id:btn.dataset.id}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-approve'){
-    if(!confirm('Approve this request and generate a 1-year access code?')) return;
+    const daysInput=prompt('Grant how many days of access? (e.g. 15, 30, 365)','365');
+    if(daysInput===null) return;
+    const days=parseInt(daysInput,10);
+    if(!days||days<=0){ alert('Please enter a valid number of days.'); return; }
+    if(!confirm('Approve this request and generate a '+days+'-day access code?')) return;
     btn.disabled=true; btn.textContent='…';
-    acct('approve',{id:btn.dataset.id,days:365}).then(r=>{
+    acct('approve',{id:btn.dataset.id,days}).then(r=>{
       if(r&&r.ok){ showGeneratedCode(r.name,r.code,r.expiresAt); }
       else alert('Approve failed: '+((r&&r.error)||''));
       setTimeout(loadAdmin,700);
@@ -2645,6 +2816,38 @@ app.addEventListener('click', async e => {
   if (act==='admin-extend'){ acct('extend',{code:btn.dataset.code,days:365}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-revoke'){ if(confirm('Revoke access for this subscriber?')) acct('revoke',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-reactivate'){ acct('reactivate',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
+  if (act==='admin-expiry-edit'){
+    const panel=document.getElementById('expiryEditor-'+btn.dataset.key);
+    if(panel){
+      panel.classList.toggle('hidden');
+      if(panel.classList.contains('hidden')) adminExpiryEditing.delete(btn.dataset.code); else adminExpiryEditing.add(btn.dataset.code);
+    }
+    return;
+  }
+  if (act==='admin-expiry-cancel'){
+    const panel=document.getElementById('expiryEditor-'+btn.dataset.key);
+    if(panel) panel.classList.add('hidden');
+    adminExpiryEditing.delete(btn.dataset.code);
+    return;
+  }
+  if (act==='admin-expiry-save'){
+    const input=document.getElementById('expiryDate-'+btn.dataset.key);
+    const val=input?input.value:'';
+    if(!val){ if(input) input.focus(); return; }
+    const iso=new Date(val+'T23:59:59').toISOString();
+    btn.disabled=true; btn.textContent='Saving…';
+    acct('set-expiry',{code:btn.dataset.code,expiresAt:iso}).then(r=>{
+      if(!r||!r.ok){ alert('Failed: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='Save'; return; }
+      adminExpiryEditing.delete(btn.dataset.code);
+      loadAdmin();
+    }).catch(()=>{ alert('Network error.'); btn.disabled=false; btn.textContent='Save'; });
+    return;
+  }
+  if (act==='admin-reset-devices'){
+    if(!confirm('Reset the device lock for this code? The next 2 devices to log in with it will be remembered again.')) return;
+    acct('reset-devices',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)).catch(()=>alert('Network error.'));
+    return;
+  }
   if (act==='profile-save'){ saveProfile(); return; }
   if (act==='profile-avatar'){ uploadProfileAvatar(); return; }
   if (act==='profile-avatar-remove'){ removeProfileAvatar(); return; }
@@ -2663,6 +2866,10 @@ app.addEventListener('click', async e => {
   if (act==='query-cancel'){ const h=document.getElementById('queryEditor'); if(h) h.innerHTML=''; return; }
   if (act==='query-submit'){ submitQuery(); return; }
   if (act==='query-close'){ if(confirm('Mark this query as closed?')) closeQuery(btn.dataset.id); return; }
+  if (act==='ann-new'){ openAnnouncementEditor(); return; }
+  if (act==='ann-cancel'){ const h=document.getElementById('announcementEditor'); if(h) h.innerHTML=''; return; }
+  if (act==='ann-submit'){ submitAnnouncement(); return; }
+  if (act==='ann-delete'){ if(confirm('Delete this announcement for everyone?')) deleteAnnouncement(btn.dataset.id); return; }
   if (act==='admin-query-reply'){
     const ta=document.getElementById('qreply-'+btn.dataset.id);
     const reply=ta?ta.value.trim():'';
@@ -2818,6 +3025,8 @@ function refresh(){
   if(hash==='#/profile'){ renderProfile(); setHeaderProgress(); return; }
   if(hash==='#/interviews'){ renderInterviews(); setHeaderProgress(); return; }
   if(hash==='#/queries'){ renderQueries(); setHeaderProgress(); return; }
+  if(hash==='#/announcements'){ renderAnnouncements(); setHeaderProgress(); return; }
+  if(hash==='#/notifications'){ renderNotifications(); setHeaderProgress(); return; }
   if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
   if(hash==='#/history'){ renderHistory(); setHeaderProgress(); return; }
   const m = hash.match(/^#\/a\/([\w-]+)/);
