@@ -68,6 +68,15 @@
     .area-card, .q-card { transition: transform .3s cubic-bezier(.22,1,.36,1), box-shadow .3s; }
     .area-card:hover { transform: translateY(-4px); }
     .fade { animation: fadeUp .4s cubic-bezier(.22,1,.36,1) both; }
+    /* rolling feature showcase */
+    .mb4-ticker { position:relative; overflow:hidden; -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent); }
+    .mb4-ticker-track { display:flex; flex-direction:column; will-change:transform; animation:mb4roll 26s linear infinite; }
+    .mb4-ticker:hover .mb4-ticker-track { animation-play-state:paused; }
+    .mb4-trow { margin-bottom:.5rem; }
+    @keyframes mb4roll { from { transform:translateY(0); } to { transform:translateY(-50%); } }
+    .mb4-shine { background:linear-gradient(100deg,#fbbf24,#f59e0b 30%,#fde68a 50%,#f59e0b 70%,#fbbf24); background-size:200% auto; -webkit-background-clip:text; background-clip:text; color:transparent; animation:mb4shine 3.4s linear infinite; }
+    @keyframes mb4shine { to { background-position:200% center; } }
+    @media (prefers-reduced-motion: reduce){ .mb4-ticker-track{ animation:none; } .mb4-shine{ animation:none; } }
     .lc { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
     .grip { cursor: grab; touch-action: none; }
     .grip:active { cursor: grabbing; }
@@ -154,7 +163,7 @@
         <span class="h-8 w-8 grid place-items-center rounded-full bg-white/20 text-lg shrink-0">🤖</span>
         <div class="min-w-0">
           <p class="font-display font-bold text-sm leading-tight">Audit Buddy</p>
-          <p class="text-[10px] text-white/80 leading-tight">AI tutor · powered by Gemini</p>
+          <p class="text-[10px] text-white/80 leading-tight">Your audit-prep mentor</p>
         </div>
       </div>
       <div class="flex items-center gap-1 shrink-0">
@@ -172,12 +181,12 @@
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>
         </button>
       </div>
-      <p class="text-[10px] text-slate-400 mt-1.5 text-center">AI can make mistakes — verify important points.</p>
+      <p class="text-[10px] text-slate-400 mt-1.5 text-center">Audit Buddy can make mistakes — verify important points.</p>
     </div>
   </div>
-  <button id="chatFab" title="Ask the AI tutor" class="fixed bottom-5 right-4 sm:right-6 z-[80] h-14 px-4 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 to-brand-700 text-white shadow-2xl shadow-brand-600/40 hover:scale-105 active:scale-95 transition ring-2 ring-white/20">
-    <span class="text-xl">🤖</span>
-    <span class="font-semibold text-sm hidden sm:inline">Ask AI</span>
+  <button id="chatFab" title="Ask Audit Buddy" class="fixed bottom-5 right-4 sm:right-6 z-[80] h-14 px-4 flex items-center gap-2 rounded-full bg-gradient-to-r from-brand-500 to-brand-700 text-white shadow-2xl shadow-brand-600/40 hover:scale-105 active:scale-95 transition ring-2 ring-white/20">
+    <span class="text-xl">💬</span>
+    <span class="font-semibold text-sm hidden sm:inline">Ask a doubt</span>
     <span class="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white animate-pulse"></span>
   </button>
 
@@ -1402,7 +1411,7 @@ function renderHeaderControls(){
   }
   nav.innerHTML=`${navLinkHTML('#/','🏠','Home')}
     ${navLinkHTML('#/questions','📚','Question Bank')}
-    ${navLinkHTML('#/mock-interview','🎙️','AI Mock Interview')}
+    ${navLinkHTML('#/mock-interview','🎙️','Mock Interview')}
     ${navLinkHTML('#/flashcards','⚡','Daily Flashcards')}
     ${navLinkHTML('#/ats-scanner','📝','Resume Keyword Check')}
     ${navLinkHTML('#/estimator','📊','GDC Salary Calculator')}
@@ -1453,6 +1462,32 @@ function switchLoginTab(tab){
   }
 }
 
+function siteFeatures(){
+  var n=(typeof allQuestions==='function'?allQuestions().length:0)||200;
+  return [
+    {i:'🎤', t:'Compiled from 20+ Big 4 interviewers', s:'Real questions asked across EY · PwC · Deloitte · KPMG'},
+    {i:'🎯', t:n+'+ real interview questions', s:'Stat audit, Ind AS 115/116, CARO 2020, SA 240 & IFC'},
+    {i:'✍️', t:'Expert model answers & examples', s:'Structured, interview-ready responses for every question'},
+    {i:'⚡', t:'Instant answer grading', s:'Practice out loud and get expert-style feedback on the spot'},
+    {i:'🔊', t:'Listen on the go', s:'Every answer in clear audio — revise anytime, anywhere'},
+    {i:'🃏', t:'Flashcards, mock interview & ATS scanner', s:'A full prep toolkit, not just a question list'},
+    {i:'📈', t:'Personal interview tracker', s:'Log every company, date, outcome & follow-up in one place'},
+    {i:'📱', t:'Syncs across your devices', s:'Progress, notes & flags on both mobile and laptop'},
+  ];
+}
+function featureTickerHTML(opts){
+  opts=opts||{};
+  var rowCls = opts.dark ? 'bg-white/[.05] border-white/10' : 'bg-white/70 dark:bg-white/[.05] border-slate-200/70 dark:border-white/10';
+  var titleCls = opts.dark ? 'text-slate-100' : 'text-slate-800 dark:text-slate-100';
+  var subCls = opts.dark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400';
+  var items = siteFeatures();
+  var row = function(f){ return '<div class="mb4-trow flex items-start gap-3 rounded-2xl border '+rowCls+' px-3.5 py-2.5"><div class="h-9 w-9 shrink-0 grid place-items-center rounded-xl bg-gradient-to-br from-brand-500/20 to-cyan-500/20 text-lg">'+f.i+'</div><div class="min-w-0"><p class="text-[13px] font-bold '+titleCls+' leading-tight">'+esc(f.t)+'</p><p class="text-[11px] '+subCls+' mt-0.5 leading-snug">'+esc(f.s)+'</p></div></div>'; };
+  var list = items.map(row).join('') + items.map(row).join(''); // duplicated → seamless loop
+  return '<div class="mb4-ticker" style="height:'+(opts.height||'236px')+'"><div class="mb4-ticker-track">'+list+'</div></div>';
+}
+function interviewersBadgeHTML(cls){
+  return '<div class="'+(cls||'')+' inline-flex items-center gap-2 rounded-full bg-amber-400/10 border border-amber-400/30 px-3 py-1.5"><span class="text-base">🎤</span><span class="text-[11px] sm:text-xs font-extrabold mb4-shine tracking-tight">Questions compiled from 20+ Big 4 interviewers</span></div>';
+}
 function renderGate(){
   const app=document.getElementById('app');
   app.innerHTML=`<div class="max-w-4xl mx-auto mt-2 sm:mt-8 mb-12 fade">
@@ -1473,28 +1508,9 @@ function renderGate(){
               </div>
             </div>
             
-            <div class="mt-8 space-y-4">
-              <div class="flex items-start gap-3">
-                <div class="h-8 w-8 rounded-xl bg-brand-500/20 text-brand-300 grid place-items-center shrink-0 text-base font-bold">🎯</div>
-                <div>
-                  <h2 class="text-sm font-bold text-slate-100">${allQuestions().length} Real Big 4 Questions</h2>
-                  <p class="text-xs text-slate-400 mt-0.5">Stat Audit, Ind AS 115/116, CARO 2020, SA 240 & IFC testing.</p>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div class="h-8 w-8 rounded-xl bg-cyan-500/20 text-cyan-300 grid place-items-center shrink-0 text-base font-bold">🤖</div>
-                <div>
-                  <h2 class="text-sm font-bold text-slate-100">AI Tutor & Speech Grading</h2>
-                  <p class="text-xs text-slate-400 mt-0.5">Voice practice answers scored by Gemini with expert feedback.</p>
-                </div>
-              </div>
-              <div class="flex items-start gap-3">
-                <div class="h-8 w-8 rounded-xl bg-purple-500/20 text-purple-300 grid place-items-center shrink-0 text-base font-bold">⚡</div>
-                <div>
-                  <h2 class="text-sm font-bold text-slate-100">2-Device Cloud Sync</h2>
-                  <p class="text-xs text-slate-400 mt-0.5">Your progress, notes & practice flags sync across mobile & laptop.</p>
-                </div>
-              </div>
+            <div class="mt-6">${interviewersBadgeHTML('mb-4')}
+              <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">Everything inside 👇</p>
+              ${featureTickerHTML({dark:true, height:'250px'})}
             </div>
           </div>
 
@@ -1573,16 +1589,16 @@ function renderGate(){
           </div>
 
           <!-- Get Access Banner -->
-          <div class="mt-8 pt-6 border-t border-white/10 flex items-center justify-between gap-3">
-            <div>
-              <p class="text-xs font-bold text-slate-200">Don't have an access code yet?</p>
-              <p class="text-[11px] text-slate-400">Get 1 year unlimited access with live sync</p>
+          <a href="#/request" class="group block mt-8 relative overflow-hidden rounded-2xl p-0.5 bg-gradient-to-r from-brand-500 via-cyan-400 to-fuchsia-500 shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 active:scale-[0.99] transition-all duration-200">
+            <div class="rounded-[15px] bg-slate-950/90 px-4 py-3.5 flex items-center justify-between gap-3">
+              <div class="min-w-0">
+                <p class="text-[10px] font-extrabold uppercase tracking-widest text-amber-300">✦ New here? Unlock everything</p>
+                <p class="text-sm font-black text-white mt-0.5 leading-tight">1 year full access — <span class="gradient-text">just ₹199</span></p>
+                <p class="text-[11px] text-slate-400 mt-0.5">That's under ₹17/month · audio revision · 20+ interviewers</p>
+              </div>
+              <span class="shrink-0 inline-flex items-center gap-1 px-4 py-2.5 rounded-xl text-xs font-black bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow-md group-hover:gap-2 transition-all">Get Access <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
             </div>
-            <a href="#/request" class="px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-500/20 to-cyan-500/20 text-brand-300 border border-brand-400/40 hover:bg-brand-500/30 transition-all duration-200 shrink-0 flex items-center gap-1">
-              <span>Get Access — ₹199</span>
-              <span>→</span>
-            </a>
-          </div>
+          </a>
 
         </div>
 
@@ -1777,7 +1793,13 @@ function renderRequest(){
     ${authed()?'':'<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to login</a>'}
     <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
       <h1 class="font-display text-2xl font-extrabold">Get access — <span class="gradient-text">₹199 / year</span></h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access to the complete audit-interview question bank with model answers, examples, audio, AI tutor and more.</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access to the complete audit-interview question bank with model answers, examples, audio revision, instant answer feedback and more.</p>
+      <div class="mt-4 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[.07] to-brand-500/[.05] p-4">
+        ${interviewersBadgeHTML('mb-3')}
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Here's everything your ₹199 unlocks 👇</p>
+        ${featureTickerHTML({height:'220px'})}
+        <p class="text-[11px] text-slate-400 mt-3 text-center">1 full year · works on mobile &amp; laptop · under ₹17/month</p>
+      </div>
       <div class="mt-5 overflow-hidden rounded-2xl border border-cyan-400/25 bg-slate-950 text-white shadow-lg shadow-cyan-950/10">
         <div class="flex items-center justify-between gap-4 px-4 py-3">
           <div>
@@ -1944,7 +1966,7 @@ function renderSubscription(){
               <h1 class="font-display text-2xl sm:text-3xl font-black">
                 ${isAdmin() ? 'Administrator Access Pass' : '1-Year CA Audit Prep Access'}
               </h1>
-              <p class="text-xs text-slate-400 mt-1">Full access to ${allQuestions().length} Big 4 interview questions, Gemini AI Tutor & Cloud Sync.</p>
+              <p class="text-xs text-slate-400 mt-1">Full access to ${allQuestions().length} Big 4 interview questions, model answers, audio revision & cloud sync.</p>
             </div>
             
             <a href="#/request" class="px-5 py-3 rounded-2xl text-xs sm:text-sm font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg shadow-brand-500/30 hover:opacity-95 transition shrink-0 flex items-center gap-2">
@@ -2723,11 +2745,11 @@ function renderMockInterview(){
     <div class="fade max-w-3xl mx-auto space-y-6">
       <div class="rounded-3xl p-6 sm:p-8 bg-gradient-to-br from-slate-900/90 to-brand-950/90 border border-white/10 glass shadow-2xl text-white">
         <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
-          <span class="px-3 py-1 rounded-full text-xs font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">🎙️ Live AI Panel Simulation</span>
+          <span class="px-3 py-1 rounded-full text-xs font-bold bg-brand-500/20 text-brand-300 border border-brand-500/30">🎙️ Live Panel Simulation</span>
           <span class="text-xs text-slate-400 font-semibold">EY · PwC · Deloitte · KPMG Panel</span>
         </div>
         <h1 class="font-display text-2xl font-extrabold mb-2">Audit Technical Interview Round</h1>
-        <p class="text-xs text-slate-400">Read the interviewer's question below, record your answer or type your response, and get scored by Gemini AI.</p>
+        <p class="text-xs text-slate-400">Read the interviewer's question below, record your answer or type your response, and get instant expert-style scoring.</p>
         
         <div class="mt-6 p-5 rounded-2xl bg-white/5 border border-white/10 relative">
           <span class="text-xs font-bold text-brand-400 uppercase tracking-wider block mb-1">Interviewer Question:</span>
@@ -2749,7 +2771,7 @@ function renderMockInterview(){
 
         <div id="mockFeedbackBox" class="mt-6 hidden p-5 rounded-2xl bg-brand-500/10 border border-brand-400/30 space-y-2">
           <div class="flex items-center justify-between">
-            <span class="font-display font-bold text-sm text-brand-300">Gemini Panel Feedback</span>
+            <span class="font-display font-bold text-sm text-brand-300">Panel Feedback</span>
             <span id="mockScoreBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">Score: --</span>
           </div>
           <p id="mockFeedbackText" class="text-xs text-slate-300 leading-relaxed"></p>
@@ -2788,7 +2810,7 @@ function evaluateMockAnswer(qid){
 
   if(btn){ btn.disabled = true; btn.textContent = 'Evaluating…'; }
   if(box) box.classList.remove('hidden');
-  if(txt) txt.textContent = 'Analyzing technical accuracy, accounting standards, and audit assertions with Gemini AI…';
+  if(txt) txt.textContent = 'Analyzing technical accuracy, accounting standards, and audit assertions…';
 
   fetch('/.netlify/functions/chat',{
     method:'POST',
@@ -3177,7 +3199,7 @@ function renderHome(){
 
   const refCards = [
     { href:'#/questions', icon:'📚', bg:'bg-brand-500/10', title:'Question Bank', desc:`${m.pct}% ready · ${m.done}/${totalQ} done`, show:true },
-    { href:'#/mock-interview', icon:'🎙️', bg:'bg-cyan-500/10', title:'AI Mock Panel', desc:'Live simulated interview scored by Gemini AI', show:true },
+    { href:'#/mock-interview', icon:'🎙️', bg:'bg-cyan-500/10', title:'Mock Interview Panel', desc:'Live simulated interview with instant scoring', show:true },
     { href:'#/flashcards', icon:'⚡', bg:'bg-amber-500/10', title:'Daily Flashcards', desc:'5-min speed revision for Ind AS, CARO & SAs', show:true },
     { href:'#/ats-scanner', icon:'📝', bg:'bg-purple-500/10', title:'Resume Keyword Check', desc:'Review coverage of common Big 4 GDC audit terms', show:true },
     { href:'#/estimator', icon:'📊', bg:'bg-emerald-500/10', title:'Salary Calculator', desc:'Estimate target GDC designation & CTC package', show:true },
