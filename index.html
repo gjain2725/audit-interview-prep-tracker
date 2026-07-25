@@ -1343,6 +1343,7 @@ function router(){
   }
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
+  else if (hash === '#/referrals') { if(isAdmin()){ renderReferrals(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/profile') { renderProfile(); }
   else if (hash === '#/subscription') { renderSubscription(); }
   else if (hash === '#/mock-interview') { renderMockInterview(); }
@@ -1804,6 +1805,7 @@ function renderRequest(){
           <input id="reqName" placeholder="Full name" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
           <input id="reqEmail" type="email" placeholder="Email" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
           <input id="reqPhone" placeholder="Phone (same as WhatsApp)" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+          <input id="reqRef" placeholder="Referral code (optional)" maxlength="8" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400 uppercase tracking-wider font-mono" />
           <button data-action="do-request" class="mt-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Submit my request</button>
           <p id="reqMsg" class="text-xs text-center mt-1"></p>
         </div>
@@ -1815,10 +1817,12 @@ function doRequest(){
   const name=(document.getElementById('reqName').value||'').trim();
   const email=(document.getElementById('reqEmail').value||'').trim();
   const phone=(document.getElementById('reqPhone').value||'').trim();
+  const refEl=document.getElementById('reqRef');
+  const ref=refEl?(refEl.value||'').trim():'';
   const msg=document.getElementById('reqMsg');
   if(!name||!email||!phone){ msg.textContent='Please fill name, email and phone.'; msg.className='text-xs text-center mt-1 text-rose-500'; return; }
   msg.textContent='Submitting…'; msg.className='text-xs text-center mt-1 text-slate-400';
-  fetch(ACCOUNT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'request',name,email,phone})}).then(r=>r.json()).then(r=>{
+  fetch(ACCOUNT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'request',name,email,phone,ref})}).then(r=>r.json()).then(r=>{
     if(r&&r.ok){ document.getElementById('reqForm').innerHTML='<div class="text-center py-4"><div class="text-4xl mb-2">✅</div><p class="font-semibold">Request received!</p><p class="text-sm text-slate-500 mt-1">Make sure you have sent the payment screenshot on WhatsApp to <b>8968549488</b>. We will WhatsApp your login code within ~4 hours.</p><a href="#/" class="inline-block mt-4 text-sm font-semibold text-brand-600 dark:text-brand-300 underline">Go to login</a></div>'; }
     else { msg.textContent=(r&&r.error)||'Something went wrong.'; msg.className='text-xs text-center mt-1 text-rose-500'; }
   }).catch(()=>{ msg.textContent='Network error — please try again.'; msg.className='text-xs text-center mt-1 text-rose-500'; });
@@ -2522,6 +2526,61 @@ function fmtLastActive(iso){
   return fmtExpiry(iso);
 }
 
+function renderReferrals(){
+  const app=document.getElementById('app');
+  if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p></div>`; return; }
+  app.innerHTML=`<a href="#/admin" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to admin</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-xl sm:text-2xl font-extrabold">💸 Referrals &amp; payouts</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Give each Telegram group owner a unique code. When a buyer enters it while requesting access, the sale is attributed automatically and their commission is calculated here.</p>
+    </div>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h2 class="font-semibold mb-3">➕ Add a referral partner</h2>
+      <div class="grid sm:grid-cols-2 gap-3">
+        <div><label class="text-xs font-semibold text-slate-500">Partner / group name</label><input id="refPartner" placeholder="e.g. CA Rahul – Audit Prep Group" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.03] text-sm" /></div>
+        <div><label class="text-xs font-semibold text-slate-500">Contact (phone / @handle)</label><input id="refContact" placeholder="e.g. 98xxxxxx or @rahul" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.03] text-sm" /></div>
+        <div><label class="text-xs font-semibold text-slate-500">Custom code (optional, 3–5 letters)</label><input id="refCode" placeholder="auto if blank" maxlength="5" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.03] text-sm uppercase tracking-widest font-mono" /></div>
+        <div><label class="text-xs font-semibold text-slate-500">Commission %</label><input id="refPct" type="number" min="0" max="100" value="50" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.03] text-sm" /></div>
+        <div class="sm:col-span-2"><label class="text-xs font-semibold text-slate-500">Note (optional)</label><input id="refNote" placeholder="e.g. 12k members, promotes on Sundays" class="mt-1 w-full px-3 py-2 rounded-xl border border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.03] text-sm" /></div>
+      </div>
+      <button data-action="ref-create" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Create code</button>
+    </div>
+    <div id="refBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
+  loadReferrals();
+}
+function loadReferrals(){
+  acct('ref-report').then(r=>{
+    const body=document.getElementById('refBody'); if(!body) return;
+    const rows=(r&&r.rows)||[]; const t=(r&&r.totals)||{gross:0,commission:0,referredUsers:0};
+    const money=n=>'₹'+Number(n||0).toLocaleString('en-IN');
+    const cards=`<div class="grid grid-cols-3 gap-3 mb-5">
+      <div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 text-center"><p class="text-2xl font-extrabold">${t.referredUsers||0}</p><p class="text-xs text-slate-500 mt-0.5">Referred subscribers</p></div>
+      <div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 text-center"><p class="text-2xl font-extrabold">${money(t.gross)}</p><p class="text-xs text-slate-500 mt-0.5">Gross collected</p></div>
+      <div class="rounded-2xl p-4 bg-amber-500/10 glass border border-amber-400/30 text-center"><p class="text-2xl font-extrabold text-amber-600 dark:text-amber-300">${money(t.commission)}</p><p class="text-xs text-slate-500 mt-0.5">Commission owed</p></div>
+    </div>`;
+    let table;
+    if(!rows.length){
+      table=`<div class="rounded-2xl p-8 text-center text-slate-400 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10">No referral codes yet. Create one above and share it with your Telegram group owners.</div>`;
+    } else {
+      table=`<div class="rounded-2xl overflow-hidden bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+        <div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200/70 dark:border-white/10">
+          <th class="px-3 py-2.5">Code</th><th class="px-3 py-2.5">Partner</th><th class="px-3 py-2.5 text-right">Subs</th><th class="px-3 py-2.5 text-right">Gross</th><th class="px-3 py-2.5 text-right">Rate</th><th class="px-3 py-2.5 text-right">Owed</th><th class="px-3 py-2.5"></th>
+        </tr></thead><tbody>
+        ${rows.map(row=>`<tr class="border-b border-slate-100/70 dark:border-white/5 last:border-0">
+          <td class="px-3 py-2.5"><span class="font-mono font-bold tracking-widest">${esc(row.code)}</span> <button data-action="ref-copy" data-code="${esc(row.code)}" class="ml-1 text-[11px] text-brand-500 font-semibold">Copy</button>${row.registered?'':' <span class="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-500 align-middle">unregistered</span>'}</td>
+          <td class="px-3 py-2.5"><div class="font-medium">${esc(row.partner||'—')}</div>${row.contact?`<div class="text-xs text-slate-400">${esc(row.contact)}</div>`:''}${row.note?`<div class="text-[11px] text-slate-400 mt-0.5">${esc(row.note)}</div>`:''}</td>
+          <td class="px-3 py-2.5 text-right font-semibold">${row.count||0}</td>
+          <td class="px-3 py-2.5 text-right">${money(row.gross)}</td>
+          <td class="px-3 py-2.5 text-right text-slate-500">${row.commissionPct}%</td>
+          <td class="px-3 py-2.5 text-right font-bold text-amber-600 dark:text-amber-300">${money(row.commission)}</td>
+          <td class="px-3 py-2.5 text-right">${row.registered?`<button data-action="ref-delete" data-code="${esc(row.code)}" class="text-xs text-rose-500 font-semibold">Delete</button>`:''}</td>
+        </tr>`).join('')}
+        </tbody></table></div></div>`;
+    }
+    body.innerHTML=cards+table+`<p class="text-[11px] text-slate-400 mt-3">Commission is calculated on the gross amount each buyer paid (default ₹199). Share the code with the group owner; buyers type it into the “Referral code” box on the buy-access page.</p>`;
+  }).catch(()=>{ const body=document.getElementById('refBody'); if(body) body.innerHTML='<div class="text-center py-10 text-rose-400">Could not load referral report.</div>'; });
+}
 function renderAdmin(){
   const app=document.getElementById('app');
   if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p><button data-action="admin-login" class="mt-3 px-4 py-2 rounded-xl text-sm font-semibold bg-gradient-to-r from-brand-500 to-brand-600 text-white">Admin login</button></div>`; return; }
@@ -2532,7 +2591,7 @@ function renderAdmin(){
       <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers, monitor preparation progress and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
       <p class="text-[11px] text-emerald-500 mt-1">● Progress refreshes automatically every 30 seconds · private note text is never shown</p>
-      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button></div>
+      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button><a href="#/referrals" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20">💸 Referrals &amp; payouts</a></div>
     </div>
     <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
   loadAdmin();
@@ -3799,6 +3858,26 @@ app.addEventListener('click', async e => {
     return;
   }
   if (act==='admin-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
+  if (act==='ref-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
+  if (act==='ref-create'){
+    const partner=(document.getElementById('refPartner').value||'').trim();
+    const contact=(document.getElementById('refContact').value||'').trim();
+    const code=(document.getElementById('refCode').value||'').trim();
+    const commissionPct=(document.getElementById('refPct').value||'50').trim();
+    const note=(document.getElementById('refNote').value||'').trim();
+    if(!partner){ alert('Please enter a partner / group name.'); return; }
+    btn.disabled=true; btn.textContent='…';
+    acct('ref-create',{partner,contact,code,commissionPct,note}).then(r=>{
+      if(r&&r.ok){ alert('Referral code created: '+r.code+'\n\nShare this with '+partner+'.'); renderReferrals(); }
+      else { alert('Could not create code: '+((r&&r.error)||'')); btn.disabled=false; btn.textContent='Create code'; }
+    }).catch(()=>{ alert('Network error.'); btn.disabled=false; btn.textContent='Create code'; });
+    return;
+  }
+  if (act==='ref-delete'){
+    if(!confirm('Delete referral code '+btn.dataset.code+'? Past attributed sales stay recorded, but the code will no longer be listed as registered.')) return;
+    acct('ref-delete',{code:btn.dataset.code}).then(()=>loadReferrals());
+    return;
+  }
   if (act==='admin-extend'){ acct('extend',{code:btn.dataset.code,days:365}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-revoke'){ if(confirm('Revoke access for this subscriber?')) acct('revoke',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }
   if (act==='admin-reactivate'){ acct('reactivate',{code:btn.dataset.code}).then(()=>setTimeout(loadAdmin,600)); return; }

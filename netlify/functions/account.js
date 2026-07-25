@@ -13,6 +13,18 @@ function genCode() {
 }
 const usersOf = async (store) => (await store.get('users', { type: 'json' })) || {};
 const pendingOf = async (store) => (await store.get('pending', { type: 'json' })) || [];
+const refsOf = async (store) => (await store.get('referrals', { type: 'json' })) || {};
+const cleanRef = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+function gen5(refs) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  for (let tries = 0; tries < 50; tries++) {
+    let c = ''; const a = new Uint8Array(5);
+    try { globalThis.crypto.getRandomValues(a); } catch (e) { for (let i = 0; i < 5; i++) a[i] = Math.floor(Math.random() * 256); }
+    for (const b of a) c += chars[b % chars.length];
+    if (!refs[c]) return c;
+  }
+  return 'R' + Date.now().toString(36).toUpperCase().slice(-4);
+}
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '415640736608-v21kq5d32csvtqovptdcg1l4ckdjesjt.apps.googleusercontent.com';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
@@ -112,8 +124,9 @@ export default async (req) => {
     const email = String(body.email || '').slice(0, 120).trim();
     const phone = String(body.phone || '').slice(0, 20).trim();
     if (!name || !email || !phone) return json({ error: 'Please provide name, email and phone.' }, 400);
+    const ref = cleanRef(body.ref);
     const pending = await pendingOf(store);
-    pending.push({ id: 'req-' + Date.now() + '-' + Math.round(Math.random() * 1e6), name, email, phone, requestedAt: new Date().toISOString() });
+    pending.push({ id: 'req-' + Date.now() + '-' + Math.round(Math.random() * 1e6), name, email, phone, ref: ref || null, requestedAt: new Date().toISOString() });
     await store.setJSON('pending', pending.slice(-1000));
     return json({ ok: true });
   }
@@ -161,17 +174,21 @@ export default async (req) => {
       return json({ error: 'Access duration must be between 1 and 3650 days.' }, 400);
     }
     const code = genCode();
+    const amt = parseInt(body.amount != null ? body.amount : '199', 10);
     users[code] = {
       name: (body.name || (p && p.name) || 'Member'),
       email: (body.email || (p && p.email) || ''),
       phone: (body.phone || (p && p.phone) || ''),
       role: 'member', active: true,
+      referredBy: cleanRef(body.ref != null ? body.ref : (p && p.ref)) || null,
+      amountPaid: Number.isFinite(amt) ? amt : 199,
       createdAt: new Date().toISOString(),
+      approvedAt: new Date().toISOString(),
       expiresAt: new Date(Date.now() + days * 86400000).toISOString(),
     };
     await store.setJSON('users', users);
     if (p) await store.setJSON('pending', pending.filter(x => x.id !== body.id));
-    return json({ ok: true, code, name: users[code].name, expiresAt: users[code].expiresAt });
+    return json({ ok: true, code, name: users[code].name, referredBy: users[code].referredBy, expiresAt: users[code].expiresAt });
   }
   if (action === 'revoke') { if (users[body.code]) { users[body.code].active = false; await store.setJSON('users', users); } return json({ ok: true }); }
   if (action === 'reactivate') { if (users[body.code]) { users[body.code].active = true; await store.setJSON('users', users); } return json({ ok: true }); }
@@ -199,6 +216,60 @@ export default async (req) => {
   }
   if (action === 'delete') { delete users[body.code]; await store.setJSON('users', users); return json({ ok: true }); }
   if (action === 'dismiss') { const pending = await pendingOf(store); await store.setJSON('pending', pending.filter(x => x.id !== body.id)); return json({ ok: true }); }
+
+  // ----- referral partners -----
+  if (action === 'ref-create') {
+    const refs = await refsOf(store);
+    let rc = cleanRef(body.code).replace(/[^A-Z]/g, '').slice(0, 5);
+    if (rc.length < 3) rc = gen5(refs);
+    if (refs[rc]) return json({ error: 'Referral code "' + rc + '" already exists.' }, 400);
+    refs[rc] = {
+      code: rc,
+      partner: String(body.partner || '').slice(0, 100).trim(),
+      contact: String(body.contact || '').slice(0, 120).trim(),
+      commissionPct: Math.min(100, Math.max(0, parseInt(body.commissionPct != null ? body.commissionPct : '50', 10) || 0)),
+      note: String(body.note || '').slice(0, 200).trim(),
+      createdAt: new Date().toISOString(),
+    };
+    await store.setJSON('referrals', refs);
+    return json({ ok: true, code: rc, referral: refs[rc] });
+  }
+  if (action === 'ref-delete') {
+    const refs = await refsOf(store); delete refs[cleanRef(body.code)]; await store.setJSON('referrals', refs);
+    return json({ ok: true });
+  }
+  if (action === 'ref-report') {
+    const refs = await refsOf(store);
+    const rep = {};
+    for (const u of Object.values(users)) {
+      const rb = cleanRef(u.referredBy); if (!rb) continue;
+      const amt = Number(u.amountPaid) || 199;
+      if (!rep[rb]) rep[rb] = { code: rb, count: 0, gross: 0 };
+      rep[rb].count++; rep[rb].gross += amt;
+    }
+    const rows = [];
+    const seen = new Set();
+    // referrals that have registered partners
+    for (const code of Object.keys(refs)) {
+      const r = rep[code] || { count: 0, gross: 0 };
+      rows.push({ code, partner: refs[code].partner || '', contact: refs[code].contact || '', commissionPct: refs[code].commissionPct != null ? refs[code].commissionPct : 50, note: refs[code].note || '', count: r.count, gross: r.gross, commission: Math.round(r.gross * (refs[code].commissionPct != null ? refs[code].commissionPct : 50) / 100), registered: true });
+      seen.add(code);
+    }
+    // codes used by buyers that were never registered (typos / ad-hoc) — default 50%
+    for (const code of Object.keys(rep)) {
+      if (seen.has(code)) continue;
+      rows.push({ code, partner: '(unregistered)', contact: '', commissionPct: 50, note: '', count: rep[code].count, gross: rep[code].gross, commission: Math.round(rep[code].gross * 0.5), registered: false });
+    }
+    rows.sort((a, b) => b.gross - a.gross || b.count - a.count);
+    return json({
+      rows,
+      totals: {
+        gross: rows.reduce((s, r) => s + r.gross, 0),
+        commission: rows.reduce((s, r) => s + r.commission, 0),
+        referredUsers: rows.reduce((s, r) => s + r.count, 0),
+      },
+    });
+  }
 
   return json({ error: 'unknown action' }, 400);
 };
