@@ -528,6 +528,66 @@ const AREAS = [
 /* Build lookups */
 const AREA_BY_ID = Object.fromEntries(AREAS.map(a => [a.id, a]));
 const CAT_BY_ID  = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
+
+/* ============================================================
+   MCQ BANK — hard-level multiple choice per area.
+   Shape: MCQ_BANK[areaId] = [{ q, o:[4 options], c:correctIndex, why }]
+   Written from the underlying standards (SAs, Ind AS, CARO, Companies Act).
+   Purely additive — never touches the AREAS question/answer content.
+   ============================================================ */
+const MCQ_BANK = {};
+function mcqsFor(areaId){ return MCQ_BANK[areaId] || []; }
+
+MCQ_BANK['process'] = [
+  { q:'Under SA 210, which of the following is a precondition for an audit that the auditor must establish BEFORE accepting the engagement?',
+    o:['That the entity has a functioning internal audit department','That management uses an acceptable financial reporting framework and acknowledges its responsibilities','That the predecessor auditor has issued a No Objection Certificate','That audit fees have been approved by the shareholders in general meeting'],
+    c:1, why:'SA 210 preconditions are two: the use of an acceptable financial reporting framework, and management acknowledging its responsibility for the financial statements, internal control and providing access. NOC and fee approval are professional or statutory matters, not SA 210 preconditions.' },
+  { q:'What is the key distinction between the overall audit strategy and the audit plan under SA 300?',
+    o:['The strategy is prepared by the engagement partner, the plan by the client','The strategy sets scope, timing and direction; the plan sets the nature, timing and extent of specific procedures','The strategy is prepared after fieldwork; the plan before it','They are identical documents with different names'],
+    c:1, why:'SA 300 says the overall audit strategy sets the scope, timing and direction of the audit and guides development of the audit plan. The audit plan is more detailed, covering the nature, timing and extent of planned risk assessment and further audit procedures.' },
+  { q:'Which of these is NOT a risk assessment procedure under SA 315?',
+    o:['Inquiries of management and others within the entity','Analytical procedures','Observation and inspection','External confirmation of trade receivable balances'],
+    c:3, why:'SA 315 lists exactly three risk assessment procedures: inquiry, analytical procedures, and observation and inspection. External confirmation is a substantive procedure under SA 505, performed as a further audit procedure, not to assess risk.' },
+  { q:'As the assessed risk of material misstatement increases, how should the auditor ordinarily change the timing of substantive procedures?',
+    o:['Shift more work to an interim date to spread the effort','Shift more work to at or near the period end','Timing is unaffected by risk; only extent changes','Perform all procedures before the interim date'],
+    c:1, why:'Higher risk pushes procedures closer to period end, because testing at an interim date leaves a remaining period that must be covered by additional roll-forward procedures. Lower risk permits more interim testing.' },
+  { q:'Under SA 500, the "sufficiency" and "appropriateness" of audit evidence refer respectively to:',
+    o:['Quality and quantity','Quantity and quality','Relevance and reliability','Cost and timing'],
+    c:1, why:'Sufficiency is the measure of the quantity of audit evidence. Appropriateness is the measure of its quality, that is its relevance and reliability. The two are interrelated; higher quality can reduce the quantity needed, but poor quality evidence cannot be cured by obtaining more of it.' },
+  { q:'On an initial audit engagement, SA 510 requires the auditor to obtain sufficient appropriate evidence about whether:',
+    o:['The prior auditor issued an unmodified opinion','Opening balances contain misstatements that materially affect the current period financial statements','The prior year audit was conducted under the same framework','The entity has changed its accounting software'],
+    c:1, why:'SA 510 focuses on whether opening balances contain misstatements materially affecting the current period, and whether appropriate accounting policies reflected in opening balances have been consistently applied. The prior opinion is relevant information but not the objective itself.' },
+  { q:'An auditor signs the report on 20 May. On 28 May, before issuing the financial statements, a material subsequent event is identified and management amends the accounts. If the auditor extends procedures only to that one event, the correct approach is:',
+    o:['Withdraw the original report and re-date it entirely to 28 May','Use dual dating, retaining the original date but adding a date limited to the specific amendment','Issue a fresh report dated 28 May covering all subsequent events afresh','Add an Emphasis of Matter paragraph and keep the original date'],
+    c:1, why:'Dual dating limits the auditor responsibility for subsequent events to the specific amendment. Re-dating the whole report would extend responsibility for all subsequent events up to the new date, requiring full procedures to that date.' },
+  { q:'Under SA 570, the auditor evaluates management assessment of going concern covering a period of:',
+    o:['At least six months from the balance sheet date','At least twelve months from the balance sheet date','At least twelve months from the date of the auditor report','Three years, matching the business plan'],
+    c:1, why:'SA 570 requires management assessment to cover a period of at least twelve months from the balance sheet date. If management assessment covers less than that, the auditor asks management to extend it.' },
+  { q:'Written representations under SA 580 should be dated:',
+    o:['On the balance sheet date','As near as practicable to, but not after, the date of the auditor report','At least 30 days before the audit report date','On the date the audit fieldwork commenced'],
+    c:1, why:'SA 580 requires written representations to be dated as near as practicable to, but not after, the date of the auditor report, so that they cover the whole period on which the auditor is reporting.' },
+  { q:'Under SA 230, the final audit file should ordinarily be assembled within:',
+    o:['30 days after the date of the auditor report','60 days after the date of the auditor report','90 days after the balance sheet date','Before the auditor report is signed'],
+    c:1, why:'SA 230 sets an administrative assembly period ordinarily not more than 60 days after the date of the auditor report. Under SQC 1, working papers are then retained for at least seven years.' },
+  { q:'Which statement about professional skepticism is MOST accurate?',
+    o:['It requires the auditor to assume management is dishonest','It means neither assuming dishonesty nor unquestioned honesty, and includes a critical assessment of evidence','It applies only where fraud risk has been identified','It can be reduced where the auditor has a long relationship with the client'],
+    c:1, why:'Professional skepticism means a questioning mind and a critical assessment of audit evidence. SA 200 makes clear the auditor neither assumes dishonesty nor unquestioned honesty, and a long client relationship does not justify reducing skepticism.' },
+  { q:'An auditor decides NOT to rely on internal controls for the revenue cycle. The consequence is that the auditor:',
+    o:['Need not understand the revenue process at all','Must perform tests of controls anyway to confirm the decision','Performs a fully substantive approach with increased substantive testing','Must issue a qualified opinion on internal controls'],
+    c:2, why:'Understanding the process is mandatory under SA 315 regardless. If the auditor does not plan to rely on controls, tests of controls are not required, but substantive procedures must be sufficiently extensive to reduce detection risk on their own.' },
+  { q:'Under SA 265, significant deficiencies in internal control identified during the audit must be communicated to those charged with governance:',
+    o:['Orally, at the closing meeting','In writing, on a timely basis','Only if management refuses to remediate them','Only in the case of listed companies'],
+    c:1, why:'SA 265 requires significant deficiencies to be communicated in writing and on a timely basis to those charged with governance. Other, less significant deficiencies may be communicated to management orally.' },
+  { q:'Detection risk is BEST described as:',
+    o:['A risk that the auditor cannot influence','The risk that the entity internal controls fail to prevent a misstatement','The risk that the auditor procedures will not detect an existing material misstatement','The same as inherent risk for high-judgement balances'],
+    c:2, why:'Detection risk is the risk that the auditor procedures will not detect a material misstatement that exists. It is the only component of audit risk the auditor directly controls, by varying the nature, timing and extent of procedures.' },
+  { q:'In an audit where inherent risk and control risk are both assessed as high, the auditor should set detection risk:',
+    o:['High, to balance the audit risk model','Low, and therefore perform more persuasive procedures','At the same level as control risk','Detection risk is fixed by the firm methodology'],
+    c:1, why:'Audit risk is held at an acceptably low level. If inherent and control risk are high, detection risk must be driven low, which means more persuasive evidence, larger samples and period-end rather than interim testing.' },
+  { q:'Which of the following BEST describes the auditor responsibility for the financial statements?',
+    o:['The auditor prepares and presents the financial statements fairly','The auditor expresses an opinion on whether they give a true and fair view','The auditor guarantees the financial statements are free from all misstatement','The auditor certifies the accuracy of every transaction recorded'],
+    c:1, why:'Preparation and fair presentation is management responsibility. The auditor expresses an opinion, obtaining reasonable, not absolute, assurance. Audit is not a guarantee or a certification of every transaction.' },
+];
 function areaAccent(area){ return ACCENTS[CAT_BY_ID[area.cat].accent]; }
 function areaMeta(area){
   const saved=(store.areas&&store.areas[area.id])||{};
@@ -546,8 +606,8 @@ let store = load();
 function load(){
   try {
     const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { q: raw.q || {}, custom: raw.custom || {}, areas: raw.areas || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], theme: raw.theme || 'dark' };
-  } catch { return { q:{}, custom:{}, areas:{}, order:{}, attach:{}, trash:[], theme:'dark' }; }
+    return { q: raw.q || {}, custom: raw.custom || {}, areas: raw.areas || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], mcq: raw.mcq || {}, theme: raw.theme || 'dark' };
+  } catch { return { q:{}, custom:{}, areas:{}, order:{}, attach:{}, trash:[], mcq:{}, theme:'dark' }; }
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(store)); scheduleSync(); }
 function qs(id){ return store.q[id] || (store.q[id] = {}); }
@@ -817,7 +877,7 @@ function buildContent(){
 function buildPstate(){
   const q={};
   for(const id in store.q){ const v=store.q[id]||{}; const p={}; if(v.flag)p.flag=true; if(v.done)p.done=true; if(v.note)p.note=v.note; if(Object.keys(p).length)q[id]=p; }
-  return { q };
+  return { q, mcq: store.mcq || {} };
 }
 function scheduleSync(){ if(!SYNC_ON||!authed()) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(pushNow,1000); }
 function pushNow(){
@@ -830,10 +890,11 @@ function pushNow(){
   setSyncStatus('syncing');
   return Promise.all(jobs).then(()=>setSyncStatus('saved')).catch(()=>{ _lastContent=null; _lastPstate=null; setSyncStatus('offline'); });
 }
-function applyCloud(content, ps){
+function applyCloud(content, ps, mcq){
   content=content||{q:{},custom:{},areas:{},order:{},attach:{},trash:[]};
   ps=ps||{};
   store.q={};
+  store.mcq=mcq||{};
   for(const id in (content.q||{})) store.q[id]=Object.assign({}, content.q[id]);
   for(const id in ps){ store.q[id]=Object.assign(store.q[id]||{}, ps[id]); }
   store.custom=content.custom||{}; store.areas=content.areas||{}; store.order=content.order||{}; store.attach=content.attach||{}; store.trash=content.trash||[];
@@ -847,7 +908,7 @@ function loadFromCloud(){
     fetch(CONTENT_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null),
     fetch(PSTATE_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null)
   ]).then(([c,p])=>{
-    applyCloud(c&&c.content, p&&p.pstate&&p.pstate.q);
+    applyCloud(c&&c.content, p&&p.pstate&&p.pstate.q, p&&p.pstate&&p.pstate.mcq);
     setSyncStatus('saved'); refresh();
   }).catch(()=>setSyncStatus('offline'));
 }
@@ -3344,6 +3405,135 @@ function renderQuestions(){
    AREA PAGE
    ============================================================ */
 const areaFilter = {}; // areaId -> {status:'all'|'flag'|'done'|'todo', search:''}
+/* ============================================================
+   MCQ TEST ENGINE (per area) — additive; never edits the Q&A bank
+   ============================================================ */
+let mcqRun = null;   // { areaId, order:[idx...], pos, answers:{qIdx:chosen} }
+
+function mcqStat(areaId){ return (store.mcq && store.mcq[areaId]) || {}; }
+function mcqRecord(areaId, pct, correct, total){
+  store.mcq = store.mcq || {};
+  const prev = store.mcq[areaId] || {};
+  store.mcq[areaId] = {
+    best: Math.max(prev.best || 0, pct), last: pct,
+    correct, total, attempts: (prev.attempts || 0) + 1, at: new Date().toISOString()
+  };
+  save();
+}
+function mcqShuffle(n){
+  const a = Array.from({length:n}, (_,i)=>i);
+  for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); const t=a[i]; a[i]=a[j]; a[j]=t; }
+  return a;
+}
+function mcqScoreOf(run, bank){
+  let correct=0; for(const k in run.answers){ if(bank[k] && run.answers[k]===bank[k].c) correct++; }
+  return correct;
+}
+
+function mcqSectionHTML(area){
+  const bank = mcqsFor(area.id);
+  const a = areaAccent(area);
+  if(!bank.length){
+    return `<div class="rounded-2xl p-5 bg-white/60 dark:bg-white/[.03] glass border border-dashed border-slate-300 dark:border-white/10 text-center">
+      <p class="text-2xl mb-1">🧠</p>
+      <p class="text-sm font-semibold text-slate-500 dark:text-slate-400">MCQ test for this area is coming soon.</p>
+    </div>`;
+  }
+  const st = mcqStat(area.id);
+  const run = (mcqRun && mcqRun.areaId===area.id) ? mcqRun : null;
+
+  // ---- idle / summary ----
+  if(!run){
+    const badge = st.best!=null ? `<span class="px-2.5 py-1 rounded-lg text-xs font-bold ${st.best>=70?'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300':'bg-amber-500/15 text-amber-600 dark:text-amber-300'}">Best ${st.best}%</span>` : '';
+    return `<div class="rounded-2xl p-5 sm:p-6 bg-gradient-to-br from-white/80 to-white/50 dark:from-white/[.06] dark:to-white/[.02] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 class="font-display text-lg font-extrabold flex items-center gap-2">🧠 MCQ Test <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-500">Hard</span></h2>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${bank.length} tough multiple-choice questions on ${esc(areaMeta(area).title)}. Instant feedback with a short explanation for every answer.</p>
+          ${st.attempts?`<p class="text-[11px] text-slate-400 mt-1.5">Attempts: ${st.attempts} · Last score: ${st.last}%</p>`:''}
+        </div>
+        ${badge}
+      </div>
+      <button data-action="mcq-start" data-area="${area.id}" class="mt-4 w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold bg-gradient-to-r ${a.grad} text-white shadow hover:opacity-95 transition">
+        ${st.attempts?'🔁 Retake test':'▶ Start test'} <span class="opacity-80">· ${bank.length} Qs</span>
+      </button>
+    </div>`;
+  }
+
+  // ---- results ----
+  if(run.pos >= run.order.length){
+    const correct = mcqScoreOf(run, bank);
+    const total = run.order.length;
+    const pct = Math.round(correct/total*100);
+    const good = pct>=70;
+    const review = run.order.map((qi,n)=>{
+      const m = bank[qi]; const chosen = run.answers[qi];
+      const ok = chosen===m.c;
+      return `<div class="rounded-xl p-3.5 border ${ok?'border-emerald-400/30 bg-emerald-500/[.06]':'border-rose-400/30 bg-rose-500/[.06]'}">
+        <p class="text-[13px] font-semibold flex gap-2"><span>${ok?'✅':'❌'}</span><span>${n+1}. ${esc(m.q)}</span></p>
+        <p class="text-[12px] mt-1.5 ml-6 ${ok?'text-emerald-600 dark:text-emerald-300':'text-rose-500'}">Your answer: ${chosen!=null?esc(m.o[chosen]):'— skipped —'}</p>
+        ${ok?'':`<p class="text-[12px] mt-0.5 ml-6 text-emerald-600 dark:text-emerald-300">Correct: ${esc(m.o[m.c])}</p>`}
+        <p class="text-[12px] mt-1.5 ml-6 text-slate-500 dark:text-slate-400"><b>Why:</b> ${esc(m.why)}</p>
+      </div>`;
+    }).join('');
+    return `<div class="rounded-2xl p-5 sm:p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="text-center py-3">
+        <p class="text-4xl mb-1">${good?'🎉':'📚'}</p>
+        <p class="font-display text-3xl font-black ${good?'text-emerald-500':'text-amber-500'}">${pct}%</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${correct} of ${total} correct${good?' — interview ready on this area.':' — revise the misses below and retake.'}</p>
+        <button data-action="mcq-start" data-area="${area.id}" class="mt-4 px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r ${a.grad} text-white shadow">🔁 Retake</button>
+        <button data-action="mcq-exit" data-area="${area.id}" class="mt-4 ml-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button>
+      </div>
+      <div class="mt-5 space-y-2.5">${review}</div>
+    </div>`;
+  }
+
+  // ---- running ----
+  const qi = run.order[run.pos];
+  const m = bank[qi];
+  const chosen = run.answers[qi];
+  const answered = chosen != null;
+  const pctDone = Math.round(run.pos/run.order.length*100);
+  const perm = (run.perms && run.perms[qi]) || [0,1,2,3];
+  const opts = perm.map((orig,disp)=>{
+    const txt = m.o[orig];
+    let cls = 'border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.04] hover:border-current';
+    let mark = `<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-slate-100 dark:bg-white/10 text-[11px] font-bold">${'ABCD'[disp]}</span>`;
+    if(answered){
+      if(orig===m.c){ cls='border-emerald-400/60 bg-emerald-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-emerald-500 text-white text-[11px] font-bold">✓</span>'; }
+      else if(orig===chosen){ cls='border-rose-400/60 bg-rose-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-rose-500 text-white text-[11px] font-bold">✕</span>'; }
+      else { cls='border-slate-200/60 dark:border-white/5 opacity-60'; }
+    }
+    return `<button ${answered?'disabled':''} data-action="mcq-answer" data-area="${area.id}" data-opt="${orig}"
+      class="w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border-2 ${cls} transition text-sm">
+      ${mark}<span class="flex-1">${esc(txt)}</span></button>`;
+  }).join('');
+
+  return `<div class="rounded-2xl p-5 sm:p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+    <div class="flex items-center justify-between gap-3 mb-3">
+      <p class="text-xs font-bold text-slate-500 dark:text-slate-400">Question ${run.pos+1} of ${run.order.length}</p>
+      <button data-action="mcq-exit" data-area="${area.id}" class="text-xs font-semibold text-slate-400 hover:text-rose-500">✕ Exit</button>
+    </div>
+    <div class="h-1.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden mb-4">
+      <div class="h-full rounded-full bg-gradient-to-r ${a.bar} transition-all duration-300" style="width:${pctDone}%"></div>
+    </div>
+    <p class="text-[15px] font-semibold leading-snug mb-4">${esc(m.q)}</p>
+    <div class="space-y-2.5">${opts}</div>
+    ${answered?`<div class="mt-4 rounded-xl p-3.5 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10">
+      <p class="text-[13px] ${chosen===m.c?'text-emerald-600 dark:text-emerald-300':'text-rose-500'} font-bold mb-1">${chosen===m.c?'✅ Correct':'❌ Not quite'}</p>
+      <p class="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed"><b>Why:</b> ${esc(m.why)}</p>
+      <button data-action="mcq-next" data-area="${area.id}" class="mt-3 w-full sm:w-auto px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r ${a.grad} text-white shadow">
+        ${run.pos+1 >= run.order.length ? 'See my score →' : 'Next question →'}
+      </button>
+    </div>`:''}
+  </div>`;
+}
+
+function renderMcqBox(area){
+  const box = document.getElementById('mcqBox');
+  if(box) box.innerHTML = mcqSectionHTML(area);
+}
+
 function renderArea(area){
   const app = document.getElementById('app');
   const a = areaAccent(area);
@@ -3427,6 +3617,13 @@ function renderArea(area){
     ${isAdmin()?`<button data-action="add-open" data-area="${area.id}" class="mt-5 w-full py-3 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:${a.text.split(' ')[0]} hover:border-current transition">
       + Add your own question to this area
     </button>`:''}
+
+    <div class="mt-8 mb-2 flex items-center gap-3">
+      <div class="h-px flex-1 bg-slate-200 dark:bg-white/10"></div>
+      <span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Test yourself</span>
+      <div class="h-px flex-1 bg-slate-200 dark:bg-white/10"></div>
+    </div>
+    <div id="mcqBox">${mcqSectionHTML(area)}</div>
   `;
 
   const as = document.getElementById('areaSearch');
@@ -3860,6 +4057,37 @@ app.addEventListener('click', async e => {
   // ---- auth / request / admin ----
   if (act==='do-login'){ doLogin(); return; }
   if (act==='admin-login'){ adminLoginPrompt(); return; }
+  if (act==='mcq-start'){
+    const ar=AREA_BY_ID[btn.dataset.area]; if(!ar) return;
+    const bank=mcqsFor(ar.id);
+    const perms={}; bank.forEach((m,i)=>{ perms[i]=mcqShuffle(m.o.length); });
+    mcqRun={ areaId:ar.id, order:mcqShuffle(bank.length), pos:0, answers:{}, perms };
+    renderMcqBox(ar);
+    const box=document.getElementById('mcqBox'); if(box) box.scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+  if (act==='mcq-answer'){
+    const ar=AREA_BY_ID[btn.dataset.area]; if(!ar||!mcqRun||mcqRun.areaId!==ar.id) return;
+    const qi=mcqRun.order[mcqRun.pos];
+    if(mcqRun.answers[qi]==null){ mcqRun.answers[qi]=parseInt(btn.dataset.opt,10); renderMcqBox(ar); }
+    return;
+  }
+  if (act==='mcq-next'){
+    const ar=AREA_BY_ID[btn.dataset.area]; if(!ar||!mcqRun||mcqRun.areaId!==ar.id) return;
+    mcqRun.pos++;
+    if(mcqRun.pos>=mcqRun.order.length){
+      const bank=mcqsFor(ar.id);
+      const correct=mcqScoreOf(mcqRun,bank), total=mcqRun.order.length;
+      mcqRecord(ar.id, Math.round(correct/total*100), correct, total);
+    }
+    renderMcqBox(ar);
+    const box=document.getElementById('mcqBox'); if(box) box.scrollIntoView({behavior:'smooth',block:'start'});
+    return;
+  }
+  if (act==='mcq-exit'){
+    const ar=AREA_BY_ID[btn.dataset.area]; mcqRun=null; if(ar) renderMcqBox(ar);
+    return;
+  }
   if (act==='do-request'){ doRequest(); return; }
   if (act==='logout'){ if(confirm('Log out?')) logout(); return; }
   if (act==='admin-refresh'){ loadAdmin(); return; }
