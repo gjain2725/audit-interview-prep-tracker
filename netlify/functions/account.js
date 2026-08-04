@@ -33,6 +33,8 @@ function authRole(token, users) {
   if (admin && token && token === admin) return { role: 'admin', name: 'Gaurav Jain', email: process.env.ADMIN_EMAIL || '' };
   const u = token && users[token];
   if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) {
+    // Free accounts are logged in but do NOT get paid content.
+    if (u.tier === 'free') return { role: 'free', name: u.name, email: u.email, code: token };
     return { role: 'member', name: u.name, code: token, expiresAt: u.expiresAt };
   }
   return { role: 'none' };
@@ -90,7 +92,28 @@ export default async (req) => {
     }
 
     if (!foundCode || !foundUser) {
-      return json({ ok: false, error: 'unregistered', email: payload.email, name: payload.name || '' });
+      // No paid subscription for this email -> create (or reuse) a FREE account.
+      // Free accounts can browse the free tier and are captured as leads.
+      let freeCode = null;
+      for (const [code, u] of Object.entries(users)) {
+        if (u && u.tier === 'free' && String(u.email || '').toLowerCase().trim() === email) { freeCode = code; break; }
+      }
+      if (!freeCode) {
+        freeCode = genCode();
+        users[freeCode] = {
+          name: payload.name || email.split('@')[0],
+          email: payload.email,
+          phone: '',
+          tier: 'free',
+          active: true,
+          createdAt: new Date().toISOString(),
+          expiresAt: null,
+          devices: [],
+          source: 'google',
+        };
+        await store.setJSON('users', users);
+      }
+      return json({ ok: true, role: 'free', token: freeCode, name: users[freeCode].name, email: payload.email, tier: 'free' });
     }
 
     const deviceId = String(body.device || '').trim().slice(0, 100);

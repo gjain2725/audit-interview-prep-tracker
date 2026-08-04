@@ -2043,7 +2043,9 @@ function renderHeaderControls(){
   closeSidebar();
   const nav=document.getElementById('sidebarNav'), footer=document.getElementById('sidebarFooter');
   const uname=document.getElementById('hdrUser');
-  if(uname) uname.textContent = authed() ? ('Hi, '+(auth.name||'there').split(' ')[0]+(isAdmin()?' · Admin':'')) : 'Audit Interview Prep';
+  if(uname) uname.textContent = (authed()||auth.role==='free')
+    ? ('Hi, '+(auth.name||'there').split(' ')[0]+(isAdmin()?' · Admin':(auth.role==='free'?' · Free':'')))
+    : 'Audit Interview Prep';
   refreshHeaderAvatar();
   if(!nav||!footer) return;
   if(!authed()){
@@ -2178,8 +2180,8 @@ function renderGate(){
             <!-- Candidate Access Code Pane -->
             <div id="paneCandidate" class="space-y-4">
               <div>
-                <h2 class="font-display text-lg font-bold text-white">Welcome back 👋</h2>
-                <p class="text-xs text-slate-400 mt-1">Sign in with Google or enter your access code to unlock your prep workspace.</p>
+                <h2 class="font-display text-lg font-bold text-white">Welcome 👋</h2>
+                <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here? Sign in with Google — it is free.</b> You get every MCQ test and our sample areas instantly. Already bought access? Enter your code below.</p>
               </div>
 
               <!-- Google Sign In Option -->
@@ -2311,6 +2313,7 @@ function handleGoogleLogin(response){
     }
     auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null };
     saveAuth();
+    if(r.role==='free') track('free_signup'); else track('login');
     renderHeaderControls();
     if(r.role==='admin'){ location.hash='#/admin'; } else { location.hash='#/'; }
     router(); loadFromCloud();
