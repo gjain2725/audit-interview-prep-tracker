@@ -113,7 +113,7 @@ export default async (req) => {
         };
         await store.setJSON('users', users);
       }
-      return json({ ok: true, role: 'free', token: freeCode, name: users[freeCode].name, email: payload.email, tier: 'free' });
+      return json({ ok: true, role: 'free', token: freeCode, name: users[freeCode].name, email: payload.email, tier: 'free', needsPhone: !users[freeCode].phone });
     }
 
     const deviceId = String(body.device || '').trim().slice(0, 100);
@@ -153,6 +153,50 @@ export default async (req) => {
     await store.setJSON('pending', pending.slice(-1000));
     return json({ ok: true });
   }
+  // Free account signup: captures name + email + phone as a lead, grants free tier.
+  if (action === 'free-signup') {
+    const name = String(body.name || '').slice(0, 80).trim();
+    const email = String(body.email || '').slice(0, 120).trim().toLowerCase();
+    const phone = String(body.phone || '').replace(/[^\d+]/g, '').slice(0, 15);
+    if (!name || !email || !phone) return json({ error: 'Please provide your name, email and phone number.' }, 400);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: 'Please enter a valid email address.' }, 400);
+    if (phone.replace(/\D/g, '').length < 10) return json({ error: 'Please enter a valid phone number.' }, 400);
+
+    // Already has a PAID subscription on this email -> tell them to use their code.
+    for (const [code, u] of Object.entries(users)) {
+      if (u && u.tier !== 'free' && String(u.email || '').toLowerCase().trim() === email && u.active !== false) {
+        return json({ ok: true, role: 'member', token: code, name: u.name, email: u.email, expiresAt: u.expiresAt || null });
+      }
+    }
+    // Reuse an existing free account for this email, topping up the phone if missing.
+    for (const [code, u] of Object.entries(users)) {
+      if (u && u.tier === 'free' && String(u.email || '').toLowerCase().trim() === email) {
+        if (!u.phone) { u.phone = phone; await store.setJSON('users', users); }
+        return json({ ok: true, role: 'free', token: code, name: u.name, email: u.email, tier: 'free' });
+      }
+    }
+    const code = genCode();
+    users[code] = {
+      name, email, phone, tier: 'free', active: true,
+      createdAt: new Date().toISOString(), expiresAt: null, devices: [],
+      source: String(body.source || 'form').slice(0, 20),
+      ref: cleanRef(body.ref) || null,
+    };
+    await store.setJSON('users', users);
+    return json({ ok: true, role: 'free', token: code, name, email, tier: 'free' });
+  }
+
+  // Attach a phone number to an existing free account (used after Google sign-in).
+  if (action === 'set-phone') {
+    const phone = String(body.phone || '').replace(/[^\d+]/g, '').slice(0, 15);
+    if (phone.replace(/\D/g, '').length < 10) return json({ error: 'Please enter a valid phone number.' }, 400);
+    const u = users[token];
+    if (!u) return json({ error: 'unauthorized' }, 401);
+    u.phone = phone;
+    await store.setJSON('users', users);
+    return json({ ok: true });
+  }
+
   if (action === 'login') {
     const a = authRole(body.token || '', users);
     if (a.role === 'none') return json({ ok: false, error: 'Invalid, inactive or expired code.' });
