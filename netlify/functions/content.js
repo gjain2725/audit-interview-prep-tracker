@@ -10,9 +10,28 @@ async function resolveRole(req) {
   try {
     const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
     const u = users[token];
-    if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) return 'member';
+    if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) {
+      return u.tier === 'free' ? 'free' : 'member';
+    }
   } catch (e) {}
   return 'none';
+}
+
+// Areas open on the free plan (the 'concepts' category). Must stay in step with
+// FREE_Q_CATEGORY in index.html.
+const FREE_AREA_IDS = ['process','materiality','risk','controls','fraud','assertions','sampling','analytical','documentation'];
+const isFreeQid = (qid) => FREE_AREA_IDS.some((a) => String(qid).startsWith(a + '-'));
+
+// A free plan must never receive the paid areas' edited answers over the API.
+function filterContentForFree(content) {
+  const c = content || {};
+  const q = {};
+  for (const id in (c.q || {})) if (isFreeQid(id)) q[id] = c.q[id];
+  const custom = {};
+  for (const areaId in (c.custom || {})) if (FREE_AREA_IDS.includes(areaId)) custom[areaId] = c.custom[areaId];
+  const attach = {};
+  for (const k in (c.attach || {})) if (isFreeQid(String(k).split('::')[0])) attach[k] = c.attach[k];
+  return { q, custom, areas: c.areas || {}, order: c.order || {}, attach, trash: [] };
 }
 
 // One-time migration: split the old shared workspace into admin-owned CONTENT
@@ -55,6 +74,7 @@ export default async (req) => {
   if (req.method === 'GET') {
     if (role === 'none') return json({ error: 'unauthorized' }, 401);
     const content = await seedIfNeeded(cstore);
+    if (role === 'free') return json({ content: filterContentForFree(content) });
     return json({ content });
   }
   if (req.method === 'POST') {
