@@ -1375,6 +1375,31 @@ function setHeaderProgress(){ /* progress ring removed from header; readiness sh
 const ACCOUNT_URL='/.netlify/functions/account';
 const CONTENT_URL='/.netlify/functions/content';
 const PSTATE_URL='/.netlify/functions/pstate';
+const STATS_URL='/.netlify/functions/stats';
+
+/* ---- lightweight private analytics (no third party, no cookies) ---- */
+function visitorId(){
+  try{
+    let v=localStorage.getItem('mb4_vid');
+    if(!v){ v=(crypto.randomUUID?crypto.randomUUID():String(Date.now())+Math.random().toString(36).slice(2)); localStorage.setItem('mb4_vid',v); }
+    return v;
+  }catch(_){ return ''; }
+}
+function campaignRef(){
+  try{
+    const m=/[?&]ref=([A-Za-z0-9_.-]{1,40})/.exec(location.search||'');
+    if(m){ sessionStorage.setItem('mb4_src', m[1]); return m[1]; }
+    return sessionStorage.getItem('mb4_src')||'';
+  }catch(_){ return ''; }
+}
+function track(event, extra){
+  try{
+    const body=Object.assign({event, vid:visitorId(), ref:campaignRef()}, extra||{});
+    const blob=new Blob([JSON.stringify(body)],{type:'application/json'});
+    if(navigator.sendBeacon){ navigator.sendBeacon(STATS_URL, blob); }
+    else { fetch(STATS_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),keepalive:true}).catch(()=>{}); }
+  }catch(_){ }
+}
 const FILES_URL='/.netlify/functions/files';
 const PORTAL_URL='/.netlify/functions/portal';
 const ANNOUNCEMENTS_URL='/.netlify/functions/announcements';
@@ -1943,6 +1968,9 @@ function router(){
   const hash = location.hash || '#/';
   const m = hash.match(/^#\/a\/([\w-]+)/);
   if(hash!=='#/admin'&&adminLiveTimer){ clearInterval(adminLiveTimer); adminLiveTimer=null; }
+  track('land');
+  if (m) track('view_area');
+  else if (hash === '#/request') track('view_request');
   window.scrollTo({top:0});
   stopSpeech();   // stop any audio when navigating
   renderHeaderControls();
@@ -1953,6 +1981,7 @@ function router(){
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
   else if (hash === '#/referrals') { if(isAdmin()){ renderReferrals(); } else { location.hash='#/'; renderHome(); } }
+  else if (hash === '#/stats') { if(isAdmin()){ renderStats(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/profile') { renderProfile(); }
   else if (hash === '#/subscription') { renderSubscription(); }
   else if (hash === '#/mock-interview') { renderMockInterview(); }
@@ -2445,7 +2474,7 @@ function doRequest(){
   if(!name||!email||!phone){ msg.textContent='Please fill name, email and phone.'; msg.className='text-xs text-center mt-1 text-rose-500'; return; }
   msg.textContent='Submitting…'; msg.className='text-xs text-center mt-1 text-slate-400';
   fetch(ACCOUNT_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'request',name,email,phone,ref})}).then(r=>r.json()).then(r=>{
-    if(r&&r.ok){ document.getElementById('reqForm').innerHTML='<div class="text-center py-4"><div class="text-4xl mb-2">✅</div><p class="font-semibold">Request received!</p><p class="text-sm text-slate-500 mt-1">Make sure you have sent the payment screenshot on WhatsApp to <b>8968549488</b>. We will WhatsApp your login code within ~4 hours.</p><a href="#/" class="inline-block mt-4 text-sm font-semibold text-brand-600 dark:text-brand-300 underline">Go to login</a></div>'; }
+    if(r&&r.ok){ track('submit_request'); document.getElementById('reqForm').innerHTML='<div class="text-center py-4"><div class="text-4xl mb-2">✅</div><p class="font-semibold">Request received!</p><p class="text-sm text-slate-500 mt-1">Make sure you have sent the payment screenshot on WhatsApp to <b>8968549488</b>. We will WhatsApp your login code within ~4 hours.</p><a href="#/" class="inline-block mt-4 text-sm font-semibold text-brand-600 dark:text-brand-300 underline">Go to login</a></div>'; }
     else { msg.textContent=(r&&r.error)||'Something went wrong.'; msg.className='text-xs text-center mt-1 text-rose-500'; }
   }).catch(()=>{ msg.textContent='Network error — please try again.'; msg.className='text-xs text-center mt-1 text-rose-500'; });
 }
@@ -3148,6 +3177,76 @@ function fmtLastActive(iso){
   return fmtExpiry(iso);
 }
 
+function renderStats(){
+  const app=document.getElementById('app');
+  if(!isAdmin()){ app.innerHTML='<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p></div>'; return; }
+  app.innerHTML=`<a href="#/admin" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to admin</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-xl sm:text-2xl font-extrabold">📈 Traffic &amp; funnel</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Private, built-in analytics. No third party, no cookies. Shows where visitors drop off so you know what to fix.</p>
+      <div class="flex gap-2 mt-3">
+        <button data-action="stats-range" data-days="7" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">7 days</button>
+        <button data-action="stats-range" data-days="30" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">30 days</button>
+        <button data-action="stats-range" data-days="90" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">90 days</button>
+      </div>
+    </div>
+    <div id="statsBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
+  loadStats(30);
+}
+function loadStats(days){
+  fetch(STATS_URL+'?days='+(days||30),{headers:{'x-auth':auth.token}}).then(r=>r.json()).then(d=>{
+    const body=document.getElementById('statsBody'); if(!body) return;
+    if(d&&d.error){ body.innerHTML='<div class="text-center py-10 text-rose-400">Could not load stats.</div>'; return; }
+    const t=d.totals||{views:0,visitors:0,events:{},refs:{}};
+    const e=t.events||{};
+    const card=(v,l,c)=>`<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 text-center">
+      <p class="text-2xl font-extrabold ${c||''}">${v}</p><p class="text-[11px] text-slate-500 mt-0.5">${l}</p></div>`;
+    const cards=`<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      ${card(t.visitors||0,'Unique visitors')}${card(t.views||0,'Page views')}
+      ${card(e.start_mcq||0,'MCQ tests started','text-cyan-500')}${card(e.submit_request||0,'Access requests','text-emerald-500')}
+    </div>`;
+    // funnel
+    const steps=[
+      ['Visited the site', t.visitors||0],
+      ['Opened an area', e.view_area||0],
+      ['Started an MCQ test', e.start_mcq||0],
+      ['Finished an MCQ test', e.finish_mcq||0],
+      ['Hit a locked answer', e.hit_paywall||0],
+      ['Opened the buy page', e.view_request||0],
+      ['Submitted a request', e.submit_request||0],
+    ];
+    const top=Math.max(1,...steps.map(s=>s[1]));
+    const funnel=`<div class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm mb-5">
+      <h2 class="font-semibold mb-3">Funnel</h2>
+      ${steps.map(([l,v])=>`<div class="mb-2.5">
+        <div class="flex justify-between text-xs mb-1"><span class="text-slate-600 dark:text-slate-300">${l}</span><span class="font-bold">${v}</span></div>
+        <div class="h-2 rounded-full bg-slate-200/70 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-cyan-400" style="width:${Math.round(v/top*100)}%"></div></div>
+      </div>`).join('')}
+      <p class="text-[11px] text-slate-400 mt-2">Each bar is relative to the biggest step. Big gaps between two bars show you exactly where people give up.</p>
+    </div>`;
+    // sources
+    const refs=Object.entries(t.refs||{}).sort((a,b)=>b[1]-a[1]);
+    const src=`<div class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm mb-5">
+      <h2 class="font-semibold mb-2">Where visitors came from</h2>
+      ${refs.length?refs.map(([k,v])=>`<div class="flex justify-between text-sm py-1.5 border-b border-slate-100 dark:border-white/5 last:border-0"><span class="font-mono">${esc(k)}</span><span class="font-bold">${v}</span></div>`).join('')
+        :'<p class="text-xs text-slate-400">No tagged sources yet. Add <code class="font-mono">?ref=telegram1</code> to the end of a link you share, and its visits show up here.</p>'}
+    </div>`;
+    // daily
+    const rows=(d.days||[]).filter(x=>x.views>0||x.visitors>0);
+    const daily=`<div class="rounded-2xl overflow-hidden bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="overflow-x-auto"><table class="w-full text-sm">
+      <thead><tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200/70 dark:border-white/10">
+        <th class="px-3 py-2.5">Date</th><th class="px-3 py-2.5 text-right">Visitors</th><th class="px-3 py-2.5 text-right">Views</th><th class="px-3 py-2.5 text-right">MCQ starts</th><th class="px-3 py-2.5 text-right">Requests</th>
+      </tr></thead><tbody>
+      ${rows.length?rows.reverse().map(r=>`<tr class="border-b border-slate-100/70 dark:border-white/5 last:border-0">
+        <td class="px-3 py-2">${r.date}</td><td class="px-3 py-2 text-right font-semibold">${r.visitors}</td><td class="px-3 py-2 text-right">${r.views}</td>
+        <td class="px-3 py-2 text-right">${(r.events||{}).start_mcq||0}</td><td class="px-3 py-2 text-right">${(r.events||{}).submit_request||0}</td></tr>`).join('')
+        :'<tr><td colspan="5" class="px-3 py-8 text-center text-slate-400">No traffic recorded yet. Data starts from the moment this was deployed.</td></tr>'}
+      </tbody></table></div></div>`;
+    body.innerHTML=cards+funnel+src+daily;
+  }).catch(()=>{ const b=document.getElementById('statsBody'); if(b) b.innerHTML='<div class="text-center py-10 text-rose-400">Network error.</div>'; });
+}
+
 function renderReferrals(){
   const app=document.getElementById('app');
   if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p></div>`; return; }
@@ -3213,7 +3312,7 @@ function renderAdmin(){
       <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers, monitor preparation progress and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
       <p class="text-[11px] text-emerald-500 mt-1">● Progress refreshes automatically every 30 seconds · private note text is never shown</p>
-      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button><a href="#/referrals" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20">💸 Referrals &amp; payouts</a></div>
+      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button><a href="#/referrals" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20">💸 Referrals &amp; payouts</a><a href="#/stats" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border border-cyan-400/20">📈 Traffic &amp; funnel</a></div>
     </div>
     <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
   loadAdmin();
@@ -4601,6 +4700,7 @@ app.addEventListener('click', async e => {
     const bank=mcqsFor(ar.id);
     const perms={}; bank.forEach((m,i)=>{ perms[i]=mcqShuffle(m.o.length); });
     mcqRun={ areaId:ar.id, order:mcqShuffle(bank.length), pos:0, answers:{}, perms };
+    track('start_mcq');
     renderMcqBox(ar);
     const box=document.getElementById('mcqBox'); if(box) box.scrollIntoView({behavior:'smooth',block:'start'});
     return;
@@ -4618,6 +4718,7 @@ app.addEventListener('click', async e => {
       const bank=mcqsFor(ar.id);
       const correct=mcqScoreOf(mcqRun,bank), total=mcqRun.order.length;
       mcqRecord(ar.id, Math.round(correct/total*100), correct, total);
+      track('finish_mcq');
     }
     renderMcqBox(ar);
     const box=document.getElementById('mcqBox'); if(box) box.scrollIntoView({behavior:'smooth',block:'start'});
@@ -4647,6 +4748,7 @@ app.addEventListener('click', async e => {
     return;
   }
   if (act==='admin-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
+  if (act==='stats-range'){ loadStats(parseInt(btn.dataset.days,10)||30); return; }
   if (act==='ref-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
   if (act==='ref-create'){
     const partner=(document.getElementById('refPartner').value||'').trim();
