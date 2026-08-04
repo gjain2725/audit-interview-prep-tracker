@@ -2020,6 +2020,7 @@ function router(){
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
   else if (hash === '#/referrals') { if(isAdmin()){ renderReferrals(); } else { location.hash='#/'; renderHome(); } }
+  else if (hash === '#/leads') { if(isAdmin()){ renderLeads(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/stats') { if(isAdmin()){ renderStats(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/profile') { renderProfile(); }
   else if (hash === '#/subscription') { renderSubscription(); }
@@ -3354,6 +3355,70 @@ function loadStats(days){
   }).catch(()=>{ const b=document.getElementById('statsBody'); if(b) b.innerHTML='<div class="text-center py-10 text-rose-400">Network error.</div>'; });
 }
 
+let leadsCache=[];
+function renderLeads(){
+  const app=document.getElementById('app');
+  if(!isAdmin()){ app.innerHTML='<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p></div>'; return; }
+  app.innerHTML=`<a href="#/admin" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to admin</a>
+    <div class="fade rounded-2xl p-5 sm:p-6 mb-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-xl sm:text-2xl font-extrabold">🧲 Leads &amp; contacts</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Everyone who created an account. Free signups are people who have shown interest but have not paid yet — message them on WhatsApp with an offer.</p>
+      <div class="flex flex-wrap gap-2 mt-3">
+        <button data-action="leads-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button>
+        <button data-action="leads-csv" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-400/20">⇩ Download all as CSV</button>
+        <button data-action="leads-wa" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">📋 Copy free-user phone numbers</button>
+      </div>
+    </div>
+    <div id="leadsBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
+  loadLeads();
+}
+function loadLeads(){
+  acct('list').then(r=>{
+    const body=document.getElementById('leadsBody'); if(!body) return;
+    const users=(r&&r.users)||[];
+    leadsCache=users;
+    const free=users.filter(u=>u.tier==='free');
+    const paid=users.filter(u=>u.tier!=='free');
+    const withPhone=free.filter(u=>(u.phone||'').trim()).length;
+    const card=(v,l,c)=>`<div class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 text-center"><p class="text-2xl font-extrabold ${c||''}">${v}</p><p class="text-[11px] text-slate-500 mt-0.5">${l}</p></div>`;
+    const cards=`<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      ${card(users.length,'Total accounts')}${card(free.length,'Free signups','text-amber-500')}
+      ${card(withPhone,'Free with phone','text-emerald-500')}${card(paid.length,'Paying subscribers','text-brand-500')}
+    </div>`;
+    const fmtDate=s=>{ try{ return s?new Date(s).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}):'—'; }catch(_){ return '—'; } };
+    const table=(rows,title,empty)=>`<div class="rounded-2xl overflow-hidden bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm mb-5">
+      <div class="px-4 py-3 border-b border-slate-200/70 dark:border-white/10"><h2 class="font-semibold text-sm">${title} <span class="text-slate-400 font-normal">(${rows.length})</span></h2></div>
+      ${rows.length?`<div class="overflow-x-auto"><table class="w-full text-sm">
+        <thead><tr class="text-left text-xs uppercase tracking-wide text-slate-400 border-b border-slate-200/70 dark:border-white/10">
+          <th class="px-3 py-2.5">Name</th><th class="px-3 py-2.5">Email</th><th class="px-3 py-2.5">Phone</th><th class="px-3 py-2.5">Joined</th><th class="px-3 py-2.5">Source</th>
+        </tr></thead><tbody>
+        ${rows.map(u=>`<tr class="border-b border-slate-100/70 dark:border-white/5 last:border-0">
+          <td class="px-3 py-2 font-medium">${esc(u.name||'—')}</td>
+          <td class="px-3 py-2"><a href="mailto:${esc(u.email||'')}" class="text-brand-500 hover:underline">${esc(u.email||'—')}</a></td>
+          <td class="px-3 py-2">${(u.phone||'').trim()?`<a href="https://wa.me/91${esc(String(u.phone).replace(/\\D/g,'').slice(-10))}" target="_blank" rel="noopener" class="text-emerald-500 hover:underline font-mono">${esc(u.phone)}</a>`:'<span class="text-rose-400 text-xs">not given</span>'}</td>
+          <td class="px-3 py-2 text-slate-500">${fmtDate(u.createdAt)}</td>
+          <td class="px-3 py-2 text-slate-500 text-xs">${esc(u.campaign||u.source||'—')}</td>
+        </tr>`).join('')}
+        </tbody></table></div>`:`<p class="px-4 py-8 text-center text-slate-400 text-sm">${empty}</p>`}
+    </div>`;
+    body.innerHTML=cards
+      + table(free,'🧲 Free signups — not paying yet','No free signups yet. Share your link and they will appear here.')
+      + table(paid,'💚 Paying subscribers','No paid subscribers yet.')
+      + `<p class="text-[11px] text-slate-400">Tap any phone number to open WhatsApp directly. Numbers are only present where the person gave one.</p>`;
+  }).catch(()=>{ const b=document.getElementById('leadsBody'); if(b) b.innerHTML='<div class="text-center py-10 text-rose-400">Could not load leads.</div>'; });
+}
+function leadsToCsv(){
+  const esc2=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const head=['Name','Email','Phone','Tier','Joined','Source','Referral code','Access code'];
+  const rows=leadsCache.map(u=>[u.name,u.email,u.phone,u.tier==='free'?'Free':'Paid',u.createdAt,u.source||'',u.campaign||u.referredBy||'',u.code]);
+  const csv=[head.map(esc2).join(','), ...rows.map(r=>r.map(esc2).join(','))].join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='missionbig4-leads-'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click(); setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
 function renderReferrals(){
   const app=document.getElementById('app');
   if(!isAdmin()){ app.innerHTML=`<div class="max-w-md mx-auto mt-10 text-center"><p class="text-4xl mb-3">🔒</p><p class="font-semibold">Admin access required.</p></div>`; return; }
@@ -3419,7 +3484,7 @@ function renderAdmin(){
       <h1 class="font-display text-xl sm:text-2xl font-extrabold">🛠️ Admin Portal</h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Approve subscribers, monitor preparation progress and manage access. Signed in as <b>${esc(auth.email||'Gaurav Jain')}</b>.</p>
       <p class="text-[11px] text-emerald-500 mt-1">● Progress refreshes automatically every 30 seconds · private note text is never shown</p>
-      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button><a href="#/referrals" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20">💸 Referrals &amp; payouts</a><a href="#/stats" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border border-cyan-400/20">📈 Traffic &amp; funnel</a></div>
+      <div class="flex flex-wrap gap-2 mt-3"><button data-action="admin-refresh" class="text-xs font-semibold px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10">↻ Refresh</button><button data-action="admin-export" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-brand-500/10 text-brand-600 dark:text-brand-300 border border-brand-400/20">⇩ Export candidate data (CSV)</button><a href="#/referrals" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-300 border border-amber-400/20">💸 Referrals &amp; payouts</a><a href="#/stats" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-600 dark:text-cyan-300 border border-cyan-400/20">📈 Traffic &amp; funnel</a><a href="#/leads" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-300 border border-emerald-400/20">🧲 Leads &amp; contacts</a></div>
     </div>
     <div id="adminBody"><div class="text-center py-10 text-slate-400">Loading…</div></div>`;
   loadAdmin();
@@ -4885,6 +4950,15 @@ app.addEventListener('click', async e => {
   if (act==='show-login'){ closeSidebar(); location.hash='#/'; renderGate(); return; }
   if (act==='do-free-signup'){ doFreeSignup(btn); return; }
   if (act==='paywall-cta'){ track('hit_paywall'); return; }
+  if (act==='leads-refresh'){ loadLeads(); return; }
+  if (act==='leads-csv'){ leadsToCsv(); return; }
+  if (act==='leads-wa'){
+    const nums=leadsCache.filter(u=>u.tier==='free'&&(u.phone||'').trim()).map(u=>String(u.phone).replace(/\D/g,'').slice(-10)).filter(Boolean);
+    if(!nums.length){ alert('No free users have shared a phone number yet.'); return; }
+    try{ navigator.clipboard.writeText(nums.join(', ')); btn.textContent='Copied '+nums.length+' numbers'; setTimeout(()=>{btn.textContent='📋 Copy free-user phone numbers';},1800); }
+    catch(_){ alert(nums.join(', ')); }
+    return;
+  }
   if (act==='stats-range'){ loadStats(parseInt(btn.dataset.days,10)||30); return; }
   if (act==='ref-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
   if (act==='ref-create'){
