@@ -538,6 +538,14 @@ const CAT_BY_ID  = Object.fromEntries(CATEGORIES.map(c => [c.id, c]));
 const MCQ_BANK = {};
 function mcqsFor(areaId){ return MCQ_BANK[areaId] || []; }
 
+/* ---- FREE TIER ----------------------------------------------------------
+   Guests (not logged in) get: every MCQ test, and full model answers for the
+   sample areas below. Everything else shows the question but locks the answer.
+   ------------------------------------------------------------------------ */
+const FREE_AREAS = new Set(['process','fraud']);
+function isFreeArea(areaId){ return FREE_AREAS.has(areaId); }
+function canSeeAnswer(area){ return authed() || isFreeArea(area.id); }
+
 MCQ_BANK['process'] = [
   { q:'Under SA 210, which of the following is a precondition for an audit that the auditor must establish BEFORE accepting the engagement?',
     o:['The entity maintains an internal audit function as required by section 138','An acceptable reporting framework and management acknowledging its responsibility','The predecessor auditor has issued a no objection certificate to the incoming firm','The audit fee has been approved by the shareholders at the annual general meeting'],
@@ -1974,8 +1982,13 @@ function router(){
   window.scrollTo({top:0});
   stopSpeech();   // stop any audio when navigating
   renderHeaderControls();
-  if (!authed()){                        // not logged in → gate (buy-access is public)
-    if (hash === '#/request') renderRequest(); else renderGate();
+  if (!authed()){
+    // Free tier: buy-access, the area browser and every MCQ test are open to guests.
+    if (hash === '#/request') { renderRequest(); return; }
+    if (hash === '#/questions') { renderQuestions(); return; }
+    if (m && AREA_BY_ID[m[1]]) { renderArea(AREA_BY_ID[m[1]]); return; }
+    if (hash === '#/' || hash === '') { renderQuestions(); return; }
+    renderGate();
     return;
   }
   if (hash === '#/request') { renderRequest(); }
@@ -2034,7 +2047,9 @@ function renderHeaderControls(){
   refreshHeaderAvatar();
   if(!nav||!footer) return;
   if(!authed()){
-    nav.innerHTML='';
+    nav.innerHTML=`${navLinkHTML('#/questions','📚','Browse free questions')}
+      <a href="#/request" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow mt-1"><span>🔓</span><span>Get full access — ₹199</span></a>
+      <button data-action="show-login" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 mt-1"><span>🔑</span><span>Log in</span></button>`;
     footer.innerHTML=`<button id="themeToggle" title="Toggle theme" class="w-full flex items-center justify-center gap-2 h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition text-sm font-semibold"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg><span>Theme</span></button>`;
     wireTheme(); return;
   }
@@ -4006,6 +4021,17 @@ function renderQuestions(){
   if (!catHtml.trim()) catHtml = `<div class="text-center py-16 text-slate-400"><p class="text-4xl mb-3">🔍</p><p class="font-semibold">No areas match "${esc(homeSearch)}".</p></div>`;
 
   app.innerHTML = `
+    ${!authed()?`<div class="fade rounded-2xl p-5 mb-5 bg-gradient-to-br from-brand-500/10 to-cyan-400/10 border border-brand-400/30">
+      <div class="flex items-start gap-3 flex-wrap sm:flex-nowrap">
+        <span class="text-2xl">🎁</span>
+        <div class="flex-1 min-w-0">
+          <h2 class="font-display font-extrabold text-base">Free to try — no signup needed</h2>
+          <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-1">Take <b>any of the ${AREAS.length} MCQ tests free</b> (${Object.values(MCQ_BANK).reduce((s,x)=>s+x.length,0)} hard questions with explanations), and read the <b>full model answers</b> in our sample areas: ${[...FREE_AREAS].map(id=>'<b>'+esc((AREA_BY_ID[id]||{}).title||id)+'</b>').join(' and ')}.</p>
+          <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1">Model answers in the other areas are locked. Unlock all ${totalQ} for ₹199/year.</p>
+        </div>
+        <a href="#/request" class="shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Unlock all →</a>
+      </div>
+    </div>`:''}
     <div class="fade rounded-2xl p-5 sm:p-6 mb-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
       <div class="flex flex-col sm:flex-row sm:items-center gap-3 justify-between">
         <div>
@@ -4462,12 +4488,27 @@ function qCard(area, q, a, i, reorderAllowed){
                 <p class="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-0.5">🎤 Interviewer's tip</p>
                 <p class="text-sm text-slate-600 dark:text-slate-300 italic whitespace-pre-wrap">${fmt(q.tip)}</p></div>`:''}
               ${!isAdmin()?`<button data-action="reveal-answer" data-id="${q.id}" class="mt-3 text-xs font-semibold text-slate-400 hover:${a.text.split(' ')[0]} transition">🙈 Hide answer again</button>`:''}
-            `:`
+            `: (canSeeAnswer(area) ? `
               <button data-action="reveal-answer" data-id="${q.id}" class="w-full py-5 rounded-xl border-2 border-dashed border-slate-300 dark:border-white/15 text-sm font-semibold text-slate-500 hover:${a.text.split(' ')[0]} hover:border-current transition flex items-center justify-center gap-2">
                 <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
                 Show model answer
               </button>
-            `}
+            ` : `
+              <div class="relative rounded-xl overflow-hidden border border-slate-200 dark:border-white/10">
+                <div class="p-4 select-none pointer-events-none" style="filter:blur(5px);opacity:.55">
+                  <p class="text-[11px] font-bold uppercase tracking-wider ${a.text} mb-1">Model answer · practical</p>
+                  <p class="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">${esc(answerPlainText(aText).slice(0,180))}…</p>
+                </div>
+                <div class="absolute inset-0 grid place-items-center bg-white/70 dark:bg-slate-950/70 backdrop-blur-[2px] px-4">
+                  <div class="text-center">
+                    <p class="text-2xl mb-1">🔒</p>
+                    <p class="text-sm font-bold">Model answer locked</p>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 mb-2.5">Free sample areas are open. Unlock all ${allQuestions().length} model answers for ₹199/year.</p>
+                    <a href="#/request" data-action="paywall-cta" class="inline-block px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r ${a.grad} text-white shadow">Unlock full access →</a>
+                  </div>
+                </div>
+              </div>
+            `)}
             </div>
 
             ${isAdmin()?`<div class="mt-3 flex items-center gap-3 text-xs flex-wrap">
@@ -4748,6 +4789,8 @@ app.addEventListener('click', async e => {
     return;
   }
   if (act==='admin-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
+  if (act==='show-login'){ closeSidebar(); renderGate(); return; }
+  if (act==='paywall-cta'){ track('hit_paywall'); return; }
   if (act==='stats-range'){ loadStats(parseInt(btn.dataset.days,10)||30); return; }
   if (act==='ref-copy'){ const c=btn.dataset.code; try{navigator.clipboard.writeText(c);}catch(_){}; btn.textContent='Copied'; setTimeout(()=>{btn.textContent='Copy';},1200); return; }
   if (act==='ref-create'){
