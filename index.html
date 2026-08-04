@@ -2365,7 +2365,7 @@ function handleGoogleLogin(response){
       if(btn){ btn.disabled=false; }
       return;
     }
-    auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null };
+    auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null, needsPhone: !!r.needsPhone };
     saveAuth();
     if(r.role==='free') track('free_signup'); else track('login');
     renderHeaderControls();
@@ -2373,7 +2373,7 @@ function handleGoogleLogin(response){
     else if(r.role==='free'){ location.hash='#/questions'; }
     else { location.hash='#/'; }
     router(); loadFromCloud();
-    if(r.needsPhone) setTimeout(promptForPhone, 400);
+    // Phone is asked later, after the person has actually got value (see MCQ results).
   }).catch(()=>{
     showLoginErr('Network error during Google login — please try again.');
     if(btn){ btn.disabled=false; }
@@ -2402,6 +2402,43 @@ function doFreeSignup(btn){
       btn.disabled=false; btn.textContent=orig;
     }
   }).catch(()=>{ set('Network error — please try again.','text-rose-400'); btn.disabled=false; btn.textContent=orig; });
+}
+
+/* Progressive contact capture: only asked AFTER the person has finished a test,
+   and framed as a swap for the free PDF rather than a demand at the door. */
+function phoneCaptureHTML(){
+  if(auth.role!=='free' || !auth.needsPhone) return '';
+  try{ if(sessionStorage.getItem('mb4_phone_skip')==='1') return ''; }catch(_){}
+  return `<div id="phoneCapture" class="mt-5 rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-emerald-500/10 to-brand-500/10 border border-emerald-400/30">
+    <div class="flex items-start gap-3">
+      <span class="text-2xl shrink-0">🎁</span>
+      <div class="flex-1 min-w-0">
+        <p class="font-bold text-sm">Want the free 50-question PDF on WhatsApp?</p>
+        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Drop your WhatsApp number and we will send the PDF plus any subscriber offers. No spam.</p>
+        <div class="flex gap-2 mt-2.5 flex-wrap">
+          <input id="capPhone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit WhatsApp number"
+            class="flex-1 min-w-[190px] text-sm rounded-xl bg-white/80 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-400" />
+          <button data-action="cap-phone-save" class="px-4 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow">Send it</button>
+          <button data-action="cap-phone-skip" class="px-3 py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-slate-600">Not now</button>
+        </div>
+        <p id="capPhoneMsg" class="text-[11px] mt-1.5"></p>
+      </div>
+    </div>
+  </div>`;
+}
+function savePhoneFromCapture(){
+  const el=document.getElementById('capPhone'); if(!el) return;
+  const msg=document.getElementById('capPhoneMsg');
+  const phone=(el.value||'').trim();
+  if(phone.replace(/\D/g,'').length<10){ if(msg){ msg.textContent='Please enter a valid 10-digit number.'; msg.className='text-[11px] mt-1.5 text-rose-500'; } return; }
+  if(msg){ msg.textContent='Saving…'; msg.className='text-[11px] mt-1.5 text-slate-400'; }
+  acct('set-phone',{phone}).then(r=>{
+    if(r&&r.ok){
+      auth.needsPhone=false; saveAuth(); track('phone_given');
+      const box=document.getElementById('phoneCapture');
+      if(box) box.innerHTML='<p class="text-sm font-bold text-emerald-600 dark:text-emerald-300">✅ Got it — we will WhatsApp your PDF shortly.</p>';
+    } else if(msg){ msg.textContent=(r&&r.error)||'Could not save, please try again.'; msg.className='text-[11px] mt-1.5 text-rose-500'; }
+  }).catch(()=>{ if(msg){ msg.textContent='Network error — please try again.'; msg.className='text-[11px] mt-1.5 text-rose-500'; } });
 }
 
 function promptForPhone(){
@@ -4305,6 +4342,7 @@ function mcqSectionHTML(area){
         <button data-action="mcq-start" data-area="${area.id}" class="mt-4 px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r ${a.grad} text-white shadow">🔁 Retake</button>
         <button data-action="mcq-exit" data-area="${area.id}" class="mt-4 ml-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button>
       </div>
+      ${phoneCaptureHTML()}
       <div class="mt-5 space-y-2.5">${review}</div>
     </div>`;
   }
@@ -4950,6 +4988,12 @@ app.addEventListener('click', async e => {
   if (act==='show-login'){ closeSidebar(); location.hash='#/'; renderGate(); return; }
   if (act==='do-free-signup'){ doFreeSignup(btn); return; }
   if (act==='paywall-cta'){ track('hit_paywall'); return; }
+  if (act==='cap-phone-save'){ savePhoneFromCapture(); return; }
+  if (act==='cap-phone-skip'){
+    try{ sessionStorage.setItem('mb4_phone_skip','1'); }catch(_){}
+    const box=document.getElementById('phoneCapture'); if(box) box.remove();
+    return;
+  }
   if (act==='leads-refresh'){ loadLeads(); return; }
   if (act==='leads-csv'){ leadsToCsv(); return; }
   if (act==='leads-wa'){

@@ -15,6 +15,7 @@ const EVENTS = new Set([
   'view_request',    // opened the buy-access page
   'submit_request',  // submitted the access request form
   'free_signup',     // created a free account
+  'phone_given',     // free user shared a WhatsApp number
   'login',           // logged in
 ]);
 
