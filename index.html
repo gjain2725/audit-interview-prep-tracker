@@ -1396,6 +1396,7 @@ const ACCOUNT_URL='/.netlify/functions/account';
 const CONTENT_URL='/.netlify/functions/content';
 const PSTATE_URL='/.netlify/functions/pstate';
 const STATS_URL='/.netlify/functions/stats';
+const CASHFREE_FORM_URL='https://payments.cashfree.com/forms/missionbig4';
 
 /* ---- lightweight private analytics (no third party, no cookies) ---- */
 function visitorId(){
@@ -2574,27 +2575,23 @@ function renderRequest(){
         ${featureTickerHTML({height:'220px'})}
         <p class="text-[11px] text-slate-400 mt-3 text-center">1 full year · works on mobile &amp; laptop · under ₹17/month</p>
       </div>
-      <div class="mt-5 overflow-hidden rounded-2xl border border-cyan-400/25 bg-slate-950 text-white shadow-lg shadow-cyan-950/10">
-        <div class="flex items-center justify-between gap-4 px-4 py-3">
-          <div>
-            <p class="text-sm font-bold">Scan &amp; pay using any UPI app</p>
-            <p class="mt-0.5 text-xs text-slate-300">Payee: Gaurav Jain</p>
+      <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
+        class="mt-5 group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/35 active:scale-[.99] transition">
+        <div class="rounded-[15px] bg-slate-950 px-5 py-4 flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">Secure payment</p>
+            <p class="text-lg font-black text-white mt-0.5 leading-tight">Pay ₹199 &amp; get 1 year access</p>
+            <p class="text-[11px] text-slate-400 mt-1">UPI · Cards · Net banking · Wallets — powered by Cashfree</p>
           </div>
-          <span class="shrink-0 rounded-full bg-cyan-400/15 px-3 py-1 text-sm font-extrabold text-cyan-300">₹199</span>
+          <span class="shrink-0 inline-flex items-center gap-1.5 px-5 py-3 rounded-xl text-sm font-black bg-white text-slate-900 shadow group-hover:gap-2.5 transition-all">Pay now <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
         </div>
-        <div class="bg-white p-3 sm:p-4">
-          <img src="/assets/paytm-payment-qr.png" width="327" height="342" alt="Paytm payment QR code for Gaurav Jain, UPI ID 8968549488@ptsbi" class="mx-auto h-auto w-full max-w-[360px] rounded-xl border border-slate-200" />
-        </div>
-        <div class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-xs">
-          <span class="text-slate-400">UPI ID</span>
-          <span class="select-all rounded-lg bg-white/10 px-2.5 py-1 font-mono font-bold text-cyan-200">8968549488@ptsbi</span>
-        </div>
-      </div>
+      </a>
+      <p class="mt-2 text-center text-[11px] text-slate-400">🔒 Payments are handled by Cashfree. We never see your card or UPI details.</p>
       <ol class="mt-5 space-y-3 text-sm">
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">1</span><div><b>Scan the QR above and pay ₹199</b>, or pay directly to <span class="font-mono font-bold text-brand-600 dark:text-brand-300 select-all">8968549488@ptsbi</span>.</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">2</span><div><b>Send the payment screenshot on WhatsApp</b> to <span class="font-mono font-bold text-emerald-600 dark:text-emerald-300 select-all">8968549488</span>, with your <b>name, email &amp; phone</b>.</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">3</span><div><b>Submit your details below</b> so we can match your payment.</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-xs font-bold">4</span><div>We verify &amp; <b>WhatsApp you a login code within ~4 hours</b>. Enter it on the login page — done!</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">1</span><div><b>Tap "Pay now" above</b> and complete the ₹199 payment. Use the <b>same name, email and phone</b> you enter below.</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">2</span><div><b>Submit your details below</b> so we can match your payment to your account.</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-xs font-bold">3</span><div>We activate your access and <b>WhatsApp your login code within ~4 hours</b>. Enter it on the login page — done!</div></li>
+        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-slate-400 text-white text-xs font-bold">?</span><div class="text-slate-500 dark:text-slate-400">Any problem with payment? WhatsApp <span class="font-mono font-bold text-emerald-600 dark:text-emerald-300 select-all">8968549488</span>.</div></li>
       </ol>
       <div class="mt-6 pt-5 border-t border-slate-200/60 dark:border-white/10">
         <div id="reqForm" class="grid gap-2.5">
