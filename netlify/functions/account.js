@@ -1,4 +1,5 @@
 import { getStore } from '@netlify/blobs';
+import crypto from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 
 const json = (o, s = 200) =>
@@ -27,6 +28,30 @@ function gen5(refs) {
 }
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '415640736608-v21kq5d32csvtqovptdcg1l4ckdjesjt.apps.googleusercontent.com';
 const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+
+
+// ---- password hashing (scrypt, per-user salt; no external dependency) ----
+function hashPassword(password, salt) {
+  const s = salt || crypto.randomBytes(16).toString('hex');
+  const dk = crypto.scryptSync(String(password), s, 64).toString('hex');
+  return s + ':' + dk;
+}
+function verifyPassword(password, stored) {
+  try {
+    if (!stored || typeof stored !== 'string' || stored.indexOf(':') < 0) return false;
+    const [salt, dk] = stored.split(':');
+    const calc = crypto.scryptSync(String(password), salt, 64).toString('hex');
+    const a = Buffer.from(calc, 'hex'), b = Buffer.from(dk, 'hex');
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch (e) { return false; }
+}
+function passwordProblem(pw) {
+  const v = String(pw || '');
+  if (v.length < 8) return 'Password must be at least 8 characters.';
+  if (v.length > 200) return 'Password is too long.';
+  if (!/[a-zA-Z]/.test(v) || !/[0-9]/.test(v)) return 'Password must contain at least one letter and one number.';
+  return null;
+}
 
 function authRole(token, users) {
   const admin = process.env.ADMIN_SECRET;
@@ -283,6 +308,54 @@ export default async (req) => {
   }
   if (action === 'delete') { delete users[body.code]; await store.setJSON('users', users); return json({ ok: true }); }
   if (action === 'dismiss') { const pending = await pendingOf(store); await store.setJSON('pending', pending.filter(x => x.id !== body.id)); return json({ ok: true }); }
+
+  // ----- password login -----
+  if (action === 'set-password') {
+    // caller must already be signed in (google / code / admin token)
+    const u = users[token];
+    if (!u) return json({ error: 'unauthorized' }, 401);
+    const problem = passwordProblem(body.password);
+    if (problem) return json({ error: problem }, 400);
+    u.passwordHash = hashPassword(body.password);
+    u.passwordSetAt = new Date().toISOString();
+    await store.setJSON('users', users);
+    return json({ ok: true });
+  }
+
+  if (action === 'password-login') {
+    const email = String(body.email || '').toLowerCase().trim();
+    const password = String(body.password || '');
+    if (!email || !password) return json({ ok: false, error: 'Enter your email and password.' }, 400);
+    let code = null, user = null;
+    for (const [c, u] of Object.entries(users)) {
+      if (u && u.passwordHash && String(u.email || '').toLowerCase().trim() === email) { code = c; user = u; break; }
+    }
+    // Same message either way, so this cannot be used to discover which emails exist.
+    const bad = () => json({ ok: false, error: 'Incorrect email or password.' });
+    if (!user || !verifyPassword(password, user.passwordHash)) return bad();
+    if (user.active === false) return json({ ok: false, error: 'This account has been deactivated.' });
+    if (user.expiresAt && Date.parse(user.expiresAt) <= Date.now()) {
+      return json({ ok: false, error: 'Your subscription has expired. Please renew to continue.' });
+    }
+    const deviceId = String(body.device || '').trim().slice(0, 100);
+    if (deviceId && user.tier !== 'free') {
+      const devices = Array.isArray(user.devices) ? user.devices : [];
+      const existing = devices.find((d) => d.id === deviceId);
+      if (existing) { existing.lastSeen = new Date().toISOString(); await store.setJSON('users', users); }
+      else if (devices.length >= 2) return json({ ok: false, error: 'This account is in use on 2 devices. Ask admin to reset devices.' });
+      else { devices.push({ id: deviceId, lastSeen: new Date().toISOString() }); user.devices = devices; await store.setJSON('users', users); }
+    }
+    return json({
+      ok: true,
+      role: user.tier === 'free' ? 'free' : 'member',
+      token: code,
+      name: user.name,
+      email: user.email,
+      expiresAt: user.expiresAt || null,
+      tier: user.tier || 'paid',
+      needsPhone: !user.phone,
+    });
+  }
 
   // ----- referral partners -----
   if (action === 'ref-create') {

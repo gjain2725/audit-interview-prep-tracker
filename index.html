@@ -2044,6 +2044,7 @@ function router(){
   if (hash === '#/request') { renderRequest(); }
   else if (hash === '#/admin') { renderAdmin(); }
   else if (hash === '#/referrals') { if(isAdmin()){ renderReferrals(); } else { location.hash='#/'; renderHome(); } }
+  else if (hash === '#/set-password') { renderSetPassword(); }
   else if (hash === '#/leads') { if(isAdmin()){ renderLeads(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/stats') { if(isAdmin()){ renderStats(); } else { location.hash='#/'; renderHome(); } }
   else if (hash === '#/profile') { renderProfile(); }
@@ -2123,6 +2124,7 @@ function renderHeaderControls(){
     ${navLinkHTML('#/round-checklist','📅','Round Checklist')}
     ${navLinkHTML('#/pdf-generator','📄','Study Guide PDF')}
     ${navLinkHTML('#/subscription','💳','My subscription')}
+    ${navLinkHTML('#/set-password','🔑','Set my password')}
     ${navLinkHTML('#/profile','👤','My profile')}
     ${isAdmin()?navLinkHTML('#/admin','🛠️','Admin portal'):''}
     ${isAdmin()?navLinkHTML('#/vault','🗂️','Files'):''}
@@ -2283,6 +2285,19 @@ function renderGate(){
                 <p id="loginErr" class="text-xs font-medium text-rose-400 mt-2 hidden flex items-center gap-1"><span>⚠️</span><span id="loginErrMsg"></span></p>
               </div>
 
+              <div class="relative my-3 flex items-center justify-center">
+                <div class="border-t border-white/10 w-full"></div>
+                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">OR EMAIL &amp; PASSWORD</span>
+              </div>
+              <div class="space-y-2">
+                <input id="pwEmail" type="email" autocomplete="username" placeholder="Email address"
+                  class="w-full text-sm rounded-2xl bg-black/40 border border-slate-700 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 text-white px-4 py-3 outline-none transition placeholder:text-slate-600" />
+                <input id="pwPass" type="password" autocomplete="current-password" placeholder="Password"
+                  class="w-full text-sm rounded-2xl bg-black/40 border border-slate-700 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 text-white px-4 py-3 outline-none transition placeholder:text-slate-600" />
+                <button data-action="do-password-login" id="pwLoginBtn" class="w-full py-3 rounded-2xl text-sm font-bold border border-brand-400/40 bg-brand-500/15 text-brand-200 hover:bg-brand-500/25 transition">Log in with password</button>
+                <p class="text-[10.5px] text-slate-500 text-center">Set a password from <b>My subscription</b> after your first sign-in.</p>
+              </div>
+
               <button data-action="do-login" id="loginSubmitBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg shadow-brand-500/30 hover:opacity-95 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 group">
                 <span>Enter Workspace</span>
                 <span class="group-hover:translate-x-1 transition-transform">→</span>
@@ -2332,6 +2347,8 @@ function renderGate(){
 
   const inp=document.getElementById('loginCode');
   if(inp) inp.addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+  const pwp=document.getElementById('pwPass');
+  if(pwp) pwp.addEventListener('keydown',e=>{ if(e.key==='Enter') doPasswordLogin(); });
   const admInp=document.getElementById('adminCodeInput');
   if(admInp) admInp.addEventListener('keydown',e=>{ if(e.key==='Enter') doAdminPaneLogin(); });
 
@@ -2721,47 +2738,110 @@ function renderPolicy(hash){
   window.scrollTo({top:0});
 }
 
+function renderSetPassword(){
+  const app=document.getElementById('app');
+  if(!signedIn()){ location.hash='#/'; return; }
+  app.innerHTML=`<div class="max-w-md mx-auto mt-6 fade">
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back</a>
+    <div class="rounded-2xl p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <h1 class="font-display text-xl font-extrabold">🔑 Set your password</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Choose a password so you can log in with your email instead of Google. Your email is <b>${esc(auth.email||'your account email')}</b>.</p>
+      <div class="grid gap-2.5 mt-4">
+        <input id="spPass" type="password" autocomplete="new-password" placeholder="New password"
+          class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+        <input id="spPass2" type="password" autocomplete="new-password" placeholder="Repeat new password"
+          class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+        <p class="text-[11px] text-slate-400">At least 8 characters, with one letter and one number.</p>
+        <button data-action="do-set-password" class="mt-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Save password</button>
+        <p id="spMsg" class="text-xs text-center mt-1"></p>
+      </div>
+    </div>
+  </div>`;
+}
+function doPasswordLogin(){
+  const em=(document.getElementById('pwEmail').value||'').trim();
+  const pw=document.getElementById('pwPass').value||'';
+  const btn=document.getElementById('pwLoginBtn');
+  if(!em||!pw){ showLoginErr('Enter your email and password.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  acct('password-login',{email:em,password:pw,device:getDeviceId()}).then(r=>{
+    if(!r||!r.ok){ showLoginErr((r&&r.error)||'Incorrect email or password.'); if(btn){btn.disabled=false;btn.textContent='Log in with password';} return; }
+    auth={ token:r.token, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null, needsPhone:!!r.needsPhone };
+    saveAuth(); track('login'); renderHeaderControls();
+    location.hash = r.role==='admin' ? '#/admin' : (r.role==='free' ? '#/questions' : '#/');
+    router(); loadFromCloud();
+  }).catch(()=>{ showLoginErr('Network error — please try again.'); if(btn){btn.disabled=false;btn.textContent='Log in with password';} });
+}
+function doSetPassword(){
+  const a=document.getElementById('spPass').value||'', b=document.getElementById('spPass2').value||'';
+  const msg=document.getElementById('spMsg');
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.className='text-xs text-center mt-1 '+(ok?'text-emerald-500':'text-rose-500'); } };
+  if(a!==b){ say('Both passwords must match.'); return; }
+  if(a.length<8||!/[a-zA-Z]/.test(a)||!/[0-9]/.test(a)){ say('Use at least 8 characters with one letter and one number.'); return; }
+  say('Saving…', true);
+  acct('set-password',{password:a}).then(r=>{
+    if(r&&r.ok){ say('✅ Password saved. You can now log in with your email and password.', true); }
+    else say((r&&r.error)||'Could not save password.');
+  }).catch(()=>say('Network error — please try again.'));
+}
+
 function renderRequest(){
   const app=document.getElementById('app');
   app.innerHTML=`<div class="max-w-lg mx-auto mt-6 fade">
-    ${authed()?'':'<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back to login</a>'}
+    ${signedIn()?'':'<a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back</a>'}
+
     <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
-      <h1 class="font-display text-2xl font-extrabold">Get access — <span class="gradient-text">₹199 / year</span></h1>
-      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access to the complete audit-interview question bank with model answers, examples, audio revision, instant answer feedback and more.</p>
-      <div class="mt-4 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[.07] to-brand-500/[.05] p-4">
+      <h1 class="font-display text-2xl font-extrabold">Get full access — <span class="gradient-text">₹199 / year</span></h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">One payment. Instant access. No code to wait for.</p>
+
+      <!-- 1. PAYMENT FIRST -->
+      <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
+        class="mt-5 group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[.99] transition">
+        <div class="rounded-[15px] bg-slate-950 px-5 py-5 text-center">
+          <p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">Secure payment</p>
+          <p class="text-2xl font-black text-white mt-1 leading-tight">Pay ₹199 → get access instantly</p>
+          <p class="text-[11px] text-slate-400 mt-1.5">UPI · Cards · Net banking · Wallets — powered by Cashfree</p>
+          <span class="mt-4 inline-flex items-center gap-2 px-7 py-3 rounded-xl text-base font-black bg-white text-slate-900 shadow group-hover:gap-3 transition-all">Pay now <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
+        </div>
+      </a>
+      <p class="mt-2.5 text-center text-[11px] text-slate-400">🔒 Cashfree handles the payment. We never see your card or UPI details.</p>
+
+      <!-- 2. WHAT HAPPENS NEXT (automatic) -->
+      <div class="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/[.06] p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300 mb-2.5">⚡ Access is automatic</p>
+        <ol class="space-y-2.5 text-[13px]">
+          <li class="flex gap-2.5"><span class="h-5 w-5 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">1</span><div>Pay ₹199 above. <b>Use your real email address</b> at checkout — that is what unlocks your account.</div></li>
+          <li class="flex gap-2.5"><span class="h-5 w-5 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">2</span><div>Come back and <b>sign in with Google</b> using that same email. Your full access is already there.</div></li>
+          <li class="flex gap-2.5"><span class="h-5 w-5 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">3</span><div>Prefer not to use Google? <b>Set your own password</b> from your profile and log in with email and password.</div></li>
+        </ol>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-3">No access code to wait for and nothing to send us. If anything goes wrong, WhatsApp <span class="font-mono font-bold text-emerald-600 dark:text-emerald-300 select-all">8968549488</span> and we will sort it within 4 hours.</p>
+      </div>
+
+      <!-- 3. WHAT YOU GET -->
+      <div class="mt-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[.07] to-brand-500/[.05] p-4">
         ${interviewersBadgeHTML('mb-3')}
         <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Here's everything your ₹199 unlocks 👇</p>
         ${featureTickerHTML({height:'220px'})}
         <p class="text-[11px] text-slate-400 mt-3 text-center">1 full year · works on mobile &amp; laptop · under ₹17/month</p>
       </div>
-      <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
-        class="mt-5 group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/35 active:scale-[.99] transition">
-        <div class="rounded-[15px] bg-slate-950 px-5 py-4 flex items-center justify-between gap-3">
-          <div class="min-w-0">
-            <p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">Secure payment</p>
-            <p class="text-lg font-black text-white mt-0.5 leading-tight">Pay ₹199 &amp; get 1 year access</p>
-            <p class="text-[11px] text-slate-400 mt-1">UPI · Cards · Net banking · Wallets — powered by Cashfree</p>
-          </div>
-          <span class="shrink-0 inline-flex items-center gap-1.5 px-5 py-3 rounded-xl text-sm font-black bg-white text-slate-900 shadow group-hover:gap-2.5 transition-all">Pay now <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
-        </div>
-      </a>
-      <p class="mt-2 text-center text-[11px] text-slate-400">🔒 Payments are handled by Cashfree. We never see your card or UPI details.</p>
-      <ol class="mt-5 space-y-3 text-sm">
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">1</span><div><b>Tap "Pay now" above</b> and complete the ₹199 payment. Use the <b>same name, email and phone</b> you enter below.</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-brand-500 text-white text-xs font-bold">2</span><div><b>Submit your details below</b> so we can match your payment to your account.</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-xs font-bold">3</span><div>We activate your access and <b>WhatsApp your login code within ~4 hours</b>. Enter it on the login page — done!</div></li>
-        <li class="flex gap-3"><span class="h-6 w-6 shrink-0 grid place-items-center rounded-full bg-slate-400 text-white text-xs font-bold">?</span><div class="text-slate-500 dark:text-slate-400">Any problem with payment? WhatsApp <span class="font-mono font-bold text-emerald-600 dark:text-emerald-300 select-all">8968549488</span>.</div></li>
-      </ol>
-      <div class="mt-6 pt-5 border-t border-slate-200/60 dark:border-white/10">
-        <div id="reqForm" class="grid gap-2.5">
+
+      <!-- 4. OPTIONAL backup details -->
+      <details class="mt-5 rounded-xl border border-slate-200 dark:border-white/10 px-4 py-3">
+        <summary class="text-[12px] font-semibold text-slate-500 dark:text-slate-400 cursor-pointer">Paid but cannot get in? Leave your details here</summary>
+        <p class="text-[11px] text-slate-400 mt-2">Only needed if automatic activation did not work — for example if you paid with a different email.</p>
+        <div id="reqForm" class="grid gap-2.5 mt-3">
           <input id="reqName" placeholder="Full name" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
-          <input id="reqEmail" type="email" placeholder="Email" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+          <input id="reqEmail" type="email" placeholder="Email used at checkout" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
           <input id="reqPhone" placeholder="Phone (same as WhatsApp)" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
           <input id="reqRef" placeholder="Referral code (optional)" maxlength="8" class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400 uppercase tracking-wider font-mono" />
-          <button data-action="do-request" class="mt-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Submit my request</button>
+          <button data-action="do-request" class="mt-1 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Submit my details</button>
           <p id="reqMsg" class="text-xs text-center mt-1"></p>
         </div>
-      </div>
+      </details>
+
+      <p class="mt-4 text-center text-[11px] text-slate-400">
+        By paying you agree to our <a href="#/terms" class="underline">Terms</a>, <a href="#/privacy" class="underline">Privacy policy</a> and <a href="#/refund" class="underline">Refund policy</a>.
+      </p>
     </div>
   </div>`;
 }
@@ -5121,6 +5201,8 @@ app.addEventListener('click', async e => {
     const ar=AREA_BY_ID[btn.dataset.area]; mcqRun=null; if(ar) renderMcqBox(ar);
     return;
   }
+  if (act==='do-password-login'){ doPasswordLogin(); return; }
+  if (act==='do-set-password'){ doSetPassword(); return; }
   if (act==='do-request'){ doRequest(); return; }
   if (act==='logout'){ if(confirm('Log out?')) logout(); return; }
   if (act==='admin-refresh'){ loadAdmin(); return; }
