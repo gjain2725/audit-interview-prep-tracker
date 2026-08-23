@@ -16,7 +16,10 @@ import crypto from 'node:crypto';
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-const SECRET = process.env.CASHFREE_CLIENT_SECRET || '';
+// Live and test mode sign webhooks with different secrets, so accept either.
+// Add CASHFREE_CLIENT_SECRET_TEST while testing; remove it once you go live.
+const SECRETS = [process.env.CASHFREE_CLIENT_SECRET, process.env.CASHFREE_CLIENT_SECRET_TEST].filter(Boolean);
+const SECRET = SECRETS[0] || '';
 const ACCESS_DAYS = parseInt(process.env.CASHFREE_ACCESS_DAYS || '365', 10);
 
 function genCode() {
@@ -29,12 +32,15 @@ function genCode() {
 
 // Cashfree signs: base64( HMAC_SHA256( timestamp + rawBody, secret ) )
 function verify(rawBody, timestamp, signature) {
-  if (!SECRET || !signature || !timestamp) return false;
-  try {
-    const expected = crypto.createHmac('sha256', SECRET).update(timestamp + rawBody).digest('base64');
-    const a = Buffer.from(expected); const b = Buffer.from(String(signature));
-    return a.length === b.length && crypto.timingSafeEqual(a, b);
-  } catch (e) { return false; }
+  if (!SECRETS.length || !signature || !timestamp) return false;
+  const given = Buffer.from(String(signature));
+  for (const sec of SECRETS) {
+    try {
+      const expected = Buffer.from(crypto.createHmac('sha256', sec).update(timestamp + rawBody).digest('base64'));
+      if (expected.length === given.length && crypto.timingSafeEqual(expected, given)) return true;
+    } catch (e) { /* try the next secret */ }
+  }
+  return false;
 }
 
 const pick = (...vals) => vals.find(v => v != null && String(v).trim() !== '') || '';
@@ -53,12 +59,12 @@ export default async (req) => {
         if (v) rows.push(v);
       }
       rows.sort((a, b) => String(b.at).localeCompare(String(a.at)));
-      return json({ count: rows.length, payments: rows, configured: !!SECRET });
+      return json({ count: rows.length, payments: rows, configured: SECRETS.length, modes: { live: !!process.env.CASHFREE_CLIENT_SECRET, test: !!process.env.CASHFREE_CLIENT_SECRET_TEST } });
     } catch (e) { return json({ count: 0, payments: [], configured: !!SECRET }); }
   }
 
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
-  if (!SECRET) return json({ error: 'CASHFREE_CLIENT_SECRET not configured' }, 503);
+  if (!SECRETS.length) return json({ error: 'CASHFREE_CLIENT_SECRET not configured' }, 503);
 
   const raw = await req.text();
   const ts = req.headers.get('x-webhook-timestamp') || '';
