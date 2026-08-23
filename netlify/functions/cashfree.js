@@ -43,6 +43,45 @@ function verify(rawBody, timestamp, signature) {
   return false;
 }
 
+
+// ---- optional receipt email -------------------------------------------------
+// Sends the access details when RESEND_API_KEY is configured. If it is not set,
+// provisioning still works and the buyer uses the on-screen claim page instead.
+const RESEND_KEY = process.env.RESEND_API_KEY || '';
+const MAIL_FROM = process.env.MAIL_FROM || 'Mission Big 4 <onboarding@resend.dev>';
+const SITE = process.env.SITE_URL || 'https://missionbig4.netlify.app';
+
+async function sendAccessEmail(to, name, code, expiresAt) {
+  if (!RESEND_KEY || !to) return { skipped: true };
+  const nice = (() => { try { return new Date(expiresAt).toDateString(); } catch (e) { return ''; } })();
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0d1330">',
+    '<h2 style="margin:0 0 4px">Welcome to Mission Big 4</h2>',
+    '<p style="color:#5b6784;margin:0 0 18px">Your payment of Rs 199 is confirmed. You have full access for one year',
+    nice ? ' (until ' + nice + ')' : '', '.</p>',
+    '<p style="margin:0 0 6px"><b>Your access code</b></p>',
+    '<p style="font-family:monospace;font-size:20px;font-weight:bold;letter-spacing:2px;background:#eef2fb;padding:12px 16px;border-radius:10px;margin:0 0 18px">', code, '</p>',
+    '<p style="margin:0 0 8px">Two ways to get in:</p>',
+    '<ol style="color:#334155;line-height:1.7;margin:0 0 18px;padding-left:20px">',
+    '<li>Sign in with Google using <b>', to, '</b> - your access is already linked to it.</li>',
+    '<li>Or enter the access code above on the login page.</li>',
+    '</ol>',
+    '<p style="margin:0 0 18px"><a href="', SITE, '" style="background:#3a5bef;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">Open Mission Big 4</a></p>',
+    '<p style="color:#5b6784;font-size:13px;margin:0">Once inside you can set your own password from the sidebar, so you never need the code again.</p>',
+    '<hr style="border:none;border-top:1px solid #e2e8f0;margin:22px 0">',
+    '<p style="color:#94a3b8;font-size:11px;margin:0">Need help? Reply to this email or WhatsApp +91 8968549488.</p>',
+    '</div>',
+  ].join('');
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + RESEND_KEY },
+      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject: 'Your Mission Big 4 access is ready', html }),
+    });
+    return { ok: r.ok, status: r.status };
+  } catch (e) { return { ok: false, error: String(e && e.message) }; }
+}
+
 const pick = (...vals) => vals.find(v => v != null && String(v).trim() !== '') || '';
 
 export default async (req) => {
@@ -130,8 +169,11 @@ export default async (req) => {
   };
   await store.setJSON('users', users);
 
+  const mail = await sendAccessEmail(email, name, code, expiresAt);
+
   await payStore.setJSON('order:' + orderId, {
     orderId, at: new Date().toISOString(), email, name, phone, amount, code, expiresAt, auto: true,
+    emailed: !!(mail && mail.ok), mailSkipped: !!(mail && mail.skipped),
   });
 
   return json({ ok: true, code, expiresAt });

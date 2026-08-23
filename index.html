@@ -2029,6 +2029,7 @@ function router(){
   stopSpeech();   // stop any audio when navigating
   renderHeaderControls();
   if (POLICY_PAGES[hash]) { renderPolicy(hash); return; }
+  if (hash.indexOf('#/paid') === 0) { renderPaid(); return; }
   if (!authed()){
     // Everyone must have an account. Free accounts (role 'free') may browse the
     // free tier; true guests are sent to the gate to sign up or log in.
@@ -2783,6 +2784,85 @@ function doSetPassword(){
     if(r&&r.ok){ say('✅ Password saved. You can now log in with your email and password.', true); }
     else say((r&&r.error)||'Could not save password.');
   }).catch(()=>say('Network error — please try again.'));
+}
+
+const CLAIM_URL='/.netlify/functions/claim';
+function paymentOrderId(){
+  try{
+    const m = /[?&]order_id=([A-Za-z0-9_.-]{1,120})/.exec(location.hash) || /[?&]order_id=([A-Za-z0-9_.-]{1,120})/.exec(location.search);
+    return m ? m[1] : '';
+  }catch(_){ return ''; }
+}
+function renderPaid(){
+  const app=document.getElementById('app');
+  const oid=paymentOrderId();
+  app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
+    <div class="rounded-2xl p-6 sm:p-7 bg-white/75 dark:bg-white/[.04] glass border border-emerald-400/30 shadow-sm text-center">
+      <p class="text-5xl mb-2">🎉</p>
+      <h1 class="font-display text-2xl font-extrabold">Payment received</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Confirm the email you paid with and we will unlock your account right now.</p>
+      ${oid?'':'<p class="text-[11px] text-amber-500 mt-2">No payment reference found in the link. If you have just paid, enter your email below anyway and we will try to match it.</p>'}
+      <div class="grid gap-2.5 mt-5 text-left">
+        <input id="claimEmail" type="email" autocomplete="email" placeholder="Email you used at checkout"
+          class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-400" />
+        <button data-action="do-claim" id="claimBtn" class="py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow">Unlock my access</button>
+        <p id="claimMsg" class="text-xs text-center mt-1"></p>
+      </div>
+      <p class="text-[11px] text-slate-400 mt-4">Trouble? WhatsApp <b>8968549488</b> with your payment screenshot.</p>
+    </div>
+  </div>`;
+  const el=document.getElementById('claimEmail');
+  if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') doClaim(); });
+}
+function doClaim(){
+  const em=(document.getElementById('claimEmail').value||'').trim();
+  const msg=document.getElementById('claimMsg');
+  const btn=document.getElementById('claimBtn');
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.className='text-xs text-center mt-1 '+(ok?'text-emerald-500':'text-rose-500'); } };
+  if(!em){ say('Enter the email you paid with.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  say('Checking your payment…', true);
+  fetch(CLAIM_URL,{method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({order_id:paymentOrderId(), email:em})}).then(r=>r.json()).then(r=>{
+    if(!r||!r.ok){
+      say((r&&r.error)||'Could not verify that payment.');
+      if(btn){ btn.disabled=false; btn.textContent = r&&r.pending ? 'Try again' : 'Unlock my access'; }
+      return;
+    }
+    // Log the buyer straight in using the code the webhook generated.
+    auth={ token:r.code, role:'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false };
+    saveAuth(); track('login');
+    renderHeaderControls();
+    const app=document.getElementById('app');
+    app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
+      <div class="rounded-2xl p-6 sm:p-7 bg-white/75 dark:bg-white/[.04] glass border border-emerald-400/30 shadow-sm">
+        <div class="text-center">
+          <p class="text-5xl mb-2">✅</p>
+          <h1 class="font-display text-2xl font-extrabold">You are in</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access until <b>${r.expiresAt?new Date(r.expiresAt).toDateString():'one year from today'}</b>.</p>
+        </div>
+        <div class="mt-4 rounded-xl bg-slate-50 dark:bg-white/[.04] border border-slate-200 dark:border-white/10 p-3.5 text-center">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Your access code</p>
+          <p class="font-mono text-lg font-bold tracking-widest mt-1 select-all">${esc(r.code)}</p>
+          <p class="text-[11px] text-slate-400 mt-1">Keep this. You can also just sign in with Google using ${esc(r.email||em)}.</p>
+        </div>
+        <div class="mt-4">
+          <p class="text-sm font-bold mb-1.5">🔑 Set a password (optional)</p>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">So you can log in with your email instead of the code.</p>
+          <div class="grid gap-2">
+            <input id="spPass" type="password" autocomplete="new-password" placeholder="New password"
+              class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+            <input id="spPass2" type="password" autocomplete="new-password" placeholder="Repeat password"
+              class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-brand-400" />
+            <button data-action="do-set-password" class="py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-brand-600 text-white shadow">Save password</button>
+            <p id="spMsg" class="text-xs text-center"></p>
+          </div>
+        </div>
+        <a href="#/questions" class="mt-5 block text-center py-3 rounded-xl text-sm font-bold bg-slate-900 dark:bg-white/10 text-white">Start studying →</a>
+      </div>
+    </div>`;
+    loadFromCloud();
+  }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='Unlock my access'; } });
 }
 
 function renderRequest(){
@@ -5201,6 +5281,7 @@ app.addEventListener('click', async e => {
     const ar=AREA_BY_ID[btn.dataset.area]; mcqRun=null; if(ar) renderMcqBox(ar);
     return;
   }
+  if (act==='do-claim'){ doClaim(); return; }
   if (act==='do-password-login'){ doPasswordLogin(); return; }
   if (act==='do-set-password'){ doSetPassword(); return; }
   if (act==='do-request'){ doRequest(); return; }
