@@ -250,6 +250,54 @@ export default async (req) => {
     return json({ role: auth.role, name: auth.name || null, email: auth.email || null, expiresAt: auth.expiresAt || null });
   }
 
+  // ----- password login -----
+  if (action === 'set-password') {
+    // caller must already be signed in (google / code / admin token)
+    const u = users[token];
+    if (!u) return json({ error: 'unauthorized' }, 401);
+    const problem = passwordProblem(body.password);
+    if (problem) return json({ error: problem }, 400);
+    u.passwordHash = hashPassword(body.password);
+    u.passwordSetAt = new Date().toISOString();
+    await store.setJSON('users', users);
+    return json({ ok: true });
+  }
+
+  if (action === 'password-login') {
+    const email = String(body.email || '').toLowerCase().trim();
+    const password = String(body.password || '');
+    if (!email || !password) return json({ ok: false, error: 'Enter your email and password.' }, 400);
+    let code = null, user = null;
+    for (const [c, u] of Object.entries(users)) {
+      if (u && u.passwordHash && String(u.email || '').toLowerCase().trim() === email) { code = c; user = u; break; }
+    }
+    // Same message either way, so this cannot be used to discover which emails exist.
+    const bad = () => json({ ok: false, error: 'Incorrect email or password.' });
+    if (!user || !verifyPassword(password, user.passwordHash)) return bad();
+    if (user.active === false) return json({ ok: false, error: 'This account has been deactivated.' });
+    if (user.expiresAt && Date.parse(user.expiresAt) <= Date.now()) {
+      return json({ ok: false, error: 'Your subscription has expired. Please renew to continue.' });
+    }
+    const deviceId = String(body.device || '').trim().slice(0, 100);
+    if (deviceId && user.tier !== 'free') {
+      const devices = Array.isArray(user.devices) ? user.devices : [];
+      const existing = devices.find((d) => d.id === deviceId);
+      if (existing) { existing.lastSeen = new Date().toISOString(); await store.setJSON('users', users); }
+      else if (devices.length >= 2) return json({ ok: false, error: 'This account is in use on 2 devices. Ask admin to reset devices.' });
+      else { devices.push({ id: deviceId, lastSeen: new Date().toISOString() }); user.devices = devices; await store.setJSON('users', users); }
+    }
+    return json({
+      ok: true,
+      role: user.tier === 'free' ? 'free' : 'member',
+      token: code,
+      name: user.name,
+      email: user.email,
+      expiresAt: user.expiresAt || null,
+      tier: user.tier || 'paid',
+      needsPhone: !user.phone,
+    });
+  }
+
   // ----- admin only -----
   if (auth.role !== 'admin') return json({ error: 'unauthorized' }, 403);
 
@@ -308,54 +356,6 @@ export default async (req) => {
   }
   if (action === 'delete') { delete users[body.code]; await store.setJSON('users', users); return json({ ok: true }); }
   if (action === 'dismiss') { const pending = await pendingOf(store); await store.setJSON('pending', pending.filter(x => x.id !== body.id)); return json({ ok: true }); }
-
-  // ----- password login -----
-  if (action === 'set-password') {
-    // caller must already be signed in (google / code / admin token)
-    const u = users[token];
-    if (!u) return json({ error: 'unauthorized' }, 401);
-    const problem = passwordProblem(body.password);
-    if (problem) return json({ error: problem }, 400);
-    u.passwordHash = hashPassword(body.password);
-    u.passwordSetAt = new Date().toISOString();
-    await store.setJSON('users', users);
-    return json({ ok: true });
-  }
-
-  if (action === 'password-login') {
-    const email = String(body.email || '').toLowerCase().trim();
-    const password = String(body.password || '');
-    if (!email || !password) return json({ ok: false, error: 'Enter your email and password.' }, 400);
-    let code = null, user = null;
-    for (const [c, u] of Object.entries(users)) {
-      if (u && u.passwordHash && String(u.email || '').toLowerCase().trim() === email) { code = c; user = u; break; }
-    }
-    // Same message either way, so this cannot be used to discover which emails exist.
-    const bad = () => json({ ok: false, error: 'Incorrect email or password.' });
-    if (!user || !verifyPassword(password, user.passwordHash)) return bad();
-    if (user.active === false) return json({ ok: false, error: 'This account has been deactivated.' });
-    if (user.expiresAt && Date.parse(user.expiresAt) <= Date.now()) {
-      return json({ ok: false, error: 'Your subscription has expired. Please renew to continue.' });
-    }
-    const deviceId = String(body.device || '').trim().slice(0, 100);
-    if (deviceId && user.tier !== 'free') {
-      const devices = Array.isArray(user.devices) ? user.devices : [];
-      const existing = devices.find((d) => d.id === deviceId);
-      if (existing) { existing.lastSeen = new Date().toISOString(); await store.setJSON('users', users); }
-      else if (devices.length >= 2) return json({ ok: false, error: 'This account is in use on 2 devices. Ask admin to reset devices.' });
-      else { devices.push({ id: deviceId, lastSeen: new Date().toISOString() }); user.devices = devices; await store.setJSON('users', users); }
-    }
-    return json({
-      ok: true,
-      role: user.tier === 'free' ? 'free' : 'member',
-      token: code,
-      name: user.name,
-      email: user.email,
-      expiresAt: user.expiresAt || null,
-      tier: user.tier || 'paid',
-      needsPhone: !user.phone,
-    });
-  }
 
   // ----- referral partners -----
   if (action === 'ref-create') {
