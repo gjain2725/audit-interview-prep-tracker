@@ -68,6 +68,13 @@
     .area-card, .q-card { transition: transform .3s cubic-bezier(.22,1,.36,1), box-shadow .3s; }
     .area-card:hover { transform: translateY(-4px); }
     .fade { animation: fadeUp .4s cubic-bezier(.22,1,.36,1) both; }
+    .policy-page h3 { margin:1.3rem 0 .4rem; font-size:1.02rem; font-weight:750; }
+    .policy-page p, .policy-page li { font-size:.92rem; line-height:1.75; color:#475569; margin:.5rem 0; }
+    .dark .policy-page p, .dark .policy-page li { color:#cbd5e1; }
+    .policy-page ul { list-style:disc; padding-left:1.3rem; margin:.4rem 0; }
+    .policy-page a { color:#3a5bef; text-decoration:underline; }
+    .policy-page .pmuted { font-size:.8rem; color:#94a3b8; }
+
     /* rolling feature showcase */
     .mb4-ticker { position:relative; overflow:hidden; -webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent); mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent); }
     .mb4-ticker-track { display:flex; flex-direction:column; will-change:transform; animation:mb4roll 26s linear infinite; }
@@ -147,6 +154,21 @@
     </header>
 
     <main id="app" class="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 py-6"></main>
+    <footer class="mt-8 border-t border-slate-200/70 dark:border-white/10 bg-white/60 dark:bg-white/[.02]">
+      <div class="max-w-6xl mx-auto w-full px-4 sm:px-6 py-6 text-center">
+        <p class="font-display font-extrabold text-sm">Mission <span class="gradient-text">Big 4</span></p>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">Audit interview preparation for Chartered Accountants · Operated by Gaurav Jain</p>
+        <nav class="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3 text-[12px] font-semibold">
+          <a href="#/about" class="text-slate-500 hover:text-brand-500">About us</a>
+          <a href="#/contact" class="text-slate-500 hover:text-brand-500">Contact us</a>
+          <a href="#/terms" class="text-slate-500 hover:text-brand-500">Terms &amp; conditions</a>
+          <a href="#/privacy" class="text-slate-500 hover:text-brand-500">Privacy policy</a>
+          <a href="#/refund" class="text-slate-500 hover:text-brand-500">Refund &amp; cancellation</a>
+          <a href="#/pricing" class="text-slate-500 hover:text-brand-500">Pricing</a>
+        </nav>
+        <p class="text-[11px] text-slate-400 mt-3">© <span id="fyr"></span> Mission Big 4. All rights reserved.</p>
+      </div>
+    </footer>
     <input type="file" id="fileInput" multiple class="hidden" />
     <input type="file" id="richImageInput" accept="image/png,image/jpeg,image/webp,image/gif" class="hidden" />
 
@@ -2006,6 +2028,7 @@ function router(){
   window.scrollTo({top:0});
   stopSpeech();   // stop any audio when navigating
   renderHeaderControls();
+  if (POLICY_PAGES[hash]) { renderPolicy(hash); return; }
   if (!authed()){
     // Everyone must have an account. Free accounts (role 'free') may browse the
     // free tier; true guests are sent to the gate to sign up or log in.
@@ -2560,6 +2583,142 @@ function showGeneratedCode(name,code,expiresAt){
   wrap.querySelector('[data-code-close]').onclick=close;
   wrap.querySelector('[data-code-copy]').onclick=e=>{ navigator.clipboard.writeText(code).then(()=>{ e.currentTarget.textContent='Copied ✓'; }).catch(()=>{}); };
   wrap.addEventListener('click',e=>{ if(e.target===wrap) close(); });
+}
+
+/* ============================================================
+   LEGAL / BUSINESS PAGES
+   Public on purpose: payment aggregators check these during KYC and their
+   reviewer will not create an account, so they must render logged out.
+   ============================================================ */
+const BUSINESS = {
+  name: 'Gaurav Jain',
+  trade: 'Mission Big 4',
+  email: 'gjain2725@gmail.com',
+  phone: '+91 8968549488',
+  site: 'https://missionbig4.netlify.app',
+  addr: 'Punjab, India'
+};
+
+const POLICY_PAGES = {
+  '#/about': { icon: '🏢', title: 'About us', body: () => `
+    <p><b>${esc(BUSINESS.trade)}</b> is an online interview-preparation platform for Chartered Accountants and CA candidates preparing for audit roles at Big 4 firms in India.</p>
+    <p>The platform is owned and operated by <b>${esc(BUSINESS.name)}</b>, a sole proprietor based in India. It provides a structured question bank, model answers, practice tests and revision tools covering statutory audit, Indian Accounting Standards, CARO 2020, Schedule III and the Standards on Auditing.</p>
+    <p>All study material is written in-house from publicly available standards and legislation. We are an independent education service and are not affiliated with, endorsed by, or connected to Ernst &amp; Young, PricewaterhouseCoopers, Deloitte, KPMG, the Institute of Chartered Accountants of India, or any other firm or body named on this site. Firm names are used only to describe the type of interview the material prepares you for.</p>
+    <h3>What we sell</h3>
+    <p>A single digital subscription giving one year of access to the full question bank and study tools. There is also a free tier that requires no payment.</p>
+    <h3>Business details</h3>
+    <p><b>Business name:</b> ${esc(BUSINESS.name)} (sole proprietor), trading as ${esc(BUSINESS.trade)}<br>
+       <b>Registered address:</b> ${esc(BUSINESS.addr)}<br>
+       <b>Email:</b> ${esc(BUSINESS.email)}<br>
+       <b>Phone:</b> ${esc(BUSINESS.phone)}</p>` },
+
+  '#/contact': { icon: '✉️', title: 'Contact us', body: () => `
+    <p>We reply to every message. The fastest route is WhatsApp.</p>
+    <h3>Reach us</h3>
+    <p><b>Email:</b> <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a><br>
+       <b>Phone / WhatsApp:</b> ${esc(BUSINESS.phone)}<br>
+       <b>Website:</b> <a href="${esc(BUSINESS.site)}">${esc(BUSINESS.site)}</a></p>
+    <h3>Registered address</h3>
+    <p>${esc(BUSINESS.name)} (sole proprietor)<br>${esc(BUSINESS.addr)}</p>
+    <h3>Support hours</h3>
+    <p>Monday to Saturday, 10:00 to 19:00 IST. We aim to respond within 24 working hours, and to payment or access issues within 4 hours.</p>` },
+
+  '#/pricing': { icon: '💳', title: 'Pricing', body: () => `
+    <h3>Free plan — ₹0</h3>
+    <p>No payment required. Includes the practice tests across every area, model answers in the open concept areas, and instant scoring with explanations.</p>
+    <h3>Full access — ₹199 for one year</h3>
+    <p>One payment of <b>₹199 (Indian Rupees one hundred and ninety-nine only)</b> for <b>365 days</b> of access to the complete question bank, all model answers, worked examples, interviewer tips, audio revision, mock interview panel, flashcards and the interview tracker.</p>
+    <p>Prices are inclusive of all applicable taxes. There are no recurring charges and no auto-renewal — access simply ends after 365 days unless you choose to buy again.</p>
+    <h3>Payment methods</h3>
+    <p>Payments are processed by Cashfree Payments. You may pay by UPI, debit card, credit card, net banking or wallet. We do not see or store your card, UPI or banking credentials at any point.</p>` },
+
+  '#/terms': { icon: '📜', title: 'Terms & conditions', body: () => `
+    <p class="pmuted">Last updated: 24 August 2026</p>
+    <p>These terms govern your use of ${esc(BUSINESS.site)} (the "Service"), operated by ${esc(BUSINESS.name)} ("we", "us"). By creating an account or making a payment you agree to them.</p>
+    <h3>1. The service</h3>
+    <p>We provide educational material for audit interview preparation: a question bank, model answers, practice tests and study tools. The material is for personal study only.</p>
+    <h3>2. Accounts</h3>
+    <p>You must provide accurate details when creating an account. You are responsible for activity under your account. Access is granted to one person; an access code may be used on a maximum of two devices. Sharing, reselling or publishing our content is not permitted.</p>
+    <h3>3. Payment and access</h3>
+    <p>Full access costs ₹199 and lasts 365 days from activation. Payment is collected through Cashfree Payments. Access is normally activated automatically on successful payment; if it is not, we activate it manually within 4 working hours.</p>
+    <h3>4. No guarantee of results</h3>
+    <p>We prepare you for interviews. We do not promise a job, an interview call, a selection, or any particular outcome, and no part of this site should be read as such a promise.</p>
+    <h3>5. Accuracy of material</h3>
+    <p>Our material is prepared carefully from the Standards on Auditing, Indian Accounting Standards, the Companies Act 2013 and allied guidance, but law and standards change. Nothing here is professional, legal, audit or financial advice. Always verify against the current text of the relevant standard before relying on it professionally.</p>
+    <h3>6. Intellectual property</h3>
+    <p>All content is owned by us and protected by copyright. You may not copy, distribute, record, resell or make it publicly available. Accounts found sharing content may be suspended without refund.</p>
+    <h3>7. Acceptable use</h3>
+    <p>Do not attempt to break, scrape, overload or gain unauthorised access to the Service, and do not upload unlawful content.</p>
+    <h3>8. Suspension</h3>
+    <p>We may suspend or terminate access for breach of these terms. Where we terminate without cause, we refund the unused portion of your subscription on a pro-rata basis.</p>
+    <h3>9. Limitation of liability</h3>
+    <p>To the extent permitted by law, our total liability in connection with the Service is limited to the amount you paid us in the preceding twelve months.</p>
+    <h3>10. Governing law</h3>
+    <p>These terms are governed by the laws of India, and the courts of India have exclusive jurisdiction.</p>
+    <h3>11. Contact</h3>
+    <p>${esc(BUSINESS.email)} · ${esc(BUSINESS.phone)}</p>` },
+
+  '#/privacy': { icon: '🔒', title: 'Privacy policy', body: () => `
+    <p class="pmuted">Last updated: 24 August 2026</p>
+    <p>This policy explains what we collect and what we do with it. We keep collection to a minimum.</p>
+    <h3>What we collect</h3>
+    <p><b>Account details</b> — your name and email address, taken from Google Sign-In or entered by you, and a phone number if you choose to give one.<br>
+       <b>Study data</b> — your progress, flags, notes and test scores, so your account works across devices.<br>
+       <b>Usage data</b> — anonymous counts of page views and feature use, using a randomly generated identifier stored in your browser. We do not use advertising cookies and we do not track you across other websites.</p>
+    <h3>What we never collect</h3>
+    <p>We never receive or store your card number, UPI ID, CVV or banking credentials. Payments are handled entirely by Cashfree Payments on their own systems.</p>
+    <h3>Why we use it</h3>
+    <p>To give you access, save your progress, provide support, and send you information about your subscription. If you gave a phone number, we may send occasional offers by WhatsApp; you can ask us to stop at any time and we will.</p>
+    <h3>Who we share it with</h3>
+    <p>We do not sell your data. We share only with service providers who make the platform work: <b>Netlify</b> (hosting and data storage), <b>Google</b> (sign-in), <b>Cashfree Payments</b> (payment processing), and <b>Google Gemini</b> (only the text you type into the study assistant). We may disclose data where the law requires it.</p>
+    <h3>How long we keep it</h3>
+    <p>For as long as your account exists, and for up to twelve months afterwards for accounting and legal purposes. Ask us to delete your account and we will do so within 30 days.</p>
+    <h3>Your rights</h3>
+    <p>You may request a copy of your data, ask us to correct it, or ask us to delete it. Email ${esc(BUSINESS.email)} and we will respond within 30 days.</p>
+    <h3>Security</h3>
+    <p>Data is transmitted over HTTPS and stored with our hosting provider. No system is perfectly secure, but we take reasonable measures to protect your information.</p>
+    <h3>Children</h3>
+    <p>The Service is intended for users aged 18 and over.</p>
+    <h3>Contact</h3>
+    <p>${esc(BUSINESS.name)} · ${esc(BUSINESS.email)} · ${esc(BUSINESS.phone)}</p>` },
+
+  '#/refund': { icon: '↩️', title: 'Refund & cancellation policy', body: () => `
+    <p class="pmuted">Last updated: 24 August 2026</p>
+    <h3>Delivery of the product</h3>
+    <p>This is a digital service. Nothing is physically shipped. Access is delivered to your account immediately on successful payment, and in any case within 4 working hours. Sign in with the same email address you used at checkout.</p>
+    <h3>Cancellation</h3>
+    <p>The subscription is a one-time purchase for 365 days. There is no auto-renewal, so there is no recurring payment to cancel. You may stop using the Service at any time.</p>
+    <h3>Refunds</h3>
+    <p>We offer a <b>7-day refund window</b>. If you are not satisfied, email ${esc(BUSINESS.email)} within 7 days of payment with your registered email address and we will refund the full ₹199. You do not need to give a reason.</p>
+    <p>We will also refund in full, at any time, if:</p>
+    <ul>
+      <li>you were charged more than once for the same subscription;</li>
+      <li>payment was taken but access was never activated; or</li>
+      <li>we withdraw the Service during your subscription period, in which case the unused portion is refunded pro-rata.</li>
+    </ul>
+    <h3>When we may decline a refund</h3>
+    <p>We may decline a refund after the 7-day window, or where an account has been used to copy, share or redistribute our content.</p>
+    <h3>How refunds are paid</h3>
+    <p>Approved refunds are processed within <b>5 to 7 working days</b> to the original payment method through Cashfree Payments. Your bank may take a few additional days to credit it.</p>
+    <h3>How to request a refund</h3>
+    <p>Email <a href="mailto:${esc(BUSINESS.email)}">${esc(BUSINESS.email)}</a> or WhatsApp ${esc(BUSINESS.phone)} with your registered email address and the date of payment.</p>` },
+};
+
+function renderPolicy(hash){
+  const p = POLICY_PAGES[hash];
+  if(!p){ location.hash = '#/'; return; }
+  const app = document.getElementById('app');
+  app.innerHTML = `<div class="max-w-3xl mx-auto fade">
+    <a href="#/" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-brand-500 mb-4"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> Back</a>
+    <div class="rounded-2xl p-6 sm:p-8 bg-white/80 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm policy-page">
+      <h1 class="font-display text-2xl sm:text-3xl font-extrabold mb-4">${p.icon} ${esc(p.title)}</h1>
+      ${p.body()}
+    </div>
+    <nav class="flex flex-wrap justify-center gap-x-4 gap-y-1.5 my-6 text-[12px] font-semibold">
+      ${Object.keys(POLICY_PAGES).filter(k=>k!==hash).map(k=>`<a href="${k}" class="text-slate-500 hover:text-brand-500">${esc(POLICY_PAGES[k].title)}</a>`).join('')}
+    </nav>
+  </div>`;
+  window.scrollTo({top:0});
 }
 
 function renderRequest(){
