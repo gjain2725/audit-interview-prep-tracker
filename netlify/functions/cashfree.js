@@ -89,6 +89,30 @@ export default async (req) => {
   if (req.method === 'GET') {
     const token = req.headers.get('x-auth') || '';
     if (!process.env.ADMIN_SECRET || token !== process.env.ADMIN_SECRET) return json({ error: 'unauthorized' }, 401);
+
+    // Read-only check that the mail provider key authenticates. Sends nothing.
+    if (new URL(req.url).searchParams.get('mailcheck') === '1') {
+      if (!RESEND_KEY) return json({ mail: { configured: false, reason: 'RESEND_API_KEY not set' } });
+      try {
+        const r = await fetch('https://api.resend.com/domains', { headers: { authorization: 'Bearer ' + RESEND_KEY } });
+        const txt = await r.text();
+        let parsed = null; try { parsed = JSON.parse(txt); } catch (e) {}
+        const list = (parsed && (parsed.data || parsed)) || [];
+        const domains = Array.isArray(list) ? list.map((d) => ({ name: d.name, status: d.status })) : [];
+        return json({
+          mail: {
+            configured: true,
+            keyValid: r.status === 200,
+            httpStatus: r.status,
+            from: MAIL_FROM,
+            verifiedDomains: domains,
+            note: domains.length ? undefined : 'No verified domain yet: the sandbox sender usually only reaches your own Resend account email and often lands in spam.',
+          },
+        });
+      } catch (e) {
+        return json({ mail: { configured: true, keyValid: false, error: String(e && e.message) } });
+      }
+    }
     try {
       const store = getStore('cashfree-payments');
       const { blobs } = await store.list();
