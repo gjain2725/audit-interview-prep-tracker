@@ -1,5 +1,6 @@
 import { getStore } from '@netlify/blobs';
 import crypto from 'node:crypto';
+import nodemailer from 'nodemailer';
 
 // Cashfree payment webhook -> automatic access provisioning.
 //
@@ -51,8 +52,27 @@ const RESEND_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Mission Big 4 <onboarding@resend.dev>';
 const SITE = process.env.SITE_URL || 'https://missionbig4.netlify.app';
 
+const SMTP = {
+  host: process.env.SMTP_HOST || '',
+  port: parseInt(process.env.SMTP_PORT || '587', 10),
+  user: process.env.SMTP_USER || '',
+  pass: process.env.SMTP_PASS || '',
+};
+const mailReady = () => !!(SMTP.host && SMTP.user && SMTP.pass) || !!RESEND_KEY;
+
+async function sendViaSmtp(to, subject, html) {
+  const transporter = nodemailer.createTransport({
+    host: SMTP.host,
+    port: SMTP.port,
+    secure: SMTP.port === 465,
+    auth: { user: SMTP.user, pass: SMTP.pass },
+  });
+  const info = await transporter.sendMail({ from: MAIL_FROM || SMTP.user, to, subject, html });
+  return { ok: true, via: 'smtp', id: info && info.messageId };
+}
+
 async function sendAccessEmail(to, name, code, expiresAt) {
-  if (!RESEND_KEY || !to) return { skipped: true };
+  if (!to || !mailReady()) return { skipped: true };
   const nice = (() => { try { return new Date(expiresAt).toDateString(); } catch (e) { return ''; } })();
   const html = [
     '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0d1330">',
@@ -72,14 +92,20 @@ async function sendAccessEmail(to, name, code, expiresAt) {
     '<p style="color:#94a3b8;font-size:11px;margin:0">Need help? Reply to this email or WhatsApp +91 8968549488.</p>',
     '</div>',
   ].join('');
+  const subject = 'Your Mission Big 4 access is ready';
+  // Prefer your own mailbox over a third party when SMTP is configured.
+  if (SMTP.host && SMTP.user && SMTP.pass) {
+    try { return await sendViaSmtp(to, subject, html); }
+    catch (e) { if (!RESEND_KEY) return { ok: false, via: 'smtp', error: String(e && e.message) }; }
+  }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + RESEND_KEY },
-      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject: 'Your Mission Big 4 access is ready', html }),
+      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }),
     });
-    return { ok: r.ok, status: r.status };
-  } catch (e) { return { ok: false, error: String(e && e.message) }; }
+    return { ok: r.ok, via: 'resend', status: r.status };
+  } catch (e) { return { ok: false, via: 'resend', error: String(e && e.message) }; }
 }
 
 const pick = (...vals) => vals.find(v => v != null && String(v).trim() !== '') || '';
@@ -92,7 +118,17 @@ export default async (req) => {
 
     // Read-only check that the mail provider key authenticates. Sends nothing.
     if (new URL(req.url).searchParams.get('mailcheck') === '1') {
-      if (!RESEND_KEY) return json({ mail: { configured: false, reason: 'RESEND_API_KEY not set' } });
+      const smtpCfg = { host: SMTP.host || null, port: SMTP.port, user: SMTP.user ? SMTP.user.replace(/(.{2}).*(@.*)/, '$1***$2') : null, hasPass: !!SMTP.pass };
+      if (SMTP.host && SMTP.user && SMTP.pass) {
+        try {
+          const t = nodemailer.createTransport({ host: SMTP.host, port: SMTP.port, secure: SMTP.port === 465, auth: { user: SMTP.user, pass: SMTP.pass } });
+          await t.verify();
+          return json({ mail: { configured: true, via: 'smtp', smtp: smtpCfg, keyValid: true, from: MAIL_FROM } });
+        } catch (e) {
+          return json({ mail: { configured: true, via: 'smtp', smtp: smtpCfg, keyValid: false, error: String(e && e.message) } });
+        }
+      }
+      if (!RESEND_KEY) return json({ mail: { configured: false, smtp: smtpCfg, reason: 'No SMTP_* variables and no RESEND_API_KEY set' } });
       try {
         const r = await fetch('https://api.resend.com/domains', { headers: { authorization: 'Bearer ' + RESEND_KEY } });
         const txt = await r.text();
