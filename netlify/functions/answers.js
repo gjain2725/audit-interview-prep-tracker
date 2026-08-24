@@ -33,7 +33,6 @@ export default async (req) => {
   if (!area) return json({ answers: PAID_ANSWERS });
 
   const out = {};
-  const prefix = area + '-';
-  for (const id in PAID_ANSWERS) if (id.startsWith(prefix)) out[id] = PAID_ANSWERS[id];
+  for (const id in PAID_ANSWERS) if (PAID_ANSWERS[id].area === area) out[id] = PAID_ANSWERS[id];
   return json({ area, answers: out });
 };
