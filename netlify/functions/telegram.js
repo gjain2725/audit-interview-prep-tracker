@@ -11,7 +11,7 @@ import { getStore } from '@netlify/blobs';
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-const SITE = process.env.SITE_URL || 'https://missionbig4.netlify.app';
+const SITE = process.env.SITE_URL || 'https://missionbig4.in';
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
 const HOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 

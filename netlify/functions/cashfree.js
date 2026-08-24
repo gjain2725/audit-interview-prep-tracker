@@ -50,7 +50,7 @@ function verify(rawBody, timestamp, signature) {
 // provisioning still works and the buyer uses the on-screen claim page instead.
 const RESEND_KEY = process.env.RESEND_API_KEY || '';
 const MAIL_FROM = process.env.MAIL_FROM || 'Mission Big 4 <onboarding@resend.dev>';
-const SITE = process.env.SITE_URL || 'https://missionbig4.netlify.app';
+const SITE = process.env.SITE_URL || 'https://missionbig4.in';
 
 const SMTP = {
   host: process.env.SMTP_HOST || '',
