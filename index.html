@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
+  <!-- Google tag (gtag.js) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=AW-18350237820"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'AW-18350237820');
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mission Big 4 · Audit Interview Prep — Himanshi Garg</title>
@@ -1195,6 +1203,26 @@ function campaignRef(){
     return sessionStorage.getItem('mb4_src')||'';
   }catch(_){ return ''; }
 }
+/* ---- Google Ads conversion ------------------------------------------------
+   This is a hash-routed single page app, so the inline event snippet would
+   never run on navigation. Fire it from code at the moment of success.
+   transaction_id makes a repeat call for the same signup a no-op at Google,
+   and the local guard stops a re-render firing it twice in one session.
+   -------------------------------------------------------------------------- */
+const ADS_SEND_TO = 'AW-18350237820/m1L7CLn30OkcEPzQia5E';
+function adsConversion(transactionId, value){
+  try{
+    if(typeof gtag !== 'function') return;
+    const id = String(transactionId || '');
+    if(!id) return;
+    const seen = 'mb4_conv_' + id;
+    try{ if(localStorage.getItem(seen)) return; localStorage.setItem(seen,'1'); }catch(_){}
+    const payload = { send_to: ADS_SEND_TO, transaction_id: id, currency: 'INR' };
+    if(typeof value === 'number') payload.value = value;
+    gtag('event','conversion', payload);
+  }catch(_){ }
+}
+
 function track(event, extra){
   try{
     const body=Object.assign({event, vid:visitorId(), ref:campaignRef()}, extra||{});
@@ -2169,7 +2197,7 @@ function handleGoogleLogin(response){
     }
     auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null, needsPhone: !!r.needsPhone };
     saveAuth();
-    if(r.role==='free') track('free_signup'); else track('login');
+    if(r.role==='free'){ track('free_signup'); adsConversion(r.token, 0); } else track('login');
     renderHeaderControls();
     if(r.role==='admin'){ location.hash='#/admin'; }
     else if(r.role==='free'){ location.hash='#/questions'; }
@@ -2442,13 +2470,13 @@ const POLICY_PAGES = {
     <h3>What we collect</h3>
     <p><b>Account details</b> — your name and email address, taken from Google Sign-In or entered by you, and a phone number if you choose to give one.<br>
        <b>Study data</b> — your progress, flags, notes and test scores, so your account works across devices.<br>
-       <b>Usage data</b> — anonymous counts of page views and feature use, using a randomly generated identifier stored in your browser. We do not use advertising cookies and we do not track you across other websites.</p>
+       <b>Usage data</b> — anonymous counts of page views and feature use, using a randomly generated identifier stored in your browser.<br>       <b>Advertising measurement</b> — we advertise on Google. When you arrive from one of our ads, Google Ads sets a cookie so that a later sign-up can be attributed to that ad. This tells us which ads work; it does not tell us who you are. If you would rather not be measured this way, you can turn off ad personalisation in your Google account settings or block third-party cookies in your browser, and the site will work exactly the same.</p>
     <h3>What we never collect</h3>
     <p>We never receive or store your card number, UPI ID, CVV or banking credentials. Payments are handled entirely by Cashfree Payments on their own systems.</p>
     <h3>Why we use it</h3>
     <p>To give you access, save your progress, provide support, and send you information about your subscription. If you gave a phone number, we may send occasional offers by WhatsApp; you can ask us to stop at any time and we will.</p>
     <h3>Who we share it with</h3>
-    <p>We do not sell your data. We share only with service providers who make the platform work: <b>Netlify</b> (hosting and data storage), <b>Google</b> (sign-in), <b>Cashfree Payments</b> (payment processing), and <b>Google Gemini</b> (only the text you type into the study assistant). We may disclose data where the law requires it.</p>
+    <p><b>Google Ads</b> receives a signal that a sign-up occurred, so we can measure our advertising. We do not sell your data. We share only with service providers who make the platform work: <b>Netlify</b> (hosting and data storage), <b>Google</b> (sign-in), <b>Cashfree Payments</b> (payment processing), and <b>Google Gemini</b> (only the text you type into the study assistant). We may disclose data where the law requires it.</p>
     <h3>How long we keep it</h3>
     <p>For as long as your account exists, and for up to twelve months afterwards for accounting and legal purposes. Ask us to delete your account and we will do so within 30 days.</p>
     <h3>Your rights</h3>
@@ -2592,6 +2620,7 @@ function doClaim(){
     // Log the buyer straight in using the code the webhook generated.
     auth={ token:r.code, role:'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false };
     saveAuth(); track('login');
+    adsConversion('paid-' + r.code, Number(r.amount) || 199);
     renderHeaderControls();
     const app=document.getElementById('app');
     app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
