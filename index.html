@@ -1822,11 +1822,11 @@ function router(){
     // Everyone must have an account. Free accounts (role 'free') may browse the
     // free tier; true guests are sent to the gate to sign up or log in.
     if (hash === '#/request') { renderRequest(); return; }
-    if (auth.role === 'free'){
-      if (hash === '#/questions') { renderQuestions(); return; }
-      if (m && AREA_BY_ID[m[1]]) { renderArea(AREA_BY_ID[m[1]]); return; }
-      if (hash === '#/' || hash === '') { renderQuestions(); return; }
-    }
+    // Value first: anyone may browse the bank and take a test. The account is
+    // asked for afterwards, once they have seen the quality for themselves.
+    if (hash === '#/questions') { renderQuestions(); return; }
+    if (m && AREA_BY_ID[m[1]]) { renderArea(AREA_BY_ID[m[1]]); return; }
+    if (hash === '#/' || hash === '') { renderQuestions(); return; }
     renderGate();
     return;
   }
@@ -4453,6 +4453,12 @@ function mcqSectionHTML(area){
         <button data-action="mcq-exit" data-area="${area.id}" class="mt-4 ml-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">Close</button>
       </div>
       ${phoneCaptureHTML()}
+      ${signedIn()?'':`<div class="mt-5 rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-brand-500/10 to-cyan-400/10 border border-brand-400/30 text-center">
+        <p class="text-2xl mb-1">🔓</p>
+        <p class="font-bold text-sm">Create a free account to keep this score</p>
+        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1 mb-3">One tap with Google. Saves your progress across devices, unlocks the model answers in the concept areas, and it stays free.</p>
+        <button data-action="show-login" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Save my progress — free</button>
+      </div>`}
       <div class="mt-5 space-y-2.5">${review}</div>
     </div>`;
   }
