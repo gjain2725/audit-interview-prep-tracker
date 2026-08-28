@@ -904,6 +904,7 @@ function baseField(q, field){
 }
 const MCQ_BANK = {};              // filled on demand from /data/mcq/<area>.json
 const MCQ_TOTAL = 484;
+const MCQ_FIRST_RUN = 10;      // length of a first attempt
 const _mcqLoading = {};
 function mcqsFor(areaId){ return MCQ_BANK[areaId] || []; }
 function mcqLoaded(areaId){ return Array.isArray(MCQ_BANK[areaId]); }
@@ -4417,13 +4418,13 @@ function mcqSectionHTML(area){
       <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h2 class="font-display text-lg font-extrabold flex items-center gap-2">🧠 MCQ Test <span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-500/15 text-rose-500">Hard</span></h2>
-          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${bank.length} tough multiple-choice questions on ${esc(areaMeta(area).title)}. Instant feedback with a short explanation for every answer.</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${st.attempts?bank.length:Math.min(MCQ_FIRST_RUN,bank.length)} tough multiple-choice questions on ${esc(areaMeta(area).title)}. Instant feedback with a short explanation for every answer.${st.attempts?'':` <span class="text-slate-400">(${bank.length} in total — retake for the full set.)</span>`}</p>
           ${st.attempts?`<p class="text-[11px] text-slate-400 mt-1.5">Attempts: ${st.attempts} · Last score: ${st.last}%</p>`:''}
         </div>
         ${badge}
       </div>
       <button data-action="mcq-start" data-area="${area.id}" class="mt-4 w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold bg-gradient-to-r ${a.grad} text-white shadow hover:opacity-95 transition">
-        ${st.attempts?'🔁 Retake test':'▶ Start test'} <span class="opacity-80">· ${bank.length} Qs</span>
+        ${st.attempts?'🔁 Retake test':'▶ Start test'} <span class="opacity-80">· ${st.attempts?bank.length:Math.min(MCQ_FIRST_RUN,bank.length)} Qs</span>
       </button>
     </div>`;
   }
@@ -5053,7 +5054,11 @@ app.addEventListener('click', async e => {
     const ar=AREA_BY_ID[btn.dataset.area]; if(!ar) return;
     const bank=mcqsFor(ar.id);
     const perms={}; bank.forEach((m,i)=>{ perms[i]=mcqShuffle(m.o.length); });
-    mcqRun={ areaId:ar.id, order:mcqShuffle(bank.length), pos:0, answers:{}, perms };
+    // A first taste is short on purpose: a 10-question run reaches a score fast.
+    // Anyone retaking has already finished one, so they get the full bank.
+    const first = !mcqStat(ar.id).attempts;
+    const len = first ? Math.min(MCQ_FIRST_RUN, bank.length) : bank.length;
+    mcqRun={ areaId:ar.id, order:mcqShuffle(bank.length).slice(0,len), pos:0, answers:{}, perms };
     track('start_mcq');
     renderMcqBox(ar);
     const box=document.getElementById('mcqBox'); if(box) box.scrollIntoView({behavior:'smooth',block:'start'});
