@@ -1210,15 +1210,16 @@ function campaignRef(){
    transaction_id makes a repeat call for the same signup a no-op at Google,
    and the local guard stops a re-render firing it twice in one session.
    -------------------------------------------------------------------------- */
-const ADS_SEND_TO = 'AW-18350237820/m1L7CLn30OkcEPzQia5E';
-function adsConversion(transactionId, value){
+const ADS_REGISTRATION = 'AW-18350237820/m1L7CLn30OkcEPzQia5E';   // counts once per click
+const ADS_PURCHASE     = 'AW-18350237820/_nIcCKbR1OkcEPzQia5E';   // counts every conversion
+function adsConversion(sendTo, transactionId, value){
   try{
-    if(typeof gtag !== 'function') return;
+    if(typeof gtag !== 'function' || !sendTo) return;
     const id = String(transactionId || '');
-    if(!id) return;
-    const seen = 'mb4_conv_' + id;
+    if(!id) return;                       // never fire without a dedupe key
+    const seen = 'mb4_conv_' + sendTo.split('/').pop() + '_' + id;
     try{ if(localStorage.getItem(seen)) return; localStorage.setItem(seen,'1'); }catch(_){}
-    const payload = { send_to: ADS_SEND_TO, transaction_id: id, currency: 'INR' };
+    const payload = { send_to: sendTo, transaction_id: id, currency: 'INR' };
     if(typeof value === 'number') payload.value = value;
     gtag('event','conversion', payload);
   }catch(_){ }
@@ -2198,7 +2199,7 @@ function handleGoogleLogin(response){
     }
     auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null, needsPhone: !!r.needsPhone };
     saveAuth();
-    if(r.role==='free'){ track('free_signup'); adsConversion(r.token, 0); } else track('login');
+    if(r.role==='free'){ track('free_signup'); adsConversion(ADS_REGISTRATION, r.token, 0); } else track('login');
     renderHeaderControls();
     if(r.role==='admin'){ location.hash='#/admin'; }
     else if(r.role==='free'){ location.hash='#/questions'; }
@@ -2621,7 +2622,7 @@ function doClaim(){
     // Log the buyer straight in using the code the webhook generated.
     auth={ token:r.code, role:'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false };
     saveAuth(); track('login');
-    adsConversion('paid-' + r.code, Number(r.amount) || 199);
+    adsConversion(ADS_PURCHASE, 'paid-' + r.code, Number(r.amount) || 199);
     renderHeaderControls();
     const app=document.getElementById('app');
     app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
