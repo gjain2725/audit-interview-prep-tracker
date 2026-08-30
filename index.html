@@ -1255,7 +1255,23 @@ function isAdmin(){ return auth.role==='admin'; }
 function authed(){ return auth.role==='admin'||auth.role==='member'; }
 function signedIn(){ return authed()||auth.role==='free'; }   // free accounts sync too (server filters their content)
 function acct(action, extra){ return fetch(ACCOUNT_URL,{method:'POST',headers:Object.assign({'content-type':'application/json'}, auth.token?{'x-auth':auth.token}:{}),body:JSON.stringify(Object.assign({action},extra||{}))}).then(r=>r.json()); }
-function logout(){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; localStorage.removeItem(AUTH_KEY); store.q={};store.custom={};store.areas={};store.order={};store.attach={};store.trash=[]; portalCache=null; adminPortalRecords=[]; if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} _lastContent=null;_lastPstate=null; location.hash='#/'; renderHeaderControls(); renderGate(); }
+function logout(){
+  // Every step is defensive: a throw part-way through used to leave the user
+  // signed in with no feedback (localStorage is unavailable in private mode
+  // and when a browser blocks site data).
+  auth={token:null,role:'none',name:null,email:null,expiresAt:null};
+  try{ localStorage.removeItem(AUTH_KEY); }catch(_){ }
+  try{ store.q={};store.custom={};store.areas={};store.order={};store.attach={};store.trash=[]; store.mcq={}; }catch(_){ }
+  try{ portalCache=null; adminPortalRecords=[]; }catch(_){ }
+  try{ if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} }catch(_){ }
+  try{ if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} }catch(_){ }
+  try{ _lastContent=null;_lastPstate=null; }catch(_){ }
+  try{ for(const k in ANSWER_CACHE) delete ANSWER_CACHE[k]; }catch(_){ }
+  try{ closeSidebar(); }catch(_){ }
+  try{ location.hash='#/'; }catch(_){ }
+  try{ renderHeaderControls(); }catch(_){ }
+  renderGate();                      // always land on the gate, whatever failed above
+}
 
 /* ---- sync status pill ---- */
 function setSyncStatus(state){
@@ -2032,7 +2048,7 @@ function renderGate(){
             <div id="paneCandidate" class="space-y-4">
               <div>
                 <h2 class="font-display text-lg font-bold text-white">Welcome 👋</h2>
-                <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here?</b> Sign in with Google to create your account, then unlock a full year for ₹199. Already bought access? Enter your code below.</p>
+                <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here?</b> Get a full year for ₹199, then sign in with the same email — your access is already waiting. Already a member? Sign in below.</p>
               </div>
 
               <!-- Google Sign In Option -->
@@ -2044,36 +2060,31 @@ function renderGate(){
               <!-- Divider -->
               <div class="relative my-3 flex items-center justify-center">
                 <div class="border-t border-white/10 w-full"></div>
-                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">OR CREATE ACCOUNT</span>
+                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">OR GET ACCESS</span>
               </div>
 
-              <!-- Free signup (name + email + phone) -->
-              <div id="freeSignup" class="rounded-2xl border border-emerald-400/30 bg-emerald-500/[.07] p-3.5">
-                <p class="text-xs font-bold text-emerald-300 mb-2">👤 Create your account in 10 seconds</p>
-                <div class="grid gap-2">
-                  <input id="fsName" placeholder="Full name" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
-                  <input id="fsEmail" type="email" placeholder="Email" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
-                  <input id="fsPhone" type="tel" inputmode="numeric" placeholder="WhatsApp number" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
-                  <button data-action="do-free-signup" class="py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow">Create account →</button>
-                  <p id="fsMsg" class="text-[11px] text-center text-slate-400"></p>
+              <!-- Buy access: the primary action -->
+              <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
+                class="group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-lg shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[.99] transition">
+                <div class="rounded-[15px] bg-slate-950 px-4 py-4 text-center">
+                  <p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">Get started</p>
+                  <p class="text-lg font-black text-white mt-0.5 leading-tight">1 year access — ₹199</p>
+                  <p class="text-[10.5px] text-slate-400 mt-1">Pay first, then sign in with the same email. Access is instant.</p>
+                  <span class="mt-3 inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl text-sm font-black bg-white text-slate-900 shadow group-hover:gap-2.5 transition-all">Pay now <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
                 </div>
-                <p class="text-[10px] text-slate-500 mt-1.5 text-center">Creates your account. Full access to all ${AREAS.length} areas is ₹199 for a year.</p>
-              </div>
+              </a>
+              <p class="text-[10px] text-slate-500 text-center">Already paid? Sign in with Google above using the same email.</p>
 
-              <!-- Divider -->
-              <div class="relative my-3 flex items-center justify-center">
-                <div class="border-t border-white/10 w-full"></div>
-                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">ALREADY PAID? ACCESS CODE</span>
-              </div>
 
-              <div>
-                <label for="loginCode" class="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">Access Code</label>
-                <div class="relative">
-                  <input id="loginCode" type="text" placeholder="MB4-XXXXX-XXXXX" autocomplete="off" spellcheck="false" class="w-full font-mono tracking-widest text-base rounded-2xl bg-black/40 border border-slate-700 focus:border-brand-400 focus:ring-2 focus:ring-brand-400/40 text-white px-4 py-3.5 outline-none transition-all uppercase placeholder:text-slate-600 placeholder:tracking-normal placeholder:font-sans" />
-                  <span class="absolute right-3.5 top-3.5 text-slate-500 text-sm">🔑</span>
+              <details class="group">
+                <summary class="cursor-pointer list-none text-[11px] text-slate-500 hover:text-slate-400 text-center py-1 select-none">I have an access code</summary>
+                <div class="mt-2">
+                  <input id="loginCode" type="text" placeholder="MB4-XXXXX-XXXXX" autocomplete="off" spellcheck="false"
+                    class="w-full font-mono tracking-widest text-sm rounded-xl bg-black/20 border border-slate-700/60 focus:border-slate-500 text-slate-300 px-3 py-2.5 outline-none transition-all uppercase placeholder:text-slate-600 placeholder:tracking-normal placeholder:font-sans" />
+                  <button data-action="do-login" class="mt-2 w-full py-2.5 rounded-xl text-xs font-semibold border border-slate-700/60 text-slate-400 hover:text-slate-200 hover:border-slate-500 transition">Use access code</button>
                 </div>
-                <p id="loginErr" class="text-xs font-medium text-rose-400 mt-2 hidden flex items-center gap-1"><span>⚠️</span><span id="loginErrMsg"></span></p>
-              </div>
+              </details>
+              <p id="loginErr" class="text-xs font-medium text-rose-400 mt-2 hidden flex items-center gap-1"><span>⚠️</span><span id="loginErrMsg"></span></p>
 
               <div class="relative my-3 flex items-center justify-center">
                 <div class="border-t border-white/10 w-full"></div>
@@ -2087,11 +2098,6 @@ function renderGate(){
                 <button data-action="do-password-login" id="pwLoginBtn" class="w-full py-3 rounded-2xl text-sm font-bold border border-brand-400/40 bg-brand-500/15 text-brand-200 hover:bg-brand-500/25 transition">Log in with password</button>
                 <p class="text-[10.5px] text-slate-500 text-center">Set a password from <b>My subscription</b> after your first sign-in.</p>
               </div>
-
-              <button data-action="do-login" id="loginSubmitBtn" class="w-full py-3.5 rounded-2xl text-sm font-bold bg-gradient-to-r from-brand-500 via-brand-600 to-cyan-500 text-white shadow-lg shadow-brand-500/30 hover:opacity-95 active:scale-[0.99] transition-all duration-200 flex items-center justify-center gap-2 group">
-                <span>Enter Workspace</span>
-                <span class="group-hover:translate-x-1 transition-transform">→</span>
-              </button>
             </div>
 
             <!-- Admin Passphrase Pane -->
