@@ -2637,11 +2637,7 @@ function doClaim(){
           <h1 class="font-display text-2xl font-extrabold">You are in</h1>
           <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Full access until <b>${r.expiresAt?new Date(r.expiresAt).toDateString():'one year from today'}</b>.</p>
         </div>
-        <div class="mt-4 rounded-xl bg-slate-50 dark:bg-white/[.04] border border-slate-200 dark:border-white/10 p-3.5 text-center">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Your access code</p>
-          <p class="font-mono text-lg font-bold tracking-widest mt-1 select-all">${esc(r.code)}</p>
-          <p class="text-[11px] text-slate-400 mt-1">Keep this. You can also just sign in with Google using ${esc(r.email||em)}.</p>
-        </div>
+        ${accessCodeBox(r.code, r.email||em, r.expiresAt)}
         <div class="mt-4">
           <p class="text-sm font-bold mb-1.5">🔑 Set a password (optional)</p>
           <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-2">So you can log in with your email instead of the code.</p>
@@ -2659,6 +2655,47 @@ function doClaim(){
     </div>`;
     loadFromCloud();
   }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='Unlock my access'; } });
+}
+
+function accessCodeBox(code, email, expiresAt){
+  return `<div class="mt-4 rounded-2xl p-4 bg-gradient-to-br from-emerald-500/15 to-brand-500/10 border-2 border-emerald-400/40 text-center">
+    <p class="text-[11px] font-extrabold uppercase tracking-widest text-emerald-600 dark:text-emerald-300">Your access code</p>
+    <p id="codeText" class="font-mono text-2xl sm:text-3xl font-black tracking-[0.18em] mt-2 mb-1 select-all break-all text-slate-900 dark:text-white">${esc(code)}</p>
+    <button data-action="copy-code" data-code="${esc(code)}" class="mt-1 px-4 py-2 rounded-xl text-xs font-bold bg-emerald-500 text-white shadow">📋 Copy code</button>
+    <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-2.5">Save this. You can also just sign in with Google using <b>${esc(email||'your email')}</b> — no code needed.${expiresAt?' Valid until <b>'+new Date(expiresAt).toDateString()+'</b>.':''}</p>
+  </div>`;
+}
+
+// Someone who has just paid in the Cashfree tab comes back here. Their existing
+// account code is upgraded in place by the webhook, so re-checking the same
+// token is enough to let them straight in.
+function checkPaymentNow(btn){
+  const msg=document.getElementById('upgradeMsg');
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.className='text-xs text-center mt-2 '+(ok?'text-emerald-500':'text-slate-400'); } };
+  if(!auth.token){ say('Please sign in again.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  say('Checking your payment…', true);
+  acct('login',{token:auth.token,device:getDeviceId()}).then(r=>{
+    if(r && r.ok && r.role && r.role!=='free'){
+      auth.role=r.role; auth.name=r.name||auth.name; auth.expiresAt=r.expiresAt||null; saveAuth();
+      adsConversion(ADS_PURCHASE, 'paid-'+auth.token, 199);
+      renderHeaderControls();
+      const app=document.getElementById('app');
+      app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
+        <div class="rounded-2xl p-6 bg-white/75 dark:bg-white/[.04] glass border border-emerald-400/30 shadow-sm text-center">
+          <p class="text-5xl mb-2">🎉</p>
+          <h1 class="font-display text-2xl font-extrabold">Payment confirmed</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Your full access is active.</p>
+          ${accessCodeBox(auth.token, auth.email, auth.expiresAt)}
+          <a href="#/questions" class="mt-5 block text-center py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Start studying →</a>
+        </div>
+      </div>`;
+      loadFromCloud();
+      return;
+    }
+    say('No payment found against this account yet. If you just paid, wait a few seconds and try again.');
+    if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock now'; }
+  }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock now'; } });
 }
 
 function renderUpgrade(){
@@ -2692,6 +2729,8 @@ function renderUpgrade(){
         <p class="text-[13px] text-slate-600 dark:text-slate-300">Pay with <b>${esc(auth.email||'your email')}</b> at checkout and your account unlocks the moment the payment clears — nothing to wait for and nothing to send us.</p>
       </div>
 
+      <button data-action="check-payment" class="mt-4 w-full py-3 rounded-xl text-sm font-bold border-2 border-emerald-400/50 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/10 transition">I have paid — unlock now</button>
+      <p id="upgradeMsg" class="text-xs text-center mt-2"></p>
       <p class="mt-4 text-center text-[11px] text-slate-400">
         Already paid with a different email? <a href="#/paid" class="underline font-semibold">Unlock it here</a> ·
         <a href="#/terms" class="underline">Terms</a> · <a href="#/refund" class="underline">Refunds</a>
@@ -5132,6 +5171,14 @@ app.addEventListener('click', async e => {
   }
   if (act==='mcq-exit'){
     const ar=AREA_BY_ID[btn.dataset.area]; mcqRun=null; if(ar) renderMcqBox(ar);
+    return;
+  }
+  if (act==='check-payment'){ checkPaymentNow(btn); return; }
+  if (act==='copy-code'){
+    const c=btn.dataset.code||'';
+    try{ navigator.clipboard.writeText(c); btn.textContent='✅ Copied'; }
+    catch(_){ btn.textContent='Select the code above'; }
+    setTimeout(()=>{ btn.textContent='📋 Copy code'; },1600);
     return;
   }
   if (act==='do-claim'){ doClaim(); return; }
