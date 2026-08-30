@@ -37,18 +37,19 @@ async function send(chatId, text, markup) {
 
 function pitch(link) {
   return [
-    '<b>Mission Big 4 — free audit interview prep</b>',
+    '<b>Mission Big 4 — Big 4 audit interview prep</b>',
     '',
     'Questions compiled from <b>20+ Big 4 interviewers</b> (EY · PwC · Deloitte · KPMG).',
     '',
-    '<b>Free, no payment:</b>',
-    '• 480+ hard MCQ tests with full explanations',
-    '• Model answers in the concept areas',
-    '• Instant scoring so you know where you stand',
+    '<b>What you get for ₹199 a year:</b>',
+    '• 80+ real interview questions with model answers',
+    '• 480+ practice MCQs with full explanations',
+    '• Worked examples, interviewer tips and audio revision',
+    '• Mock interview panel and an interview tracker',
     '',
-    `👉 <a href="${link}">Start free here</a>`,
+    `👉 <a href="${link}">Get 1 year access — ₹199</a>`,
     '',
-    'Full access to every model answer is ₹199 for a year if you want it later.',
+    'That is under ₹17 a month, and access is instant.',
   ].join('\n');
 }
 

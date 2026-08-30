@@ -928,9 +928,9 @@ function loadMcqs(areaId){
 const FREE_Q_CATEGORY = 'concepts';
 function isFreeQuestionArea(area){ return !!area && area.cat === FREE_Q_CATEGORY; }
 /* Concept areas (Audit Process -> Documentation & Management Reps) are fully
-   open on the free plan: questions AND model answers. Everything after that is
+   open to paying members. Everything is behind the single ₹199 plan.
    paid, and shows neither. */
-function canSeeArea(area){ return authed() || isFreeQuestionArea(area); }
+function canSeeArea(area){ return authed(); }   // one plan: paid
 function canSeeAnswer(area){ return canSeeArea(area); }
 function canSeeQuestion(area){ return canSeeArea(area); }
 function areaOfQuestion(qid){
@@ -1457,7 +1457,7 @@ function buildPrintHtml(){
   CATEGORIES.forEach(cat=>{
     let areaHtml='';
     AREAS.filter(a=>a.cat===cat.id).forEach(area=>{
-      if(!canSeeArea(area)) return;              // never export paid areas to a free plan
+      if(!canSeeArea(area)) return;              // never export locked areas
       const qs=orderedAreaQuestions(area); if(!qs.length) return;
       let qHtml='';
       qs.forEach((q,i)=>{
@@ -1496,7 +1496,7 @@ function buildPrintHtml(){
 }
 function downloadPdf(){
   if(!authed()){
-    if(confirm('The free plan exports only the open concept areas.\n\nUnlock all '+allQuestions().length+' questions with model answers for ₹199/year?')){ location.hash='#/request'; return; }
+    if(confirm('Your account is not active yet.\n\nUnlock all '+allQuestions().length+' questions with model answers for ₹199/year?')){ location.hash='#/request'; return; }
   }
   const w=window.open('','_blank');
   if(!w){ alert('Please allow pop-ups for this site, then click "Download PDF" again.'); return; }
@@ -1822,13 +1822,12 @@ function router(){
   if (hash.indexOf('#/paid') === 0) { renderPaid(); return; }
   if (!authed()){
     // Everyone must have an account. Free accounts (role 'free') may browse the
-    // free tier; true guests are sent to the gate to sign up or log in.
+    // A signed-in account that has not paid is shown the offer instead.
     if (hash === '#/request') { renderRequest(); return; }
     // Value first: anyone may browse the bank and take a test. The account is
     // asked for afterwards, once they have seen the quality for themselves.
-    if (hash === '#/questions') { renderQuestions(); return; }
-    if (m && AREA_BY_ID[m[1]]) { renderArea(AREA_BY_ID[m[1]]); return; }
-    if (hash === '#/' || hash === '') { renderQuestions(); return; }
+    // One plan. A signed-in account that has not paid sees the offer.
+    if (auth.role === 'free') { renderUpgrade(); return; }
     renderGate();
     return;
   }
@@ -1902,7 +1901,7 @@ function renderHeaderControls(){
       <a href="#/request" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow mt-1"><span>🔓</span><span>Get full access — ₹199</span></a>
       ${auth.role==='free'
         ? '<button data-action="logout" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 mt-1"><span>🚪</span><span>Log out</span></button>'
-        : '<button data-action="show-login" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 mt-1"><span>🔑</span><span>Log in / Sign up free</span></button>'}`;
+        : '<button data-action="show-login" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 mt-1"><span>🔑</span><span>Log in / Create account</span></button>'}`;
     footer.innerHTML=`<button id="themeToggle" title="Toggle theme" class="w-full flex items-center justify-center gap-2 h-10 rounded-xl border border-slate-200 dark:border-white/10 bg-white/60 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition text-sm font-semibold"><svg id="iconMoon" class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z"/></svg><svg id="iconSun" class="w-5 h-5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4 12H2m20 0h-2M5 5 4 4m15 1 1-1M5 19l-1 1m15-1 1 1"/></svg><span>Theme</span></button>`;
     wireTheme(); return;
   }
@@ -2033,7 +2032,7 @@ function renderGate(){
             <div id="paneCandidate" class="space-y-4">
               <div>
                 <h2 class="font-display text-lg font-bold text-white">Welcome 👋</h2>
-                <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here? Sign in with Google — it is free.</b> You get every MCQ test and our sample areas instantly. Already bought access? Enter your code below.</p>
+                <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here?</b> Sign in with Google to create your account, then unlock a full year for ₹199. Already bought access? Enter your code below.</p>
               </div>
 
               <!-- Google Sign In Option -->
@@ -2045,20 +2044,20 @@ function renderGate(){
               <!-- Divider -->
               <div class="relative my-3 flex items-center justify-center">
                 <div class="border-t border-white/10 w-full"></div>
-                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">OR SIGN UP FREE</span>
+                <span class="absolute bg-[#0c1024] px-3 text-[10px] font-extrabold tracking-wider text-slate-500 uppercase">OR CREATE ACCOUNT</span>
               </div>
 
               <!-- Free signup (name + email + phone) -->
               <div id="freeSignup" class="rounded-2xl border border-emerald-400/30 bg-emerald-500/[.07] p-3.5">
-                <p class="text-xs font-bold text-emerald-300 mb-2">🎁 Create a free account in 10 seconds</p>
+                <p class="text-xs font-bold text-emerald-300 mb-2">👤 Create your account in 10 seconds</p>
                 <div class="grid gap-2">
                   <input id="fsName" placeholder="Full name" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
                   <input id="fsEmail" type="email" placeholder="Email" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
                   <input id="fsPhone" type="tel" inputmode="numeric" placeholder="WhatsApp number" class="text-sm rounded-xl bg-black/30 border border-slate-700 focus:border-emerald-400 text-white px-3 py-2.5 outline-none placeholder:text-slate-500" />
-                  <button data-action="do-free-signup" class="py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow">Start free →</button>
+                  <button data-action="do-free-signup" class="py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow">Create account →</button>
                   <p id="fsMsg" class="text-[11px] text-center text-slate-400"></p>
                 </div>
-                <p class="text-[10px] text-slate-500 mt-1.5 text-center">Free: all ${AREAS.length} MCQ tests + core concept questions. No payment needed.</p>
+                <p class="text-[10px] text-slate-500 mt-1.5 text-center">Creates your account. Full access to all ${AREAS.length} areas is ₹199 for a year.</p>
               </div>
 
               <!-- Divider -->
@@ -2245,8 +2244,8 @@ function phoneCaptureHTML(){
     <div class="flex items-start gap-3">
       <span class="text-2xl shrink-0">🎁</span>
       <div class="flex-1 min-w-0">
-        <p class="font-bold text-sm">Want the free 50-question PDF on WhatsApp?</p>
-        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Drop your WhatsApp number and we will send the PDF plus any subscriber offers. No spam.</p>
+        <p class="font-bold text-sm">Want study reminders on WhatsApp?</p>
+        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-0.5">Drop your WhatsApp number for occasional prep tips and subscriber offers. No spam.</p>
         <div class="flex gap-2 mt-2.5 flex-wrap">
           <input id="capPhone" type="tel" inputmode="numeric" maxlength="15" placeholder="10-digit WhatsApp number"
             class="flex-1 min-w-[190px] text-sm rounded-xl bg-white/80 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-emerald-400" />
@@ -2268,7 +2267,7 @@ function savePhoneFromCapture(){
     if(r&&r.ok){
       auth.needsPhone=false; saveAuth(); track('phone_given');
       const box=document.getElementById('phoneCapture');
-      if(box) box.innerHTML='<p class="text-sm font-bold text-emerald-600 dark:text-emerald-300">✅ Got it — we will WhatsApp your PDF shortly.</p>';
+      if(box) box.innerHTML='<p class="text-sm font-bold text-emerald-600 dark:text-emerald-300">✅ Got it — thanks!</p>';
     } else if(msg){ msg.textContent=(r&&r.error)||'Could not save, please try again.'; msg.className='text-[11px] mt-1.5 text-rose-500'; }
   }).catch(()=>{ if(msg){ msg.textContent='Network error — please try again.'; msg.className='text-[11px] mt-1.5 text-rose-500'; } });
 }
@@ -2413,7 +2412,7 @@ const POLICY_PAGES = {
     <p>The platform is owned and operated by <b>${esc(BUSINESS.name)}</b>, a sole proprietor based in India. It provides a structured question bank, model answers, practice tests and revision tools covering statutory audit, Indian Accounting Standards, CARO 2020, Schedule III and the Standards on Auditing.</p>
     <p>All study material is written in-house from publicly available standards and legislation. We are an independent education service and are not affiliated with, endorsed by, or connected to Ernst &amp; Young, PricewaterhouseCoopers, Deloitte, KPMG, the Institute of Chartered Accountants of India, or any other firm or body named on this site. Firm names are used only to describe the type of interview the material prepares you for.</p>
     <h3>What we sell</h3>
-    <p>A single digital subscription giving one year of access to the full question bank and study tools. There is also a free tier that requires no payment.</p>
+    <p>A single digital subscription giving one year of access to the full question bank and study tools.</p>
     <h3>Business details</h3>
     <p><b>Business name:</b> ${esc(BUSINESS.name)} (sole proprietor), trading as ${esc(BUSINESS.trade)}<br>
        <b>Registered address:</b> ${esc(BUSINESS.addr)}<br>
@@ -2432,8 +2431,8 @@ const POLICY_PAGES = {
     <p>Monday to Saturday, 10:00 to 19:00 IST. We aim to respond within 24 working hours, and to payment or access issues within 4 hours.</p>` },
 
   '#/pricing': { icon: '💳', title: 'Pricing', body: () => `
-    <h3>Free plan — ₹0</h3>
-    <p>No payment required. Includes the practice tests across every area, model answers in the open concept areas, and instant scoring with explanations.</p>
+    <h3>One plan</h3>
+    <p>There is a single plan. Creating an account is free, and full access to the question bank requires the subscription below.</p>
     <h3>Full access — ₹199 for one year</h3>
     <p>One payment of <b>₹199 (Indian Rupees one hundred and ninety-nine only)</b> for <b>365 days</b> of access to the complete question bank, all model answers, worked examples, interviewer tips, audio revision, mock interview panel, flashcards and the interview tracker.</p>
     <p>Prices are inclusive of all applicable taxes. There are no recurring charges and no auto-renewal — access simply ends after 365 days unless you choose to buy again.</p>
@@ -2654,6 +2653,47 @@ function doClaim(){
     </div>`;
     loadFromCloud();
   }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='Unlock my access'; } });
+}
+
+function renderUpgrade(){
+  const app=document.getElementById('app');
+  const who=(auth.name||'').split(' ')[0];
+  app.innerHTML=`<div class="max-w-lg mx-auto mt-6 fade">
+    <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
+      <p class="text-[11px] font-extrabold uppercase tracking-widest text-brand-500">${who?esc('Welcome, '+who):'Welcome'}</p>
+      <h1 class="font-display text-2xl sm:text-3xl font-extrabold mt-1">Unlock your <span class="gradient-text">Big 4 prep</span></h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5">One payment of ₹199 opens everything for a full year. No renewals, no upsells.</p>
+
+      <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
+        class="mt-5 group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-xl shadow-emerald-500/25 hover:shadow-emerald-500/40 active:scale-[.99] transition">
+        <div class="rounded-[15px] bg-slate-950 px-5 py-5 text-center">
+          <p class="text-[10px] font-extrabold uppercase tracking-widest text-emerald-300">Secure payment</p>
+          <p class="text-2xl font-black text-white mt-1 leading-tight">Get 1 year access — ₹199</p>
+          <p class="text-[11px] text-slate-400 mt-1.5">UPI · Cards · Net banking · Wallets — powered by Cashfree</p>
+          <span class="mt-4 inline-flex items-center gap-2 px-7 py-3 rounded-xl text-base font-black bg-white text-slate-900 shadow group-hover:gap-3 transition-all">Pay now <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
+        </div>
+      </a>
+      <p class="mt-2.5 text-center text-[11px] text-slate-400">🔒 Cashfree handles the payment. We never see your card or UPI details. Under ₹17 a month.</p>
+
+      <div class="mt-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[.07] to-brand-500/[.05] p-4">
+        ${interviewersBadgeHTML('mb-3')}
+        <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Everything included 👇</p>
+        ${featureTickerHTML({height:'220px'})}
+      </div>
+
+      <div class="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-500/[.06] p-4">
+        <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300 mb-2">⚡ Access is instant</p>
+        <p class="text-[13px] text-slate-600 dark:text-slate-300">Pay with <b>${esc(auth.email||'your email')}</b> at checkout and your account unlocks the moment the payment clears — nothing to wait for and nothing to send us.</p>
+      </div>
+
+      <p class="mt-4 text-center text-[11px] text-slate-400">
+        Already paid with a different email? <a href="#/paid" class="underline font-semibold">Unlock it here</a> ·
+        <a href="#/terms" class="underline">Terms</a> · <a href="#/refund" class="underline">Refunds</a>
+      </p>
+      <button data-action="logout" class="mt-4 w-full text-[11px] text-slate-400 hover:text-rose-500">Sign out</button>
+    </div>
+  </div>`;
+  track('view_request');
 }
 
 function renderRequest(){
@@ -4326,9 +4366,9 @@ function renderQuestions(){
       <div class="flex items-start gap-3 flex-wrap sm:flex-nowrap">
         <span class="text-2xl">🎁</span>
         <div class="flex-1 min-w-0">
-          <h2 class="font-display font-extrabold text-base">You are on the free plan</h2>
-          <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-1">Your free account includes <b>all ${AREAS.length} MCQ tests</b> (${MCQ_TOTAL} hard questions with full explanations) plus <b>complete model answers</b> in all ${AREAS.filter(a=>a.cat==='concepts').length} core concept areas — Audit Process through Documentation &amp; Management Reps.</p>
-          <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1">Model answers in the other areas are locked. Unlock all ${totalQ} for ₹199/year.</p>
+          <h2 class="font-display font-extrabold text-base">Your account is not active yet</h2>
+          <p class="text-[13px] text-slate-600 dark:text-slate-300 mt-1">Unlock <b>all ${totalQ} questions</b> with model answers, worked examples and interviewer tips, plus <b>${MCQ_TOTAL} practice MCQs</b> across ${AREAS.length} areas.</p>
+          <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1">One payment of ₹199 covers a full year. Under ₹17 a month.</p>
         </div>
         <a href="#/request" class="shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Unlock all →</a>
       </div>
@@ -4457,9 +4497,9 @@ function mcqSectionHTML(area){
       ${phoneCaptureHTML()}
       ${signedIn()?'':`<div class="mt-5 rounded-2xl p-4 sm:p-5 bg-gradient-to-br from-brand-500/10 to-cyan-400/10 border border-brand-400/30 text-center">
         <p class="text-2xl mb-1">🔓</p>
-        <p class="font-bold text-sm">Create a free account to keep this score</p>
-        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1 mb-3">One tap with Google. Saves your progress across devices, unlocks the model answers in the concept areas, and it stays free.</p>
-        <button data-action="show-login" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Save my progress — free</button>
+        <p class="font-bold text-sm">Unlock the full question bank</p>
+        <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1 mb-3">Model answers, worked examples, interviewer tips, audio revision and the mock panel — a full year for ₹199.</p>
+        <button data-action="show-login" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">Get 1 year access — ₹199</button>
       </div>`}
       <div class="mt-5 space-y-2.5">${review}</div>
     </div>`;
