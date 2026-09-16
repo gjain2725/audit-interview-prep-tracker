@@ -1880,6 +1880,8 @@ function router(){
     // Everyone must have an account. Free accounts (role 'free') may browse the
     // A signed-in account that has not paid is shown the offer instead.
     if (hash === '#/request') { renderRequest(); return; }
+    // Paid social traffic gets three questions before the offer.
+    if (auth.role !== 'free' && isAdTraffic() && (hash === '#/' || hash === '' || hash === '#/try')) { renderSampler(); return; }
     // Value first: anyone may browse the bank and take a test. The account is
     // asked for afterwards, once they have seen the quality for themselves.
     // One plan. A signed-in account that has not paid sees the offer.
@@ -2740,6 +2742,118 @@ function checkPaymentNow(btn){
     say('No payment found against this account yet. If you just paid, wait a few seconds and try again.');
     if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock now'; }
   }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock now'; } });
+}
+
+/* ---- 3-question taster for paid social traffic --------------------------
+   Only ad traffic sees this. Organic visitors still meet the paid gate, so
+   the offer stays intact for everyone who did not cost money to acquire.
+   ------------------------------------------------------------------------ */
+const SAMPLER = [
+  { q:'Who is responsible for preparing the financial statements of a company?',
+    o:['The statutory auditor of the company','The management of the company','The audit committee of the board','The Institute of Chartered Accountants'],
+    c:1,
+    why:'Management prepares and presents the financial statements. The auditor only expresses an opinion on them - which is why an audit is never a guarantee that the accounts are correct.',
+    tag:'Warm-up' },
+  { q:'A customer may return goods within 30 days. Under Ind AS 115, at the point of sale the entity should:',
+    o:['Recognise the full invoice value and provide for the returns later','Defer all of the revenue until the 30 day return window has closed','Recognise revenue net of expected returns, with a refund liability','Recognise revenue in full because control has passed to the buyer'],
+    c:2,
+    why:'Expected returns are not revenue at all. You recognise revenue only for what you expect to keep, raise a refund liability for the rest, and separately record an asset for the right to recover the goods. Deferring everything or providing later are both wrong.',
+    tag:'Interview level' },
+  { q:'A company has working capital limits of Rs 6 crore sanctioned against current assets. Which CARO 2020 comment is triggered?',
+    o:['Whether quarterly returns filed with banks agree with the books','Whether the borrowings were applied for the purpose they were stated','Whether title deeds of the secured assets are held by the lender','No comment, since the limit is below the Rs 10 crore threshold'],
+    c:0,
+    why:'Clause 3(ii)(b) bites once sanctioned working capital limits exceed Rs 5 crore in aggregate against current assets. The auditor must state whether the quarterly returns filed with the banks agree with the books, and report any discrepancy.',
+    tag:'Interview level' },
+];
+
+let samplerRun = null;
+
+function isAdTraffic(){
+  try{ return /^instagram/i.test(campaignRef() || ''); }catch(_){ return false; }
+}
+
+function renderSampler(){
+  const app = document.getElementById('app');
+  const run = samplerRun;
+
+  // ----- intro -----
+  if(!run){
+    app.innerHTML = `<div class="max-w-lg mx-auto mt-6 fade">
+      <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm text-center">
+        ${interviewersBadgeHTML('mb-4')}
+        <h1 class="font-display text-2xl sm:text-3xl font-extrabold">Would you survive the <span class="gradient-text">technical round?</span></h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">Three real questions. Takes about a minute. No signup, no payment.</p>
+        <button data-action="sampler-start" class="mt-5 w-full py-3.5 rounded-xl text-base font-black bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow-lg">Start the 3 questions →</button>
+        <p class="text-[11px] text-slate-400 mt-3">Questions compiled from 20+ Big 4 interviewers · EY · PwC · Deloitte · KPMG</p>
+      </div>
+    </div>`;
+    return;
+  }
+
+  // ----- results -----
+  if(run.pos >= SAMPLER.length){
+    const correct = SAMPLER.reduce((n,m,i)=> n + (run.answers[i]===m.c ? 1 : 0), 0);
+    const verdict = correct===3 ? 'Strong. The full bank will stretch you further.'
+                  : correct===2 ? 'Close. One slip like that ends a real interview.'
+                  : correct===1 ? 'That is exactly the gap the full bank closes.'
+                  : 'This is what an interviewer would have seen. It is fixable.';
+    app.innerHTML = `<div class="max-w-lg mx-auto mt-6 fade">
+      <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
+        <div class="text-center">
+          <p class="font-display text-5xl font-black ${correct>=2?'text-emerald-500':'text-amber-500'}">${correct}/3</p>
+          <p class="text-sm text-slate-600 dark:text-slate-300 mt-2 font-semibold">${verdict}</p>
+        </div>
+        <div class="mt-5 rounded-2xl border border-amber-400/25 bg-gradient-to-br from-amber-400/[.07] to-brand-500/[.05] p-4">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">That was 3 of ${MCQ_TOTAL + 80}. Here is the rest 👇</p>
+          ${featureTickerHTML({height:'200px'})}
+        </div>
+        <a href="${CASHFREE_FORM_URL}" target="_blank" rel="noopener" data-action="pay-click"
+          class="mt-5 group block rounded-2xl p-0.5 bg-gradient-to-r from-emerald-500 via-brand-500 to-cyan-500 shadow-xl shadow-emerald-500/25 active:scale-[.99] transition">
+          <div class="rounded-[15px] bg-slate-950 px-5 py-5 text-center">
+            <p class="text-2xl font-black text-white leading-tight">Unlock everything — ₹199</p>
+            <p class="text-[11px] text-slate-400 mt-1.5">One year · under ₹17 a month · access is instant</p>
+            <span class="mt-3 inline-flex items-center gap-2 px-7 py-3 rounded-xl text-base font-black bg-white text-slate-900 shadow">Pay now →</span>
+          </div>
+        </a>
+        <p class="mt-3 text-center text-[11px] text-slate-400">Already bought it? <button data-action="show-login" class="underline font-semibold">Sign in</button></p>
+      </div>
+    </div>`;
+    track('finish_mcq');
+    return;
+  }
+
+  // ----- a question -----
+  const i = run.pos, m = SAMPLER[i], chosen = run.answers[i], answered = chosen != null;
+  const opts = m.o.map((txt,k)=>{
+    let cls='border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.04]';
+    let mark=`<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-slate-100 dark:bg-white/10 text-[11px] font-bold">${'ABCD'[k]}</span>`;
+    if(answered){
+      if(k===m.c){ cls='border-emerald-400/60 bg-emerald-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-emerald-500 text-white text-[11px] font-bold">✓</span>'; }
+      else if(k===chosen){ cls='border-rose-400/60 bg-rose-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-rose-500 text-white text-[11px] font-bold">✕</span>'; }
+      else cls='border-slate-200/60 dark:border-white/5 opacity-60';
+    }
+    return `<button ${answered?'disabled':''} data-action="sampler-answer" data-opt="${k}"
+      class="w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border-2 ${cls} transition text-sm">${mark}<span class="flex-1">${esc(txt)}</span></button>`;
+  }).join('');
+
+  app.innerHTML = `<div class="max-w-lg mx-auto mt-6 fade">
+    <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-5 sm:p-6 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
+        <p class="text-xs font-bold text-slate-500">Question ${i+1} of 3</p>
+        <span class="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md ${m.tag==='Warm-up'?'bg-emerald-500/15 text-emerald-500':'bg-rose-500/15 text-rose-500'}">${m.tag}</span>
+      </div>
+      <div class="h-1.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden mb-4">
+        <div class="h-full rounded-full bg-gradient-to-r from-brand-500 to-cyan-400 transition-all duration-300" style="width:${Math.round(i/3*100)}%"></div>
+      </div>
+      <p class="text-[15px] font-semibold leading-snug mb-4">${esc(m.q)}</p>
+      <div class="space-y-2.5">${opts}</div>
+      ${answered?`<div class="mt-4 rounded-xl p-3.5 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10">
+        <p class="text-[13px] font-bold mb-1 ${chosen===m.c?'text-emerald-600 dark:text-emerald-300':'text-rose-500'}">${chosen===m.c?'✅ Correct':'❌ Not quite'}</p>
+        <p class="text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed"><b>Why:</b> ${esc(m.why)}</p>
+        <button data-action="sampler-next" class="mt-3 w-full py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow">${i===2?'See my result →':'Next question →'}</button>
+      </div>`:''}
+    </div>
+  </div>`;
 }
 
 function renderUpgrade(){
@@ -5219,6 +5333,12 @@ app.addEventListener('click', async e => {
     return;
   }
   if (act==='pay-click'){ metaEvent('InitiateCheckout', {value:199, currency:'INR'}); return; }
+  if (act==='sampler-start'){ samplerRun={pos:0,answers:{}}; track('start_mcq'); metaEvent('Lead'); renderSampler(); return; }
+  if (act==='sampler-answer'){
+    if(samplerRun && samplerRun.answers[samplerRun.pos]==null){ samplerRun.answers[samplerRun.pos]=parseInt(btn.dataset.opt,10); renderSampler(); }
+    return;
+  }
+  if (act==='sampler-next'){ if(samplerRun){ samplerRun.pos++; renderSampler(); window.scrollTo({top:0,behavior:'smooth'}); } return; }
   if (act==='check-payment'){ checkPaymentNow(btn); return; }
   if (act==='copy-site-link'){
     try{ navigator.clipboard.writeText('https://missionbig4.in/?ref=instagram'); btn.textContent='✅ Copied — paste in Chrome'; }
