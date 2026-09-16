@@ -9,6 +9,21 @@
     gtag('js', new Date());
     gtag('config', 'AW-18350237820');
   </script>
+
+  <!-- Meta pixel. Set META_PIXEL_ID once the pixel exists in Meta Events Manager;
+       every call is a no-op while it is blank, so nothing breaks in the meantime. -->
+  <script>
+    window.META_PIXEL_ID = '';
+    if (window.META_PIXEL_ID) {
+      !function(f,b,e,v,n,t,s2){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s2=b.getElementsByTagName(e)[0];s2.parentNode.insertBefore(t,s2)}
+      (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', window.META_PIXEL_ID);
+      fbq('track', 'PageView');
+    }
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mission Big 4 · Audit Interview Prep — Himanshi Garg</title>
@@ -1212,6 +1227,29 @@ function campaignRef(){
    -------------------------------------------------------------------------- */
 const ADS_REGISTRATION = 'AW-18350237820/m1L7CLn30OkcEPzQia5E';   // counts once per click
 const ADS_PURCHASE     = 'AW-18350237820/_nIcCKbR1OkcEPzQia5E';   // counts every conversion
+/* Instagram, Facebook and similar apps open links in an embedded webview.
+   Google refuses OAuth in those (error: disallowed_useragent), so a visitor
+   from a reel cannot sign in with Google until they open a real browser. */
+function isInAppBrowser(){
+  try{
+    const ua = navigator.userAgent || '';
+    return /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Snapchat|Line\/|Twitter|Pinterest/i.test(ua);
+  }catch(_){ return false; }
+}
+function inAppNoticeHTML(){
+  if(!isInAppBrowser()) return '';
+  return `<div class="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3.5 mb-4">
+    <p class="text-[12px] font-bold text-amber-300">⚠️ Open in your browser for Google sign-in</p>
+    <p class="text-[11px] text-slate-300 mt-1">You are in the Instagram browser, and Google does not allow sign-in here. Tap the <b>⋯</b> menu and choose <b>Open in browser</b> — or use email and password below, which works fine here.</p>
+    <button data-action="copy-site-link" class="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-400 text-slate-900">📋 Copy link</button>
+  </div>`;
+}
+
+/* Meta pixel events, mirroring the Google ones. Safe when the pixel is absent. */
+function metaEvent(name, params){
+  try{ if(typeof fbq === 'function') fbq('track', name, params || {}); }catch(_){ }
+}
+
 function adsConversion(sendTo, transactionId, value){
   try{
     if(typeof gtag !== 'function' || !sendTo) return;
@@ -2046,6 +2084,7 @@ function renderGate(){
 
             <!-- Candidate Access Code Pane -->
             <div id="paneCandidate" class="space-y-4">
+              ${inAppNoticeHTML()}
               <div>
                 <h2 class="font-display text-lg font-bold text-white">Welcome 👋</h2>
                 <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here?</b> Get a full year for ₹199, then sign in with the same email — your access is already waiting. Already a member? Sign in below.</p>
@@ -2628,6 +2667,7 @@ function doClaim(){
     auth={ token:r.code, role:'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false };
     saveAuth(); track('login');
     adsConversion(ADS_PURCHASE, 'paid-' + r.code, Number(r.amount) || 199);
+    metaEvent('Purchase', {value: Number(r.amount)||199, currency:'INR'});
     renderHeaderControls();
     const app=document.getElementById('app');
     app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
@@ -2679,6 +2719,7 @@ function checkPaymentNow(btn){
     if(r && r.ok && r.role && r.role!=='free'){
       auth.role=r.role; auth.name=r.name||auth.name; auth.expiresAt=r.expiresAt||null; saveAuth();
       adsConversion(ADS_PURCHASE, 'paid-'+auth.token, 199);
+      metaEvent('Purchase', {value:199, currency:'INR'});
       renderHeaderControls();
       const app=document.getElementById('app');
       app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
@@ -2703,6 +2744,7 @@ function renderUpgrade(){
   const who=(auth.name||'').split(' ')[0];
   app.innerHTML=`<div class="max-w-lg mx-auto mt-6 fade">
     <div class="rounded-3xl bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 p-6 sm:p-7 shadow-sm">
+      ${inAppNoticeHTML()}
       <p class="text-[11px] font-extrabold uppercase tracking-widest text-brand-500">${who?esc('Welcome, '+who):'Welcome'}</p>
       <h1 class="font-display text-2xl sm:text-3xl font-extrabold mt-1">Unlock your <span class="gradient-text">Big 4 prep</span></h1>
       <p class="text-sm text-slate-500 dark:text-slate-400 mt-1.5">One payment of ₹199 opens everything for a full year. No renewals, no upsells.</p>
@@ -5173,7 +5215,13 @@ app.addEventListener('click', async e => {
     const ar=AREA_BY_ID[btn.dataset.area]; mcqRun=null; if(ar) renderMcqBox(ar);
     return;
   }
+  if (act==='pay-click'){ metaEvent('InitiateCheckout', {value:199, currency:'INR'}); return; }
   if (act==='check-payment'){ checkPaymentNow(btn); return; }
+  if (act==='copy-site-link'){
+    try{ navigator.clipboard.writeText('https://missionbig4.in/?ref=instagram'); btn.textContent='✅ Copied — paste in Chrome'; }
+    catch(_){ btn.textContent='missionbig4.in'; }
+    return;
+  }
   if (act==='copy-code'){
     const c=btn.dataset.code||'';
     try{ navigator.clipboard.writeText(c); btn.textContent='✅ Copied'; }
