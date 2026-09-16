@@ -1241,8 +1241,8 @@ function isInAppBrowser(){
 function inAppNoticeHTML(){
   if(!isInAppBrowser()) return '';
   return `<div class="rounded-2xl border border-amber-400/40 bg-amber-400/10 p-3.5 mb-4">
-    <p class="text-[12px] font-bold text-amber-300">⚠️ Open in your browser for Google sign-in</p>
-    <p class="text-[11px] text-slate-300 mt-1">You are in the Instagram browser, and Google does not allow sign-in here. Tap the <b>⋯</b> menu and choose <b>Open in browser</b> — or use email and password below, which works fine here.</p>
+    <p class="text-[12px] font-bold text-amber-300">📱 You are in the Instagram browser</p>
+    <p class="text-[11px] text-slate-300 mt-1">Everything works here — paying, getting your access code, and signing in with email and password. Only <b>Google sign-in</b> is unavailable, because Google blocks it inside apps. To use Google instead, tap <b>⋯</b> and choose <b>Open in browser</b>.</p>
     <button data-action="copy-site-link" class="mt-2 px-3 py-1.5 rounded-lg text-[11px] font-bold bg-amber-400 text-slate-900">📋 Copy link</button>
   </div>`;
 }
@@ -2092,11 +2092,12 @@ function renderGate(){
                 <p class="text-xs text-slate-400 mt-1"><b class="text-emerald-300">New here?</b> Get a full year for ₹199, then sign in with the same email — your access is already waiting. Already a member? Sign in below.</p>
               </div>
 
-              <!-- Google Sign In Option -->
-              <div class="mt-4 space-y-2 flex flex-col items-center">
+              <!-- Google refuses OAuth inside embedded webviews, so the button is hidden
+                   there rather than shown as something that cannot work. -->
+              ${isInAppBrowser()?'':`<div class="mt-4 space-y-2 flex flex-col items-center">
                 <div id="googleBtnContainer" class="w-full min-h-10 flex justify-center"></div>
                 <p id="googleBtnStatus" class="text-[11px] text-slate-500">Loading secure Google sign-in…</p>
-              </div>
+              </div>`}
 
               <!-- Divider -->
               <div class="relative my-3 flex items-center justify-center">
@@ -2189,7 +2190,7 @@ function renderGate(){
   const admInp=document.getElementById('adminCodeInput');
   if(admInp) admInp.addEventListener('keydown',e=>{ if(e.key==='Enter') doAdminPaneLogin(); });
 
-  initGoogleAuth();
+  if(!isInAppBrowser()) initGoogleAuth();
 }
 
 function initGoogleAuth(attempt=0){
