@@ -974,8 +974,8 @@ let store = load();
 function load(){
   try {
     const raw = JSON.parse(localStorage.getItem(KEY)) || {};
-    return { q: raw.q || {}, custom: raw.custom || {}, areas: raw.areas || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], mcq: raw.mcq || {}, theme: raw.theme || 'dark' };
-  } catch { return { q:{}, custom:{}, areas:{}, order:{}, attach:{}, trash:[], mcq:{}, theme:'dark' }; }
+    return { q: raw.q || {}, custom: raw.custom || {}, areas: raw.areas || {}, order: raw.order || {}, attach: raw.attach || {}, trash: raw.trash || [], mcq: raw.mcq || {}, english: raw.english || {}, theme: raw.theme || 'dark' };
+  } catch { return { q:{}, custom:{}, areas:{}, order:{}, attach:{}, trash:[], mcq:{}, english:{}, theme:'dark' }; }
 }
 function save(){ localStorage.setItem(KEY, JSON.stringify(store)); scheduleSync(); }
 function qs(id){ return store.q[id] || (store.q[id] = {}); }
@@ -1302,7 +1302,7 @@ function logout(){
   // and when a browser blocks site data).
   auth={token:null,role:'none',name:null,email:null,expiresAt:null};
   try{ localStorage.removeItem(AUTH_KEY); }catch(_){ }
-  try{ store.q={};store.custom={};store.areas={};store.order={};store.attach={};store.trash=[]; store.mcq={}; }catch(_){ }
+  try{ store.q={};store.custom={};store.areas={};store.order={};store.attach={};store.trash=[]; store.mcq={}; store.english={}; }catch(_){ }
   try{ portalCache=null; adminPortalRecords=[]; }catch(_){ }
   try{ if(avatarObjectUrl){URL.revokeObjectURL(avatarObjectUrl);avatarObjectUrl=null;} }catch(_){ }
   try{ if(headerAvatarObjectUrl){URL.revokeObjectURL(headerAvatarObjectUrl);headerAvatarObjectUrl=null;} }catch(_){ }
@@ -1332,7 +1332,7 @@ function buildContent(){
 function buildPstate(){
   const q={};
   for(const id in store.q){ const v=store.q[id]||{}; const p={}; if(v.flag)p.flag=true; if(v.done)p.done=true; if(v.note)p.note=v.note; if(Object.keys(p).length)q[id]=p; }
-  return { q, mcq: store.mcq || {} };
+  return { q, mcq: store.mcq || {}, english: store.english || {} };
 }
 function scheduleSync(){ if(!SYNC_ON||!signedIn()) return; clearTimeout(_syncTimer); _syncTimer=setTimeout(pushNow,1000); }
 function pushNow(){
@@ -1345,11 +1345,12 @@ function pushNow(){
   setSyncStatus('syncing');
   return Promise.all(jobs).then(()=>setSyncStatus('saved')).catch(()=>{ _lastContent=null; _lastPstate=null; setSyncStatus('offline'); });
 }
-function applyCloud(content, ps, mcq){
+function applyCloud(content, ps, mcq, english){
   content=content||{q:{},custom:{},areas:{},order:{},attach:{},trash:[]};
   ps=ps||{};
   store.q={};
   store.mcq=mcq||{};
+  store.english=english||{};
   for(const id in (content.q||{})) store.q[id]=Object.assign({}, content.q[id]);
   for(const id in ps){ store.q[id]=Object.assign(store.q[id]||{}, ps[id]); }
   store.custom=content.custom||{}; store.areas=content.areas||{}; store.order=content.order||{}; store.attach=content.attach||{}; store.trash=content.trash||[];
@@ -1363,7 +1364,7 @@ function loadFromCloud(){
     fetch(CONTENT_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null),
     fetch(PSTATE_URL,{headers:{'x-auth':auth.token}}).then(r=>r.json()).catch(()=>null)
   ]).then(([c,p])=>{
-    applyCloud(c&&c.content, p&&p.pstate&&p.pstate.q, p&&p.pstate&&p.pstate.mcq);
+    applyCloud(c&&c.content, p&&p.pstate&&p.pstate.q, p&&p.pstate&&p.pstate.mcq, p&&p.pstate&&p.pstate.english);
     setSyncStatus('saved'); refresh();
   }).catch(()=>setSyncStatus('offline'));
 }
@@ -1877,6 +1878,8 @@ function router(){
   renderHeaderControls();
   if (POLICY_PAGES[hash]) { renderPolicy(hash); return; }
   if (hash.indexOf('#/paid') === 0) { renderPaid(); return; }
+  // The KPMG English Test pack is its own gate: public landing, tests for buyers.
+  if (hash.indexOf('#/english') === 0) { renderEnglish(); return; }
   if (!authed()){
     // Everyone must have an account. Free accounts (role 'free') may browse the
     // A signed-in account that has not paid is shown the offer instead.
@@ -1920,13 +1923,15 @@ window.addEventListener('hashchange', router);
    ============================================================ */
 function fmtExpiry(iso){ if(!iso) return ''; try{ return new Date(iso).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}); }catch(e){ return iso; } }
 
-const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/profile','#/subscription','#/mock-interview','#/estimator','#/ats-scanner','#/flashcards','#/round-checklist','#/pdf-generator','#/interviews','#/queries','#/notifications','#/announcements'];
+const NAV_PAGE_HASHES=['#/admin','#/vault','#/questions','#/english','#/profile','#/subscription','#/mock-interview','#/estimator','#/ats-scanner','#/flashcards','#/round-checklist','#/pdf-generator','#/interviews','#/queries','#/notifications','#/announcements'];
 function navLinkHTML(href,icon,label){
   const current=location.hash||'#/';
   const isAreaRoute=/^#\/a\//.test(current);
   let active;
+  const isEnglishRoute=current.indexOf('#/english')===0;
   if(href==='#/questions') active = current===href || isAreaRoute;
-  else if(href==='#/') active = !NAV_PAGE_HASHES.includes(current) && !isAreaRoute;
+  else if(href==='#/english') active = isEnglishRoute;
+  else if(href==='#/') active = !NAV_PAGE_HASHES.includes(current) && !isAreaRoute && !isEnglishRoute;
   else active = current===href;
   return `<a href="${href}" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition ${active?'bg-brand-500/15 text-brand-600 dark:text-brand-300 ring-1 ring-brand-400/25':'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5'}"><span class="text-lg w-5 text-center shrink-0">${icon}</span><span class="truncate">${label}</span></a>`;
 }
@@ -1957,6 +1962,7 @@ function renderHeaderControls(){
   if(!nav||!footer) return;
   if(!authed()){
     nav.innerHTML=`${auth.role==='free'?navLinkHTML('#/questions','📚','Question bank'):''}
+      ${navLinkHTML('#/english','🇬🇧','KPMG English Test')}
       <a href="#/request" class="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-brand-500 to-cyan-500 text-white shadow mt-1"><span>🔓</span><span>Get full access — ₹199</span></a>
       ${auth.role==='free'
         ? '<button data-action="logout" class="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 mt-1"><span>🚪</span><span>Log out</span></button>'
@@ -1966,6 +1972,7 @@ function renderHeaderControls(){
   }
   nav.innerHTML=`${navLinkHTML('#/','🏠','Home')}
     ${navLinkHTML('#/questions','📚','Question Bank')}
+    ${navLinkHTML('#/english','🇬🇧','KPMG English Test')}
     ${navLinkHTML('#/mock-interview','🎙️','Mock Interview')}
     ${navLinkHTML('#/flashcards','⚡','Daily Flashcards')}
     ${navLinkHTML('#/ats-scanner','📝','Resume Keyword Check')}
@@ -2075,6 +2082,7 @@ function renderGate(){
               <span class="text-slate-400 font-medium">Targeting CA Big 4 GDCs?</span>
               <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold text-[11px]">EY · PwC · Deloitte · KPMG</span>
             </div>
+            <a href="#/english" class="mt-3 flex items-center justify-between gap-2 text-xs rounded-xl border border-sky-400/30 bg-sky-500/10 px-3 py-2 hover:bg-sky-500/20 transition"><span class="text-sky-200 font-medium">🇬🇧 KPMG English test round? 6 timed mocks · ₹199</span><span class="text-sky-300">→</span></a>
           </div>
         </div>
 
@@ -2247,7 +2255,7 @@ function handleGoogleLogin(response){
       if(btn){ btn.disabled=false; }
       return;
     }
-    auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null, needsPhone: !!r.needsPhone };
+    auth={ token: r.token, role: r.role, name: r.name, email: r.email||null, expiresAt: r.expiresAt||null, needsPhone: !!r.needsPhone, english: !!r.english };
     saveAuth();
     if(r.role==='free'){ track('free_signup'); adsConversion(ADS_REGISTRATION, r.token, 0); } else track('login');
     renderHeaderControls();
@@ -2274,7 +2282,7 @@ function doFreeSignup(btn){
   btn.disabled=true; const orig=btn.textContent; btn.textContent='Creating…'; set('');
   acct('free-signup',{name,email,phone,source:'form',ref:campaignRef()}).then(r=>{
     if(r&&r.ok){
-      auth={ token:r.token, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null };
+      auth={ token:r.token, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null, english:!!r.english };
       saveAuth(); track(r.role==='free'?'free_signup':'login');
       renderHeaderControls();
       location.hash = r.role==='member' ? '#/' : '#/questions';
@@ -2354,7 +2362,7 @@ function doAdminPaneLogin(){
       if(m) m.textContent=(r&&r.error)||'Invalid passphrase or code.'; if(err) err.classList.remove('hidden');
       if(button){ button.disabled=false; button.textContent='Log in as Admin →'; } input.select(); return;
     }
-    auth={ token:pass, role:r.role, name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
+    auth={ token:pass, role:r.role, name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:r.expiresAt||null, english:true }; saveAuth();
     renderHeaderControls();
     if(r.role==='admin'){ location.hash='#/admin'; } else { location.hash='#/'; }
     router(); loadFromCloud();
@@ -2375,7 +2383,7 @@ function doLogin(){
       if(btn){ btn.disabled=false; btn.innerHTML='<span>Enter Workspace</span><span class="group-hover:translate-x-1 transition-transform">→</span>'; }
       return;
     }
-    auth={ token:code, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null }; saveAuth();
+    auth={ token:code, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null, english:!!r.english }; saveAuth();
     renderHeaderControls();
     if(r.role==='admin'){ location.hash='#/admin'; } else { location.hash='#/'; }
     router(); loadFromCloud();
@@ -2415,7 +2423,7 @@ function adminLoginPrompt(){
         err.textContent='Invalid admin passphrase.'; err.classList.remove('hidden');
         button.disabled=false; button.textContent='Log in to admin portal'; input.select(); return;
       }
-      auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null }; saveAuth();
+      auth={ token:pass, role:'admin', name:r.name||'Gaurav Jain', email:r.email||null, expiresAt:null, english:true }; saveAuth();
       close(); renderHeaderControls(); location.hash='#/admin'; router(); loadFromCloud();
     }).catch(()=>{
       err.textContent='Network error — please try again.'; err.classList.remove('hidden');
@@ -2463,7 +2471,7 @@ const POLICY_PAGES = {
     <p>The platform is owned and operated by <b>${esc(BUSINESS.name)}</b>, a sole proprietor based in India. It provides a structured question bank, model answers, practice tests and revision tools covering statutory audit, Indian Accounting Standards, CARO 2020, Schedule III and the Standards on Auditing.</p>
     <p>All study material is written in-house from publicly available standards and legislation. We are an independent education service and are not affiliated with, endorsed by, or connected to Ernst &amp; Young, PricewaterhouseCoopers, Deloitte, KPMG, the Institute of Chartered Accountants of India, or any other firm or body named on this site. Firm names are used only to describe the type of interview the material prepares you for.</p>
     <h3>What we sell</h3>
-    <p>A single digital subscription giving one year of access to the full question bank and study tools.</p>
+    <p>Two digital products, each sold separately: a one-year subscription to the full audit question bank and study tools, and a one-year KPMG English Test practice pack of six timed mock tests.</p>
     <h3>Business details</h3>
     <p><b>Business name:</b> ${esc(BUSINESS.name)} (sole proprietor), trading as ${esc(BUSINESS.trade)}<br>
        <b>Registered address:</b> ${esc(BUSINESS.addr)}<br>
@@ -2487,6 +2495,8 @@ const POLICY_PAGES = {
     <h3>Full access — ₹199 for one year</h3>
     <p>One payment of <b>₹199 (Indian Rupees one hundred and ninety-nine only)</b> for <b>365 days</b> of access to the complete question bank, all model answers, worked examples, interviewer tips, audio revision, mock interview panel, flashcards and the interview tracker.</p>
     <p>Prices are inclusive of all applicable taxes. There are no recurring charges and no auto-renewal — access simply ends after 365 days unless you choose to buy again.</p>
+    <h3>KPMG English Test practice — ₹199 add-on</h3>
+    <p>A separate product: six timed mock tests of fifteen questions each, modelled on the KPMG English objective and verbal ability screening round, with an explained answer key. One payment of <b>₹199 (Indian Rupees one hundred and ninety-nine only)</b> gives <b>365 days</b> of access. It is not included in the full-access plan above, and the full-access plan is not included in it; each is bought on its own and either can be bought without the other.</p>
     <h3>Payment methods</h3>
     <p>Payments are processed by Cashfree Payments. You may pay by UPI, debit card, credit card, net banking or wallet. We do not see or store your card, UPI or banking credentials at any point.</p>` },
 
@@ -2498,7 +2508,7 @@ const POLICY_PAGES = {
     <h3>2. Accounts</h3>
     <p>You must provide accurate details when creating an account. You are responsible for activity under your account. Access is granted to one person; an access code may be used on a maximum of two devices. Sharing, reselling or publishing our content is not permitted.</p>
     <h3>3. Payment and access</h3>
-    <p>Full access costs ₹199 and lasts 365 days from activation. Payment is collected through Cashfree Payments. Access is normally activated automatically on successful payment; if it is not, we activate it manually within 4 working hours.</p>
+    <p>Full access costs ₹199 and lasts 365 days from activation. The KPMG English Test practice pack is a separate purchase of ₹199 for 365 days and is not included in full access. Payment is collected through Cashfree Payments. Access is normally activated automatically on successful payment; if it is not, we activate it manually within 4 working hours.</p>
     <h3>4. No guarantee of results</h3>
     <p>We prepare you for interviews. We do not promise a job, an interview call, a selection, or any particular outcome, and no part of this site should be read as such a promise.</p>
     <h3>5. Accuracy of material</h3>
@@ -2607,7 +2617,7 @@ function doPasswordLogin(){
   if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
   acct('password-login',{email:em,password:pw,device:getDeviceId()}).then(r=>{
     if(!r||!r.ok){ showLoginErr((r&&r.error)||'Incorrect email or password.'); if(btn){btn.disabled=false;btn.textContent='Log in with password';} return; }
-    auth={ token:r.token, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null, needsPhone:!!r.needsPhone };
+    auth={ token:r.token, role:r.role, name:r.name, email:r.email||null, expiresAt:r.expiresAt||null, needsPhone:!!r.needsPhone, english:!!r.english };
     saveAuth(); track('login'); renderHeaderControls();
     location.hash = r.role==='admin' ? '#/admin' : (r.role==='free' ? '#/questions' : '#/');
     router(); loadFromCloud();
@@ -2670,7 +2680,7 @@ function doClaim(){
       return;
     }
     // Log the buyer straight in using the code the webhook generated.
-    auth={ token:r.code, role:'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false };
+    auth={ token:r.code, role:r.role||'member', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, needsPhone:false, english:!!r.english };
     saveAuth(); track('login');
     adsConversion(ADS_PURCHASE, 'paid-' + r.code, Number(r.amount) || 199);
     metaEvent('Purchase', {value: Number(r.amount)||199, currency:'INR'});
@@ -2723,7 +2733,7 @@ function checkPaymentNow(btn){
   say('Checking your payment…', true);
   acct('login',{token:auth.token,device:getDeviceId()}).then(r=>{
     if(r && r.ok && r.role && r.role!=='free'){
-      auth.role=r.role; auth.name=r.name||auth.name; auth.expiresAt=r.expiresAt||null; saveAuth();
+      auth.role=r.role; auth.name=r.name||auth.name; auth.expiresAt=r.expiresAt||null; auth.english=!!r.english; saveAuth();
       adsConversion(ADS_PURCHASE, 'paid-'+auth.token, 199);
       metaEvent('Purchase', {value:199, currency:'INR'});
       renderHeaderControls();
@@ -2891,6 +2901,9 @@ function renderUpgrade(){
 
       <button data-action="check-payment" class="mt-4 w-full py-3 rounded-xl text-sm font-bold border-2 border-emerald-400/50 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/10 transition">I have paid — unlock now</button>
       <p id="upgradeMsg" class="text-xs text-center mt-2"></p>
+      <a href="#/english" class="mt-4 flex items-center gap-3 rounded-xl border border-sky-400/30 bg-sky-500/[.06] px-3.5 py-3 hover:border-sky-400/60 transition">
+        <span class="text-xl">🇬🇧</span><span class="flex-1 min-w-0"><b class="text-[13px]">KPMG English test round?</b><span class="block text-[11px] text-slate-500 dark:text-slate-400">6 timed mock tests, sold separately for ₹199. Try 3 questions free.</span></span><span class="text-sky-500">→</span>
+      </a>
       <p class="mt-4 text-center text-[11px] text-slate-400">
         Already paid with a different email? <a href="#/paid" class="underline font-semibold">Unlock it here</a> ·
         <a href="#/terms" class="underline">Terms</a> · <a href="#/refund" class="underline">Refunds</a>
@@ -2975,6 +2988,468 @@ function doRequest(){
     else { msg.textContent=(r&&r.error)||'Something went wrong.'; msg.className='text-xs text-center mt-1 text-rose-500'; }
   }).catch(()=>{ msg.textContent='Network error — please try again.'; msg.className='text-xs text-center mt-1 text-rose-500'; });
 }
+
+/* ============================================================
+   KPMG ENGLISH TEST PRACTICE — separate ₹199 add-on
+   Routes: #/english (landing + test list), #/english/test/N (timed
+   exam), #/english/paid (post-payment claim). Questions are served
+   only to admin or an account holding the add-on (see english.js);
+   the three sample questions below are the only ones in the page.
+   ============================================================ */
+const ENGLISH_URL='/.netlify/functions/english';
+const CASHFREE_ENGLISH_FORM_URL='https://payments.cashfree.com/forms/missionbig4english';
+const ENGLISH_PRICE=199;
+const ENGLISH_MINUTES=15;                       // per test, like the real screening round
+const ENGLISH_TESTS_META=[
+  { id:1, title:'Test 1 · Foundation',                  focus:'Warm-up across every question type you will meet in the real round.' },
+  { id:2, title:'Test 2 · Business Writing',            focus:'Client emails, workplace idioms and the agreement errors that trip most candidates.' },
+  { id:3, title:'Test 3 · Grammar Precision',           focus:'Apostrophes, conditionals, "despite", "suggest" and other high-frequency traps.' },
+  { id:4, title:'Test 4 · Comprehension & Sequencing',  focus:'Longer passages, four-sentence jumbles and the "as well as" family of agreement rules.' },
+  { id:5, title:'Test 5 · Advanced Usage',              focus:'Tone under pressure, its versus it\'s, inversion with "scarcely", and past-tense modals.' },
+  { id:6, title:'Test 6 · Full Mock',                   focus:'A final mixed paper at real-round difficulty. Sit it in one go with the timer on.' },
+];
+const ENGLISH_TYPES=['Professional email responses','Fill in the blanks & idioms','One word substitution','Reading comprehension','Punctuation & indirect speech','Prepositional phrases','Para jumbles / sentence sequencing','Spotting errors','Sentence correction','Subject–quantifier agreement','Synonyms & antonyms','Tenses & conditionals'];
+const ENGLISH_SAMPLE=[
+  { type:'Spotting Errors', q:'Identify the part of the sentence that contains an error.',
+    lines:['A. The senior and the trainee','B. has reviewed','C. the bank reconciliation.'],
+    o:['Part A','Part B','Part C','No error'], c:1,
+    why:'Two subjects joined by "and" take a plural verb: "have reviewed".' },
+  { type:'Sentence Correction', q:'Identify the correct substitution for the underlined part: "She [[don\'t]] have access to the ledger yet."',
+    o:['don\'t','doesn\'t','didn\'t has','not'], c:1,
+    why:'"She" is third person singular, so the auxiliary is "doesn\'t".' },
+  { type:'Indirect Speech', q:'Choose the correct indirect form of the sentence.', context:'The manager said, "I am busy today."',
+    o:['The manager said that he is busy today.','The manager said that he was busy that day.','The manager said that he had been busy today.','The manager told that he is busy that day.'], c:1,
+    why:'"Am" moves back to "was" and "today" becomes "that day".' },
+];
+const ENGLISH_CACHE={};                        // id -> test (questions), fetched for entitled users only
+let engRun=null;                               // { test, order, perms, pos, answers:{}, startedAt, deadline, done }
+let engSample={ pos:0, answers:{} };
+let _engTimer=null;
+
+function englishAccess(){ return isAdmin() || !!auth.english; }
+function englishStat(id){ return (store.english && store.english[id]) || {}; }
+function englishRecord(id, pct, correct, total, secs){
+  store.english = store.english || {};
+  const prev = store.english[id] || {};
+  store.english[id] = { best: Math.max(prev.best||0, pct), last: pct, correct, total, secs, attempts:(prev.attempts||0)+1, at:new Date().toISOString() };
+  save();
+}
+function englishBand(pct){
+  if(pct>=87) return { label:'KPMG-ready', cls:'text-emerald-500', note:'Thirteen or more out of fifteen. This is the level the screening round expects.' };
+  if(pct>=67) return { label:'Nearly there', cls:'text-amber-500', note:'Ten to twelve right. Read the explanations for the misses and retake in a day or two.' };
+  return { label:'Keep practising', cls:'text-rose-500', note:'Under ten. Work through the rules in the review below, then sit the next test.' };
+}
+function fmtSecs(s){ s=Math.max(0,Math.round(s)); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+function engStopTimer(){ if(_engTimer){ clearInterval(_engTimer); _engTimer=null; } }
+function loadEnglishTest(id){
+  if(ENGLISH_CACHE[id]) return Promise.resolve(ENGLISH_CACHE[id]);
+  return fetch(ENGLISH_URL+'?test='+encodeURIComponent(id), { headers: auth.token?{'x-auth':auth.token}:{} })
+    .then(r=>r.json().then(j=>({ status:r.status, j })))
+    .then(({status,j})=>{
+      if(status===402){ auth.english=false; saveAuth(); throw new Error('locked'); }
+      if(!j || !j.test) throw new Error((j&&j.message)||'Could not load the test.');
+      ENGLISH_CACHE[id]=j.test; return j.test;
+    });
+}
+/* Refresh the add-on flag from the server (after paying in another tab, or on a
+   device that signed in before the purchase). */
+function checkEnglishNow(btn){
+  const msg=document.getElementById('engMsg');
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.className='text-xs text-center mt-2 '+(ok?'text-emerald-500':'text-slate-400'); } };
+  if(!auth.token){ say('Please sign in first.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  say('Checking your payment…', true);
+  acct('me').then(r=>{
+    if(r && r.english){
+      auth.english=true; if(r.role && r.role!=='none') auth.role=r.role; saveAuth();
+      adsConversion(ADS_PURCHASE, 'english-'+auth.token, ENGLISH_PRICE);
+      metaEvent('Purchase', {value:ENGLISH_PRICE, currency:'INR', content_name:'kpmg-english'});
+      renderHeaderControls(); renderEnglish(); return;
+    }
+    say('No English pack found against '+(auth.email||'this account')+' yet. If you just paid, wait a few seconds and try again. Paid with a different email? Use the link below.');
+    if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock the tests'; }
+  }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='I have paid — unlock the tests'; } });
+}
+
+/* ---- rendering helpers ---- */
+function engStem(q){ return esc(q).replace(/\[\[(.+?)\]\]/g,'<u class="decoration-2 underline-offset-4 decoration-brand-400">$1</u>'); }
+function engQuestionBody(m){
+  return `${m.passage?`<div class="rounded-xl p-3.5 mb-3 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10 text-[13px] leading-relaxed text-slate-600 dark:text-slate-300"><p class="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Passage</p>${esc(m.passage)}</div>`:''}
+    <p class="text-[15px] font-semibold leading-snug">${engStem(m.q)}</p>
+    ${m.context?`<blockquote class="mt-2.5 rounded-xl px-3.5 py-3 bg-brand-500/[.06] border-l-4 border-brand-400 text-[13px] italic text-slate-600 dark:text-slate-300">${esc(m.context)}</blockquote>`:''}
+    ${m.lines?`<div class="mt-2.5 space-y-1 text-[13px] text-slate-700 dark:text-slate-200">${m.lines.map(l=>`<p>${esc(l)}</p>`).join('')}</div>`:''}`;
+}
+function engOptionsHTML(m, perm, chosen, opts){
+  opts=opts||{};
+  return perm.map((orig,disp)=>{
+    const txt=m.o[orig];
+    let cls='border-slate-200 dark:border-white/10 bg-white/70 dark:bg-white/[.04] hover:border-brand-400';
+    let mark=`<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-slate-100 dark:bg-white/10 text-[11px] font-bold">${'ABCD'[disp]}</span>`;
+    if(opts.review){
+      if(orig===m.c){ cls='border-emerald-400/60 bg-emerald-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-emerald-500 text-white text-[11px] font-bold">✓</span>'; }
+      else if(orig===chosen){ cls='border-rose-400/60 bg-rose-500/10'; mark='<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-rose-500 text-white text-[11px] font-bold">✕</span>'; }
+      else cls='border-slate-200/60 dark:border-white/5 opacity-60';
+    } else if(orig===chosen){ cls='border-brand-500 bg-brand-500/10 ring-1 ring-brand-400/40'; mark=`<span class="h-6 w-6 shrink-0 grid place-items-center rounded-lg bg-brand-500 text-white text-[11px] font-bold">${'ABCD'[disp]}</span>`; }
+    return `<button ${opts.review?'disabled':''} data-action="${opts.action}" ${opts.data||''} data-opt="${orig}"
+      class="w-full text-left flex items-start gap-3 px-3.5 py-3 rounded-xl border-2 ${cls} transition text-sm">${mark}<span class="flex-1">${esc(txt)}</span></button>`;
+  }).join('');
+}
+function engTypeBadge(t){ return `<span class="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-sky-500/15 text-sky-600 dark:text-sky-300">${esc(t)}</span>`; }
+function engPayCardHTML(){
+  return `<a href="${CASHFREE_ENGLISH_FORM_URL}" target="_blank" rel="noopener" data-action="english-pay-click"
+      class="group block rounded-2xl p-0.5 bg-gradient-to-r from-sky-500 via-brand-500 to-emerald-500 shadow-xl shadow-sky-500/25 hover:shadow-sky-500/40 active:scale-[.99] transition">
+      <div class="rounded-[15px] bg-slate-950 px-5 py-5 text-center">
+        <p class="text-[10px] font-extrabold uppercase tracking-widest text-sky-300">KPMG English Test pack</p>
+        <p class="text-2xl font-black text-white mt-1 leading-tight">6 timed mock tests — ₹${ENGLISH_PRICE}</p>
+        <p class="text-[11px] text-slate-400 mt-1.5">15 questions each · answer keys with grammar explanations · valid one year</p>
+        <span class="mt-4 inline-flex items-center gap-2 px-7 py-3 rounded-xl text-base font-black bg-white text-slate-900 shadow group-hover:gap-3 transition-all">Pay ₹${ENGLISH_PRICE} <span class="group-hover:translate-x-0.5 transition-transform">→</span></span>
+      </div>
+    </a>
+    <p class="mt-2.5 text-center text-[11px] text-slate-400">🔒 Cashfree handles the payment. Sold separately from the ₹199 audit question bank. ${authed()?'Your existing plan does not include it.':''}</p>`;
+}
+
+/* ---- router entry ---- */
+function renderEnglish(){
+  const hash=location.hash||'';
+  const m=hash.match(/^#\/english\/test\/(\d+)/);
+  if(hash.indexOf('#/english/paid')===0){ engStopTimer(); renderEnglishPaid(); return; }
+  if(m){ renderEnglishTest(parseInt(m[1],10)); return; }
+  engStopTimer(); renderEnglishHome();
+}
+
+/* ---- landing: pitch + sample for everyone, test grid for buyers ---- */
+function renderEnglishHome(){
+  const app=document.getElementById('app');
+  const has=englishAccess();
+  const stats=ENGLISH_TESTS_META.map(t=>englishStat(t.id));
+  const sat=stats.filter(s=>s.attempts).length;
+  const bestAvg=sat?Math.round(stats.filter(s=>s.attempts).reduce((n,s)=>n+(s.best||0),0)/sat):0;
+
+  const testGrid=ENGLISH_TESTS_META.map(t=>{
+    const st=englishStat(t.id);
+    const badge=st.attempts?`<span class="px-2 py-0.5 rounded-lg text-[11px] font-bold ${st.best>=87?'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300':st.best>=67?'bg-amber-500/15 text-amber-600 dark:text-amber-300':'bg-rose-500/15 text-rose-500'}">Best ${st.best}%</span>`:'<span class="px-2 py-0.5 rounded-lg text-[11px] font-bold bg-slate-200/70 dark:bg-white/10 text-slate-500">Not attempted</span>';
+    return `<a href="#/english/test/${t.id}" class="rounded-2xl p-4 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm hover:border-sky-400/60 hover:shadow-lg transition block">
+      <div class="flex items-start justify-between gap-2"><p class="font-display font-extrabold text-sm">${esc(t.title)}</p>${badge}</div>
+      <p class="text-[12px] text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed">${esc(t.focus)}</p>
+      <p class="text-[11px] text-slate-400 mt-2.5">15 questions · ${ENGLISH_MINUTES} min${st.attempts?` · ${st.attempts} attempt${st.attempts===1?'':'s'} · last ${st.last}%`:''}</p>
+      <span class="mt-3 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">${st.attempts?'🔁 Retake':'▶ Start'} test</span>
+    </a>`;
+  }).join('');
+
+  const typesHTML=`<div class="grid sm:grid-cols-2 gap-1.5 text-[12.5px]">${ENGLISH_TYPES.map(t=>`<p class="flex gap-2"><span class="text-sky-500">✔</span><span>${esc(t)}</span></p>`).join('')}</div>`;
+
+  app.innerHTML=`<div class="fade max-w-4xl mx-auto">
+    <div class="rounded-3xl overflow-hidden mb-5 relative bg-gradient-to-br from-sky-500/10 via-brand-500/5 to-emerald-500/10 border border-white/40 dark:border-white/10 glass">
+      <div class="p-5 sm:p-7">
+        <div class="flex flex-wrap items-center gap-2 mb-2">
+          <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-sky-500/15 text-sky-600 dark:text-sky-300 ring-1 ring-sky-400/30">🇬🇧 KPMG · English Objective &amp; Verbal Ability</span>
+          ${has?'<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-300">✓ Unlocked</span>':`<span class="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-300">Separate add-on · ₹${ENGLISH_PRICE}</span>`}
+        </div>
+        <h1 class="font-display text-2xl sm:text-3xl font-extrabold tracking-tight">Clear the KPMG <span class="gradient-text">English test</span> before it clears you.</h1>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2 max-w-2xl">KPMG screens candidates with a timed English paper before the interview: email etiquette, grammar, vocabulary, comprehension and sentence ordering. Six mock tests of fifteen questions each, built to the same pattern, with an explained answer key for every question.</p>
+        ${has&&sat?`<div class="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
+          <span class="px-3 py-1.5 rounded-xl bg-white/70 dark:bg-white/[.06] border border-slate-200/70 dark:border-white/10">${sat}/6 tests attempted</span>
+          <span class="px-3 py-1.5 rounded-xl bg-white/70 dark:bg-white/[.06] border border-slate-200/70 dark:border-white/10">Average best score ${bestAvg}%</span>
+        </div>`:''}
+      </div>
+    </div>
+
+    ${has?`
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">${testGrid}</div>
+    <div class="mt-6 rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10">
+      <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">How to get the most out of it</p>
+      <ul class="text-[13px] text-slate-600 dark:text-slate-300 space-y-1.5 list-disc pl-5">
+        <li>Sit each test in one go with the ${ENGLISH_MINUTES}-minute timer running. The real round is timed, and speed is half the battle.</li>
+        <li>Read every explanation, even for questions you got right. The same rules repeat across tests in new clothes.</li>
+        <li>Aim for 13 out of 15 on Test 6 before your interview date.</li>
+      </ul>
+      <p class="text-[11px] text-slate-400 mt-3">Your scores sync to your account. ${auth.englishExpiresAt?'Access till '+fmtExpiry(auth.englishExpiresAt)+'.':''}</p>
+    </div>`
+    :`
+    <div class="grid lg:grid-cols-5 gap-5">
+      <div class="lg:col-span-3 space-y-5">
+        <div class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Try three questions free</p>
+          <div id="engSampleBox">${engSampleHTML()}</div>
+        </div>
+        <div class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">Question types covered</p>
+          ${typesHTML}
+        </div>
+        <div class="rounded-2xl p-5 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2.5">The six tests</p>
+          <div class="space-y-2">${ENGLISH_TESTS_META.map(t=>`<div class="flex items-start gap-3"><span class="h-7 w-7 shrink-0 grid place-items-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-300 text-xs font-black">${t.id}</span><div><p class="text-[13px] font-bold">${esc(t.title.replace(/^Test \d+ · /,''))}</p><p class="text-[12px] text-slate-500 dark:text-slate-400">${esc(t.focus)}</p></div></div>`).join('')}</div>
+        </div>
+      </div>
+      <div class="lg:col-span-2">
+        <div class="lg:sticky lg:top-6 space-y-4">
+          <div>${engPayCardHTML()}</div>
+          <div class="rounded-2xl border border-emerald-400/25 bg-emerald-500/[.06] p-4">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-300 mb-2">⚡ Access is automatic</p>
+            <ol class="space-y-2 text-[13px]">
+              <li class="flex gap-2.5"><span class="h-5 w-5 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">1</span><div>Pay ₹${ENGLISH_PRICE} above using <b>${esc(auth.email||'your real email address')}</b>.</div></li>
+              <li class="flex gap-2.5"><span class="h-5 w-5 shrink-0 grid place-items-center rounded-full bg-emerald-500 text-white text-[10px] font-bold">2</span><div>${signedIn()?'Come back here and tap the button below.':'Sign in with Google using the same email. The tests are already unlocked.'}</div></li>
+            </ol>
+            ${signedIn()
+              ?`<button data-action="check-english" class="mt-3 w-full py-2.5 rounded-xl text-sm font-bold border-2 border-emerald-400/50 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/10 transition">I have paid — unlock the tests</button>
+                <p id="engMsg" class="text-xs text-center mt-2"></p>`
+              :`<button data-action="show-login" class="mt-3 w-full py-2.5 rounded-xl text-sm font-bold border-2 border-emerald-400/50 text-emerald-600 dark:text-emerald-300 hover:bg-emerald-500/10 transition">Sign in / create account</button>`}
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-3">Paid with a different email? <a href="#/english/paid" class="underline font-semibold">Unlock it here</a>. Trouble? WhatsApp <span class="font-mono font-bold select-all">8968549488</span>.</p>
+          </div>
+          ${authed()?'':`<p class="text-[11px] text-slate-400 text-center">Also preparing for the audit interview itself? The <a href="#/request" class="underline">₹199 question bank</a> is a separate plan.</p>`}
+        </div>
+      </div>
+    </div>`}
+  </div>`;
+  track('view_english');
+  // A buyer who paid in another tab: pick up the add-on silently on the next visit.
+  if(!has && signedIn() && SYNC_ON){
+    acct('me').then(r=>{ if(r && r.english && location.hash==='#/english'){ auth.english=true; saveAuth(); renderHeaderControls(); renderEnglishHome(); } }).catch(()=>{});
+  }
+}
+
+/* ---- the free three-question sample (immediate feedback) ---- */
+function engSampleHTML(){
+  const s=engSample;
+  if(s.pos>=ENGLISH_SAMPLE.length){
+    const correct=ENGLISH_SAMPLE.filter((m,i)=>s.answers[i]===m.c).length;
+    return `<div class="text-center py-3">
+      <p class="font-display text-3xl font-black ${correct===3?'text-emerald-500':'text-amber-500'}">${correct}/3</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${correct===3?'Clean sweep. The full tests are harder and timed.':'The full tests explain every rule like this, fifteen questions at a time.'}</p>
+      <button data-action="eng-sample-reset" class="mt-3 px-4 py-2 rounded-xl text-xs font-semibold border border-slate-200 dark:border-white/10">Try again</button>
+    </div>`;
+  }
+  const m=ENGLISH_SAMPLE[s.pos]; const chosen=s.answers[s.pos]; const answered=chosen!=null;
+  return `<div class="flex items-center justify-between mb-2"><p class="text-xs font-bold text-slate-500">Sample ${s.pos+1} of ${ENGLISH_SAMPLE.length}</p>${engTypeBadge(m.type)}</div>
+    ${engQuestionBody(m)}
+    <div class="space-y-2 mt-3">${engOptionsHTML(m,[0,1,2,3],chosen,{action:'eng-sample-answer',review:answered})}</div>
+    ${answered?`<div class="mt-3 rounded-xl p-3.5 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10">
+      <p class="text-[13px] ${chosen===m.c?'text-emerald-600 dark:text-emerald-300':'text-rose-500'} font-bold mb-1">${chosen===m.c?'✅ Correct':'❌ Not quite'}</p>
+      <p class="text-[13px] text-slate-600 dark:text-slate-300"><b>Why:</b> ${esc(m.why)}</p>
+      <button data-action="eng-sample-next" class="mt-3 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">${s.pos+1>=ENGLISH_SAMPLE.length?'See result →':'Next →'}</button>
+    </div>`:''}`;
+}
+function renderEngSample(){ const b=document.getElementById('engSampleBox'); if(b) b.innerHTML=engSampleHTML(); }
+
+/* ---- the timed test ---- */
+function renderEnglishTest(id){
+  const app=document.getElementById('app');
+  const meta=ENGLISH_TESTS_META.find(t=>t.id===id);
+  if(!meta){ location.hash='#/english'; return; }
+  if(!signedIn()){ engStopTimer(); location.hash='#/english'; return; }
+  if(!englishAccess()){ engStopTimer(); location.hash='#/english'; return; }
+  const back=`<a href="#/english" class="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-500 dark:text-slate-400 hover:text-sky-500 mb-4 transition"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg> All English tests</a>`;
+
+  if(!ENGLISH_CACHE[id]){
+    app.innerHTML=`${back}<div class="rounded-2xl p-6 bg-white/60 dark:bg-white/[.03] glass border border-slate-200/70 dark:border-white/10 text-center"><p class="text-sm font-semibold text-slate-400"><span class="inline-block animate-spin">◌</span> Loading ${esc(meta.title)}…</p></div>`;
+    loadEnglishTest(id).then(()=>{ if(location.hash.indexOf('#/english/test/'+id)===0) renderEnglishTest(id); })
+      .catch(e=>{ if(location.hash.indexOf('#/english/test/'+id)!==0) return; if(String(e&&e.message)==='locked'){ location.hash='#/english'; return; }
+        app.innerHTML=`${back}<div class="rounded-2xl p-6 bg-white/60 dark:bg-white/[.03] glass border border-rose-400/30 text-center"><p class="text-sm font-semibold text-rose-500">Could not load the test. Check your connection and try again.</p><button data-action="eng-reload" data-test="${id}" class="mt-3 px-4 py-2 rounded-xl text-xs font-bold border border-slate-200 dark:border-white/10">Retry</button></div>`; });
+    return;
+  }
+  const test=ENGLISH_CACHE[id];
+  const run=(engRun && engRun.test===id)?engRun:null;
+  const st=englishStat(id);
+
+  // ---- intro ----
+  if(!run){
+    engStopTimer();
+    app.innerHTML=`${back}<div class="fade max-w-2xl mx-auto rounded-2xl p-6 sm:p-7 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <p class="text-[11px] font-extrabold uppercase tracking-widest text-sky-500">KPMG English mock</p>
+          <h1 class="font-display text-2xl font-extrabold mt-1">${esc(test.title)}</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">${esc(test.focus)}</p>
+        </div>
+        ${st.attempts?`<span class="px-2.5 py-1 rounded-lg text-xs font-bold ${st.best>=87?'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300':'bg-amber-500/15 text-amber-600 dark:text-amber-300'}">Best ${st.best}%</span>`:''}
+      </div>
+      <div class="grid grid-cols-3 gap-2.5 mt-5 text-center">
+        <div class="rounded-xl p-3 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="font-display text-xl font-extrabold">${test.questions.length}</p><p class="text-[11px] text-slate-400">questions</p></div>
+        <div class="rounded-xl p-3 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="font-display text-xl font-extrabold">${ENGLISH_MINUTES}</p><p class="text-[11px] text-slate-400">minutes</p></div>
+        <div class="rounded-xl p-3 bg-slate-50 dark:bg-white/[.04] border border-slate-200/70 dark:border-white/10"><p class="font-display text-xl font-extrabold">${st.attempts||0}</p><p class="text-[11px] text-slate-400">attempts${st.attempts?' · last '+st.last+'%':''}</p></div>
+      </div>
+      <ul class="mt-5 text-[13px] text-slate-600 dark:text-slate-300 space-y-1.5 list-disc pl-5">
+        <li>Exam mode: no feedback until you submit. Move freely between questions and change answers.</li>
+        <li>The paper submits itself when the timer runs out. Unanswered questions score zero.</li>
+        <li>After submitting you get the full answer key with the grammar rule behind every question.</li>
+      </ul>
+      <button data-action="eng-start" data-test="${id}" class="mt-6 w-full sm:w-auto px-6 py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow hover:opacity-95 transition">${st.attempts?'🔁 Retake test':'▶ Start the timer'}</button>
+    </div>`;
+    return;
+  }
+
+  // ---- results ----
+  if(run.done){
+    engStopTimer();
+    const total=run.order.length;
+    const correct=run.order.filter(qi=>run.answers[qi]===test.questions[qi].c).length;
+    const pct=Math.round(correct/total*100);
+    const band=englishBand(pct);
+    const review=run.order.map((qi,n)=>{
+      const m=test.questions[qi]; const chosen=run.answers[qi]; const ok=chosen===m.c;
+      return `<div class="rounded-xl p-4 border ${ok?'border-emerald-400/30 bg-emerald-500/[.06]':'border-rose-400/30 bg-rose-500/[.06]'}">
+        <div class="flex items-center justify-between gap-2 mb-2"><p class="text-xs font-bold text-slate-500">${ok?'✅':'❌'} Question ${n+1}</p>${engTypeBadge(m.type)}</div>
+        ${engQuestionBody(m)}
+        <div class="space-y-1.5 mt-3">${engOptionsHTML(m,run.perms[qi],chosen,{review:true,action:'noop'})}</div>
+        ${chosen==null?'<p class="text-[12px] mt-2 text-rose-500 font-semibold">— not answered —</p>':''}
+        <p class="text-[13px] mt-2.5 text-slate-600 dark:text-slate-300 leading-relaxed"><b>Why:</b> ${esc(m.why)}</p>
+      </div>`;
+    }).join('');
+    app.innerHTML=`${back}<div class="fade max-w-3xl mx-auto">
+      <div class="rounded-2xl p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm text-center">
+        <p class="text-[11px] font-extrabold uppercase tracking-widest text-sky-500">${esc(test.title)}</p>
+        <p class="font-display text-5xl font-black mt-2 ${band.cls}">${correct}<span class="text-2xl text-slate-400">/${total}</span></p>
+        <p class="font-display text-lg font-extrabold mt-1 ${band.cls}">${pct}% · ${band.label}</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">${band.note}</p>
+        <p class="text-[11px] text-slate-400 mt-2">Time used ${fmtSecs(run.secs)} of ${ENGLISH_MINUTES}:00${run.timedOut?' · submitted automatically when time ran out':''}</p>
+        <div class="mt-4 flex flex-wrap justify-center gap-2">
+          <button data-action="eng-start" data-test="${id}" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">🔁 Retake</button>
+          ${id<ENGLISH_TESTS_META.length?`<a href="#/english/test/${id+1}" class="px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-200 dark:border-white/10">Next test →</a>`:''}
+          <a href="#/english" class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10">All tests</a>
+        </div>
+      </div>
+      <div class="mt-5 mb-2 flex items-center gap-3"><div class="h-px flex-1 bg-slate-200 dark:bg-white/10"></div><span class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Answer key &amp; explanations</span><div class="h-px flex-1 bg-slate-200 dark:bg-white/10"></div></div>
+      <div class="space-y-3">${review}</div>
+    </div>`;
+    return;
+  }
+
+  // ---- running ----
+  const qi=run.order[run.pos]; const m=test.questions[qi]; const chosen=run.answers[qi];
+  const answeredCount=run.order.filter(k=>run.answers[k]!=null).length;
+  const palette=run.order.map((k,n)=>`<button data-action="eng-jump" data-pos="${n}" class="h-8 w-8 rounded-lg text-[11px] font-bold border transition ${n===run.pos?'border-sky-500 bg-sky-500 text-white':run.answers[k]!=null?'border-emerald-400/50 bg-emerald-500/15 text-emerald-600 dark:text-emerald-300':'border-slate-200 dark:border-white/10 text-slate-500'}">${n+1}</button>`).join('');
+  app.innerHTML=`<div class="fade max-w-3xl mx-auto">
+    <div class="rounded-2xl p-5 sm:p-6 bg-white/75 dark:bg-white/[.04] glass border border-slate-200/70 dark:border-white/10 shadow-sm">
+      <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+        <p class="text-xs font-bold text-slate-500 dark:text-slate-400">${esc(test.title)} · Question ${run.pos+1} of ${run.order.length}</p>
+        <div class="flex items-center gap-2">
+          <span id="engTimer" class="font-mono text-sm font-bold px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-white/10">${fmtSecs((run.deadline-Date.now())/1000)}</span>
+          <button data-action="eng-exit" class="text-xs font-semibold text-slate-400 hover:text-rose-500">✕ Exit</button>
+        </div>
+      </div>
+      <div class="h-1.5 rounded-full bg-slate-200/80 dark:bg-white/10 overflow-hidden mb-4"><div class="h-full rounded-full bg-gradient-to-r from-sky-400 to-brand-500 transition-all duration-300" style="width:${Math.round(answeredCount/run.order.length*100)}%"></div></div>
+      <div class="mb-3">${engTypeBadge(m.type)}</div>
+      ${engQuestionBody(m)}
+      <div class="space-y-2.5 mt-4">${engOptionsHTML(m,run.perms[qi],chosen,{action:'eng-pick',data:'data-qi="'+qi+'"'})}</div>
+      <div class="mt-5 flex items-center justify-between gap-2 flex-wrap">
+        <button data-action="eng-prev" ${run.pos===0?'disabled':''} class="px-4 py-2.5 rounded-xl text-sm font-semibold border border-slate-200 dark:border-white/10 disabled:opacity-40">← Previous</button>
+        <div class="flex gap-2">
+          ${run.pos+1<run.order.length?`<button data-action="eng-next" class="px-5 py-2.5 rounded-xl text-sm font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">Next →</button>`:''}
+          <button data-action="eng-submit" class="px-5 py-2.5 rounded-xl text-sm font-bold ${run.pos+1<run.order.length?'border-2 border-emerald-400/50 text-emerald-600 dark:text-emerald-300':'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white shadow'}">Submit paper</button>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3 rounded-2xl p-3.5 bg-white/60 dark:bg-white/[.03] glass border border-slate-200/70 dark:border-white/10">
+      <div class="flex items-center justify-between mb-2"><p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Question palette</p><p class="text-[11px] text-slate-400">${answeredCount} answered · ${run.order.length-answeredCount} left</p></div>
+      <div class="flex flex-wrap gap-1.5">${palette}</div>
+    </div>
+  </div>`;
+  if(!_engTimer){
+    _engTimer=setInterval(()=>{
+      if(!engRun || engRun.test!==id || engRun.done || location.hash.indexOf('#/english/test/'+id)!==0){ engStopTimer(); return; }
+      const left=(engRun.deadline-Date.now())/1000;
+      const el=document.getElementById('engTimer');
+      if(el){ el.textContent=fmtSecs(left); el.classList.toggle('text-rose-500', left<60); }
+      if(left<=0){ finishEnglish(true); }
+    },500);
+  }
+}
+function startEnglish(id){
+  const test=ENGLISH_CACHE[id]; if(!test) return;
+  const n=test.questions.length;
+  const perms={};
+  test.questions.forEach((m,i)=>{
+    // Error-spotting options are "Part A/B/C/No error" and must keep their order.
+    perms[i] = /Spotting Errors/i.test(m.type) ? m.o.map((_,k)=>k) : mcqShuffle(m.o.length);
+  });
+  engStopTimer();
+  engRun={ test:id, order:Array.from({length:n},(_,i)=>i), perms, pos:0, answers:{}, startedAt:Date.now(), deadline:Date.now()+ENGLISH_MINUTES*60000, done:false };
+  track('start_english');
+  renderEnglishTest(id);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function finishEnglish(timedOut){
+  if(!engRun || engRun.done) return;
+  const test=ENGLISH_CACHE[engRun.test]; if(!test) return;
+  engRun.done=true; engRun.timedOut=!!timedOut;
+  engRun.secs=Math.min(ENGLISH_MINUTES*60, (Date.now()-engRun.startedAt)/1000);
+  const total=engRun.order.length;
+  const correct=engRun.order.filter(qi=>engRun.answers[qi]===test.questions[qi].c).length;
+  englishRecord(engRun.test, Math.round(correct/total*100), correct, total, Math.round(engRun.secs));
+  track('finish_english');
+  engStopTimer();
+  renderEnglishTest(engRun.test);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+/* ---- post-payment claim for the English pack ---- */
+function renderEnglishPaid(){
+  const app=document.getElementById('app');
+  const oid=paymentOrderId();
+  app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
+    <div class="rounded-2xl p-6 sm:p-7 bg-white/75 dark:bg-white/[.04] glass border border-sky-400/30 shadow-sm text-center">
+      <p class="text-5xl mb-2">🎉</p>
+      <h1 class="font-display text-2xl font-extrabold">Payment received</h1>
+      <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">Confirm the email you paid with and the six English tests unlock right now.</p>
+      ${oid?'':'<p class="text-[11px] text-amber-500 mt-2">No payment reference found in the link. If you have just paid, enter your email below anyway and we will try to match it.</p>'}
+      <div class="grid gap-2.5 mt-5 text-left">
+        <input id="engClaimEmail" type="email" autocomplete="email" placeholder="Email you used at checkout" value="${attrEsc(auth.email||'')}"
+          class="text-sm rounded-xl bg-white/70 dark:bg-black/20 border border-slate-200 dark:border-white/10 px-3 py-2.5 outline-none focus:ring-2 focus:ring-sky-400" />
+        <button data-action="do-english-claim" id="engClaimBtn" class="py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">Unlock the tests</button>
+        <p id="engClaimMsg" class="text-xs text-center mt-1"></p>
+      </div>
+      <p class="text-[11px] text-slate-400 mt-4">Trouble? WhatsApp <b>8968549488</b> with your payment screenshot.</p>
+    </div>
+  </div>`;
+  const el=document.getElementById('engClaimEmail');
+  if(el) el.addEventListener('keydown',e=>{ if(e.key==='Enter') doEnglishClaim(); });
+}
+function doEnglishClaim(){
+  const em=(document.getElementById('engClaimEmail').value||'').trim();
+  const msg=document.getElementById('engClaimMsg');
+  const btn=document.getElementById('engClaimBtn');
+  const say=(t,ok)=>{ if(msg){ msg.textContent=t; msg.className='text-xs text-center mt-1 '+(ok?'text-emerald-500':'text-rose-500'); } };
+  if(!em){ say('Enter the email you paid with.'); return; }
+  if(btn){ btn.disabled=true; btn.textContent='Checking…'; }
+  say('Checking your payment…', true);
+  fetch(CLAIM_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({order_id:paymentOrderId(), email:em})}).then(r=>r.json()).then(r=>{
+    if(!r||!r.ok){
+      say((r&&r.error)||'Could not verify that payment.');
+      if(btn){ btn.disabled=false; btn.textContent = r&&r.pending ? 'Try again' : 'Unlock the tests'; }
+      return;
+    }
+    if(!r.english){
+      // The order was for the main plan: send them through the normal claim.
+      say('This payment was for the audit question bank, not the English pack. Taking you to the right page…', true);
+      setTimeout(()=>{ location.hash='#/paid'+(paymentOrderId()?'?order_id='+encodeURIComponent(paymentOrderId()):''); }, 1200);
+      return;
+    }
+    if(!auth.token || auth.token===r.code){
+      auth={ token:r.code, role:r.role||'free', name:r.name||em, email:r.email||em, expiresAt:r.expiresAt||null, english:true, englishExpiresAt:r.englishExpiresAt||null, needsPhone:false };
+    } else {
+      // Signed in as someone else (e.g. an older free account): switch to the account that holds the purchase.
+      auth={ token:r.code, role:r.role||'free', name:r.name||auth.name||em, email:r.email||em, expiresAt:r.expiresAt||null, english:true, englishExpiresAt:r.englishExpiresAt||null, needsPhone:false };
+    }
+    saveAuth(); track('login');
+    adsConversion(ADS_PURCHASE, 'english-'+r.code, Number(r.amount)||ENGLISH_PRICE);
+    metaEvent('Purchase', {value:Number(r.amount)||ENGLISH_PRICE, currency:'INR', content_name:'kpmg-english'});
+    renderHeaderControls();
+    const app=document.getElementById('app');
+    app.innerHTML=`<div class="max-w-md mx-auto mt-8 fade">
+      <div class="rounded-2xl p-6 sm:p-7 bg-white/75 dark:bg-white/[.04] glass border border-sky-400/30 shadow-sm">
+        <div class="text-center">
+          <p class="text-5xl mb-2">✅</p>
+          <h1 class="font-display text-2xl font-extrabold">English tests unlocked</h1>
+          <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">All six mock tests are yours${r.englishExpiresAt?' until <b>'+new Date(r.englishExpiresAt).toDateString()+'</b>':''}.</p>
+        </div>
+        ${accessCodeBox(r.code, r.email||em, null)}
+        <a href="#/english" class="mt-5 block text-center py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-sky-500 to-brand-500 text-white shadow">Start Test 1 →</a>
+      </div>
+    </div>`;
+    loadFromCloud();
+  }).catch(()=>{ say('Network error — please try again.'); if(btn){ btn.disabled=false; btn.textContent='Unlock the tests'; } });
+}
+
 
 /* ============================================================
    CANDIDATE PROFILE + INTERVIEW TRACKER
@@ -3913,6 +4388,7 @@ function loadAdmin(){
     const nowT=Date.now();
     const userHtml = users.length ? users.sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).map(u=>{
       const exp=Date.parse(u.expiresAt||0), expired=exp&&exp<nowT, inactive=u.active===false;
+      const engOn=!!(u.english&&u.english.active!==false&&(!u.english.expiresAt||Date.parse(u.english.expiresAt)>nowT));
       const rec=recordByCode[u.code]||{profile:{},interviews:[]}, p=rec.profile||{}, ints=rec.interviews||[];
       const prog=candidateProgress(rec);
       const candidateKey=String(u.code).replace(/[^a-zA-Z0-9_-]/g,'');
@@ -3925,7 +4401,7 @@ function loadAdmin(){
       return `<div class="rounded-xl border ${inactive||expired?'border-slate-200/70 dark:border-white/10 opacity-70':'border-emerald-400/30 bg-emerald-500/5'}">
         <div class="flex items-center gap-3 p-3">
           <div class="h-10 w-10 rounded-xl bg-gradient-to-br from-brand-500 to-fuchsia-500 grid place-items-center text-white ${p.avatarChoice?'text-xl':'text-xs'} font-extrabold shrink-0">${esc(p.avatarChoice||initials(p.fullName||u.name))}</div>
-          <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''}</p>
+          <div class="flex-1 min-w-0"><p class="text-sm font-semibold">${esc(p.fullName||u.name)} ${inactive?'<span class="text-[10px] px-1.5 rounded bg-rose-500/15 text-rose-500">revoked</span>':expired?'<span class="text-[10px] px-1.5 rounded bg-amber-500/15 text-amber-600">expired</span>':''} ${engOn?'<span class="text-[10px] px-1.5 rounded bg-sky-500/15 text-sky-600" title="KPMG English Test pack till '+fmtExpiry(u.english.expiresAt)+'">🇬🇧 English</span>':''}</p>
           <p class="text-[11px] text-slate-500 truncate">${esc(p.email||u.email||'')} · ${esc(p.mobile||u.phone||'')}</p>
           <p class="text-[11px] text-slate-400">Code <span class="font-mono font-semibold select-all">${esc(u.code)}</span> · till ${fmtExpiry(u.expiresAt)} · ${ints.length} interview${ints.length===1?'':'s'} · 📱 ${(u.devices||[]).length}/2 devices</p>
           <div class="mt-1.5 flex items-center gap-2"><div class="h-1.5 w-24 rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden"><div class="h-full rounded-full bg-gradient-to-r from-cyan-400 to-brand-500" style="width:${prog.pct}%"></div></div><span class="text-[11px] font-semibold text-brand-500">${prog.pct}% ready</span><span class="text-[10px] text-slate-400">· ${fmtLastActive(prog.updatedAt)}</span></div></div>
@@ -3933,6 +4409,7 @@ function loadAdmin(){
           <button data-action="admin-copy" data-code="${esc(u.code)}" title="Copy code" class="h-8 px-2 grid place-items-center rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">Copy</button>
           <button data-action="admin-extend" data-code="${esc(u.code)}" title="Extend 1 year" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">＋</button>
           <button data-action="admin-expiry-edit" data-code="${esc(u.code)}" data-key="${candidateKey}" title="Set a custom expiry date (extend or reduce validity)" class="h-8 px-2 rounded-lg text-xs font-semibold border border-slate-200 dark:border-white/10 shrink-0">🗓️ Set date</button>
+          <button data-action="${engOn?'admin-english-revoke':'admin-english-grant'}" data-code="${esc(u.code)}" title="${engOn?'Revoke the KPMG English Test pack':'Grant the KPMG English Test pack (1 year)'}" class="h-8 px-2 rounded-lg text-xs font-semibold border ${engOn?'border-sky-400/40 text-sky-600':'border-slate-200 dark:border-white/10 text-slate-400'} shrink-0">🇬🇧${engOn?'✕':'+'}</button>
           <button data-action="admin-reset-devices" data-code="${esc(u.code)}" title="Reset device lock so this code can log in on new devices again" class="h-8 w-8 grid place-items-center rounded-lg text-slate-400 hover:text-brand-500 shrink-0">📱⟲</button>
           <button data-action="${inactive?'admin-reactivate':'admin-revoke'}" data-code="${esc(u.code)}" title="${inactive?'Reactivate':'Revoke'}" class="h-8 w-8 grid place-items-center rounded-lg ${inactive?'text-emerald-500':'text-slate-400 hover:text-rose-500'} shrink-0">${inactive?'↺':'⛔'}</button>
         </div>
@@ -4459,6 +4936,7 @@ function renderHome(){
 
   const refCards = [
     { href:'#/questions', icon:'📚', bg:'bg-brand-500/10', title:'Question Bank', desc:`${m.pct}% ready · ${m.done}/${totalQ} done`, show:true },
+    { href:'#/english', icon:'🇬🇧', bg:'bg-sky-500/10', title:'KPMG English Test', desc: englishAccess()?'6 timed mock tests · 15 questions each':'Separate ₹199 add-on · 6 timed mock tests', show:true },
     { href:'#/mock-interview', icon:'🎙️', bg:'bg-cyan-500/10', title:'Mock Interview Panel', desc:'Live simulated interview with instant scoring', show:true },
     { href:'#/flashcards', icon:'⚡', bg:'bg-amber-500/10', title:'Daily Flashcards', desc:'5-min speed revision for Ind AS, CARO & SAs', show:true },
     { href:'#/ats-scanner', icon:'📝', bg:'bg-purple-500/10', title:'Resume Keyword Check', desc:'Review coverage of common Big 4 GDC audit terms', show:true },
@@ -5334,6 +5812,26 @@ app.addEventListener('click', async e => {
     return;
   }
   if (act==='pay-click'){ metaEvent('InitiateCheckout', {value:199, currency:'INR'}); return; }
+  // ---- KPMG English Test pack ----
+  if (act==='english-pay-click'){ track('click_english_buy'); metaEvent('InitiateCheckout', {value:ENGLISH_PRICE, currency:'INR', content_name:'kpmg-english'}); return; }
+  if (act==='check-english'){ checkEnglishNow(btn); return; }
+  if (act==='do-english-claim'){ doEnglishClaim(); return; }
+  if (act==='eng-sample-answer'){ if(engSample.answers[engSample.pos]==null){ engSample.answers[engSample.pos]=parseInt(btn.dataset.opt,10); renderEngSample(); } return; }
+  if (act==='eng-sample-next'){ engSample.pos++; renderEngSample(); return; }
+  if (act==='eng-sample-reset'){ engSample={pos:0,answers:{}}; renderEngSample(); return; }
+  if (act==='eng-reload'){ renderEnglishTest(parseInt(btn.dataset.test,10)); return; }
+  if (act==='eng-start'){ startEnglish(parseInt(btn.dataset.test,10)); return; }
+  if (act==='eng-pick'){ if(engRun&&!engRun.done){ engRun.answers[parseInt(btn.dataset.qi,10)]=parseInt(btn.dataset.opt,10); renderEnglishTest(engRun.test); } return; }
+  if (act==='eng-prev'){ if(engRun&&engRun.pos>0){ engRun.pos--; renderEnglishTest(engRun.test); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+  if (act==='eng-next'){ if(engRun&&engRun.pos+1<engRun.order.length){ engRun.pos++; renderEnglishTest(engRun.test); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+  if (act==='eng-jump'){ if(engRun){ engRun.pos=Math.max(0,Math.min(engRun.order.length-1,parseInt(btn.dataset.pos,10)||0)); renderEnglishTest(engRun.test); window.scrollTo({top:0,behavior:'smooth'}); } return; }
+  if (act==='eng-submit'){
+    if(!engRun||engRun.done) return;
+    const left=engRun.order.filter(k=>engRun.answers[k]==null).length;
+    if(left && !confirm(left+' question'+(left===1?' is':'s are')+' still unanswered. Submit anyway?')) return;
+    finishEnglish(false); return;
+  }
+  if (act==='eng-exit'){ if(engRun&&!engRun.done&&!confirm('Exit this test? Your answers will not be saved.')) return; engStopTimer(); engRun=null; location.hash='#/english'; return; }
   if (act==='sampler-start'){ samplerRun={pos:0,answers:{}}; track('start_mcq'); metaEvent('Lead'); renderSampler(); return; }
   if (act==='sampler-answer'){
     if(samplerRun && samplerRun.answers[samplerRun.pos]==null){ samplerRun.answers[samplerRun.pos]=parseInt(btn.dataset.opt,10); renderSampler(); }
@@ -5443,6 +5941,16 @@ app.addEventListener('click', async e => {
       adminExpiryEditing.delete(btn.dataset.code);
       loadAdmin();
     }).catch(()=>{ alert('Network error.'); btn.disabled=false; btn.textContent='Save'; });
+    return;
+  }
+  if (act==='admin-english-grant'){
+    if(!confirm('Grant the KPMG English Test pack to this account for 1 year (manual activation, e.g. a payment the webhook missed)?')) return;
+    acct('grant-english',{code:btn.dataset.code,days:365}).then(r=>{ if(!r||!r.ok) alert('Failed: '+((r&&r.error)||'')); loadAdmin(); }).catch(()=>alert('Network error.'));
+    return;
+  }
+  if (act==='admin-english-revoke'){
+    if(!confirm('Revoke the KPMG English Test pack for this account?')) return;
+    acct('revoke-english',{code:btn.dataset.code}).then(()=>loadAdmin()).catch(()=>alert('Network error.'));
     return;
   }
   if (act==='admin-reset-devices'){
@@ -5640,6 +6148,7 @@ function refresh(){
   if(hash==='#/questions'){ renderQuestions(); setHeaderProgress(); return; }
   if(hash==='#/vault'){ renderVault(); setHeaderProgress(); return; }   // keep vault selection
   if(hash==='#/history'){ renderHistory(); setHeaderProgress(); return; }
+  if(hash.indexOf('#/english')===0){ if(hash.indexOf('#/english/paid')!==0) renderEnglish(); setHeaderProgress(); return; }   // keep the post-payment success screen
   const m = hash.match(/^#\/a\/([\w-]+)/);
   if (m && AREA_BY_ID[m[1]]) renderArea(AREA_BY_ID[m[1]]); else renderHome();
   setHeaderProgress();
@@ -5882,7 +6391,7 @@ if(SYNC_ON && auth.token){
   // verify the stored session, then load content + personal state
   acct('me').then(m=>{
     if(!m || m.role==='none'){ auth={token:null,role:'none',name:null,email:null,expiresAt:null}; saveAuth(); renderHeaderControls(); router(); return; }
-    auth.role=m.role; auth.name=m.name; auth.email=m.email||null; auth.expiresAt=m.expiresAt||null; saveAuth();
+    auth.role=m.role; auth.name=m.name; auth.email=m.email||null; auth.expiresAt=m.expiresAt||null; auth.english=!!m.english; saveAuth();
     renderHeaderControls(); router(); loadFromCloud();
   }).catch(()=>{ router(); });   // offline → render from local cache
 } else {

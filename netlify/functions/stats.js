@@ -17,6 +17,10 @@ const EVENTS = new Set([
   'free_signup',     // created a free account
   'phone_given',     // free user shared a WhatsApp number
   'login',           // logged in
+  'view_english',    // opened the KPMG English Test page
+  'click_english_buy', // clicked the English pack pay button
+  'start_english',   // started an English mock test
+  'finish_english',  // submitted an English mock test
 ]);
 
 const dayKey = (d) => 'day:' + d.toISOString().slice(0, 10);
