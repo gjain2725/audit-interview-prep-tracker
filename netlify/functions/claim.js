@@ -30,12 +30,31 @@ export default async (req) => {
     return json({ ok: false, error: 'That email does not match this payment. Use the email you entered at checkout.' });
   }
 
+  // Report the live account state, so the browser knows which role to sign in
+  // as (a first-time English buyer holds a free-tier account with the add-on).
+  let role = 'member', english = false, mainExpiresAt = rec.expiresAt || null;
+  try {
+    const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
+    const u = users[rec.code];
+    if (u) {
+      const now = Date.now();
+      const mainAlive = !u.expiresAt || Date.parse(u.expiresAt) > now;
+      english = !!(u.english && u.english.active !== false && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > now));
+      role = (u.tier === 'free' || !mainAlive) ? 'free' : 'member';
+      mainExpiresAt = u.expiresAt || null;
+    }
+  } catch (e) { /* fall back to the payment record */ }
+
   return json({
     ok: true,
     code: rec.code,
     name: rec.name || '',
     email: rec.email,
-    expiresAt: rec.expiresAt || null,
+    expiresAt: mainExpiresAt,
     amount: rec.amount || 199,
+    product: rec.product || 'main',
+    englishExpiresAt: rec.product === 'english' ? (rec.expiresAt || null) : null,
+    role,
+    english,
   });
 };

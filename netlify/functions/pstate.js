@@ -3,6 +3,11 @@ import { getStore } from '@netlify/blobs';
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
+const englishActive = (u) => !!(u && u.english && u.english.active !== false
+  && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > Date.now()));
+// A lapsed paid account that still holds the English add-on may keep signing in.
+const canSignIn = (u) => !!(u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now() || englishActive(u)));
+
 // Per-user PERSONAL state (flags / done / notes). Keyed by the caller's token:
 // admin -> 'admin', member -> their access code. Each user only ever touches their own.
 async function keyFor(req) {
@@ -12,7 +17,7 @@ async function keyFor(req) {
   try {
     const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
     const u = users[token];
-    if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) return token;
+    if (canSignIn(u)) return token;
   } catch (e) {}
   return null;
 }

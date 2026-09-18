@@ -3,6 +3,11 @@ import { getStore } from '@netlify/blobs';
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
+const englishActive = (u) => !!(u && u.english && u.english.active !== false
+  && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > Date.now()));
+// A lapsed paid account that still holds the English add-on may keep signing in.
+const canSignIn = (u) => !!(u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now() || englishActive(u)));
+
 async function resolveRole(req) {
   const token = req.headers.get('x-auth') || new URL(req.url).searchParams.get('auth') || '';
   if (!token) return 'none';
@@ -10,8 +15,9 @@ async function resolveRole(req) {
   try {
     const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
     const u = users[token];
-    if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) {
-      return u.tier === 'free' ? 'free' : 'member';
+    if (canSignIn(u)) {
+      const mainAlive = !u.expiresAt || Date.parse(u.expiresAt) > Date.now();
+      return (u.tier === 'free' || !mainAlive) ? 'free' : 'member';
     }
   } catch (e) {}
   return 'none';

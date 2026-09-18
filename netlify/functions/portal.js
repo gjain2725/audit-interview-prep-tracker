@@ -73,6 +73,11 @@ function cleanInterview(input = {}) {
   return item;
 }
 
+const englishActive = (u) => !!(u && u.english && u.english.active !== false
+  && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > Date.now()));
+// A lapsed paid account that still holds the English add-on may keep signing in.
+const canSignIn = (u) => !!(u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now() || englishActive(u)));
+
 async function resolveAuth(req) {
   const url = new URL(req.url);
   const token = req.headers.get('x-auth') || url.searchParams.get('auth') || '';
@@ -91,7 +96,7 @@ async function resolveAuth(req) {
   }
   const users = (await getStore('tracker-users').get('users', { type: 'json' })) || {};
   const user = users[token];
-  if (user && user.active !== false && (!user.expiresAt || Date.parse(user.expiresAt) > Date.now())) {
+  if (canSignIn(user)) {
     return {
       role: 'member',
       key: token,

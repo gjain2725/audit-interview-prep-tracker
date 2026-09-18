@@ -22,6 +22,39 @@ const json = (o, s = 200) =>
 const SECRETS = [process.env.CASHFREE_CLIENT_SECRET, process.env.CASHFREE_CLIENT_SECRET_TEST].filter(Boolean);
 const SECRET = SECRETS[0] || '';
 const ACCESS_DAYS = parseInt(process.env.CASHFREE_ACCESS_DAYS || '365', 10);
+const ENGLISH_DAYS = parseInt(process.env.ENGLISH_ACCESS_DAYS || '365', 10);
+
+// ---- which product was bought? -------------------------------------------
+// The main plan and the KPMG English Test pack both cost Rs 199, so the amount
+// cannot tell them apart. Each product has its own Cashfree payment form, and
+// the form's identity travels in the order (order_tags / order_note / link id).
+// CASHFREE_ENGLISH_FORM holds the English form's slug or id; the words
+// "english" and "kpmg" are matched as well so the default form name just works.
+const ENGLISH_FORM = String(process.env.CASHFREE_ENGLISH_FORM || '').toLowerCase().trim();
+const MAIN_FORM = String(process.env.CASHFREE_MAIN_FORM || 'missionbig4access').toLowerCase().trim();
+const englishActive = (u) => !!(u && u.english && u.english.active !== false
+  && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > Date.now()));
+
+function productOf(d, existingUser) {
+  const order = d.order || {};
+  const signals = {
+    tags: order.order_tags || {}, note: order.order_note || '', id: order.order_id || '',
+    link: d.payment_link || d.link || d.form || d.payment_form || {},
+    meta: order.order_meta || {},
+  };
+  const hay = JSON.stringify(signals).toLowerCase();
+  const needles = [ENGLISH_FORM, 'english', 'kpmg'].filter(Boolean);
+  if (needles.some((n) => hay.includes(n))) return { product: 'english', how: 'form', signals };
+  if (MAIN_FORM && hay.includes(MAIN_FORM)) return { product: 'main', how: 'form', signals };
+  // No form signal at all. A member with most of the year still to run is far
+  // more likely to be buying the English pack than renewing early. The admin
+  // page shows which rule fired, and can grant or revoke the pack by hand.
+  if (existingUser && existingUser.tier !== 'free' && existingUser.expiresAt
+      && Date.parse(existingUser.expiresAt) - Date.now() > 60 * 86400000 && !englishActive(existingUser)) {
+    return { product: 'english', how: 'inferred', signals };
+  }
+  return { product: 'main', how: 'default', signals };
+}
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -94,6 +127,42 @@ async function sendAccessEmail(to, name, code, expiresAt) {
   ].join('');
   const subject = 'Your Mission Big 4 access is ready';
   // Prefer your own mailbox over a third party when SMTP is configured.
+  if (SMTP.host && SMTP.user && SMTP.pass) {
+    try { return await sendViaSmtp(to, subject, html); }
+    catch (e) { if (!RESEND_KEY) return { ok: false, via: 'smtp', error: String(e && e.message) }; }
+  }
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + RESEND_KEY },
+      body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }),
+    });
+    return { ok: r.ok, via: 'resend', status: r.status };
+  } catch (e) { return { ok: false, via: 'resend', error: String(e && e.message) }; }
+}
+
+async function sendEnglishEmail(to, name, code, expiresAt) {
+  if (!to || !mailReady()) return { skipped: true };
+  const nice = (() => { try { return new Date(expiresAt).toDateString(); } catch (e) { return ''; } })();
+  const html = [
+    '<div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;color:#0d1330">',
+    '<h2 style="margin:0 0 4px">Your KPMG English Test pack is ready</h2>',
+    '<p style="color:#5b6784;margin:0 0 18px">Your payment of Rs 199 is confirmed. All six timed mock tests are unlocked',
+    nice ? ' until ' + nice : '', '.</p>',
+    '<p style="margin:0 0 6px"><b>Your access code</b></p>',
+    '<p style="font-family:monospace;font-size:20px;font-weight:bold;letter-spacing:2px;background:#eef2fb;padding:12px 16px;border-radius:10px;margin:0 0 18px">', code, '</p>',
+    '<p style="margin:0 0 8px">How to start:</p>',
+    '<ol style="color:#334155;line-height:1.7;margin:0 0 18px;padding-left:20px">',
+    '<li>Open <a href="', SITE, '/#/english">', SITE.replace(/^https?:\/\//, ''), '/#/english</a>.</li>',
+    '<li>Sign in with Google using <b>', to, '</b>, or enter the access code above.</li>',
+    '<li>Sit the tests one at a time with the 15-minute timer on.</li>',
+    '</ol>',
+    '<p style="margin:0 0 18px"><a href="', SITE, '/#/english" style="background:#3a5bef;color:#fff;text-decoration:none;padding:12px 22px;border-radius:10px;font-weight:bold;display:inline-block">Open the English tests</a></p>',
+    '<hr style="border:none;border-top:1px solid #e2e8f0;margin:22px 0">',
+    '<p style="color:#94a3b8;font-size:11px;margin:0">Need help? Reply to this email or WhatsApp +91 8968549488.</p>',
+    '</div>',
+  ].join('');
+  const subject = 'Your KPMG English Test practice is unlocked';
   if (SMTP.host && SMTP.user && SMTP.pass) {
     try { return await sendViaSmtp(to, subject, html); }
     catch (e) { if (!RESEND_KEY) return { ok: false, via: 'smtp', error: String(e && e.message) }; }
@@ -206,6 +275,43 @@ export default async (req) => {
     if (u && String(u.email || '').toLowerCase().trim() === email) { code = c; break; }
   }
   const now = Date.now();
+
+  const { product, how, signals } = productOf(d, code ? users[code] : null);
+
+  // ---- KPMG English Test pack: an add-on, so the main plan is left untouched ----
+  if (product === 'english') {
+    if (!code) code = genCode();
+    const prev = users[code] || {};
+    const prevEng = prev.english || {};
+    const engBase = englishActive(prev) && prevEng.expiresAt && Date.parse(prevEng.expiresAt) > now
+      ? Date.parse(prevEng.expiresAt) : now;                       // extend rather than shorten
+    const engExpires = new Date(engBase + ENGLISH_DAYS * 86400000).toISOString();
+    const mainLapsed = prev.tier && prev.tier !== 'free' && prev.expiresAt && Date.parse(prev.expiresAt) <= now;
+    users[code] = {
+      ...prev,
+      name: prev.name || name,
+      email,
+      phone: phone || prev.phone || '',
+      // A brand-new buyer gets a free-tier account to hang the add-on on. A paid
+      // member keeps their plan; a lapsed member drops to free so they can sign in.
+      tier: (!prev.tier || mainLapsed) ? 'free' : prev.tier,
+      expiresAt: mainLapsed ? null : (prev.expiresAt || null),
+      active: true,
+      createdAt: prev.createdAt || new Date().toISOString(),
+      devices: Array.isArray(prev.devices) ? prev.devices : [],
+      source: prev.source || 'cashfree-english',
+      referredBy: prev.campaign || prev.referredBy || null,
+      english: { ...prevEng, active: true, purchasedAt: prevEng.purchasedAt || new Date().toISOString(), expiresAt: engExpires, orderId, amount, source: 'cashfree' },
+    };
+    await store.setJSON('users', users);
+    const mail = await sendEnglishEmail(email, name, code, engExpires);
+    await payStore.setJSON('order:' + orderId, {
+      orderId, at: new Date().toISOString(), email, name, phone, amount, code, expiresAt: engExpires, auto: true,
+      product: 'english', detectedBy: how, signals,
+      emailed: !!(mail && mail.ok), mailSkipped: !!(mail && mail.skipped),
+    });
+    return json({ ok: true, product: 'english', code, expiresAt: engExpires });
+  }
   const base = code && users[code] && users[code].expiresAt && Date.parse(users[code].expiresAt) > now
     ? Date.parse(users[code].expiresAt) : now;          // extend rather than shorten
   const expiresAt = new Date(base + ACCESS_DAYS * 86400000).toISOString();
@@ -233,8 +339,9 @@ export default async (req) => {
 
   await payStore.setJSON('order:' + orderId, {
     orderId, at: new Date().toISOString(), email, name, phone, amount, code, expiresAt, auto: true,
+    product: 'main', detectedBy: how, signals,
     emailed: !!(mail && mail.ok), mailSkipped: !!(mail && mail.skipped),
   });
 
-  return json({ ok: true, code, expiresAt });
+  return json({ ok: true, product: 'main', code, expiresAt });
 };

@@ -53,14 +53,25 @@ function passwordProblem(pw) {
   return null;
 }
 
+// ---- KPMG English Test add-on (bought separately from the main plan) ----
+// u.english = { active, purchasedAt, expiresAt, orderId, amount, source }
+const englishActive = (u) => !!(u && u.english && u.english.active !== false
+  && (!u.english.expiresAt || Date.parse(u.english.expiresAt) > Date.now()));
+// The main plan is alive when it has no expiry (free accounts) or has not expired yet.
+const mainAlive = (u) => !!(u && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now()));
+// An account may sign in while either the main plan or the English add-on is live.
+const canSignIn = (u) => !!(u && u.active !== false && (mainAlive(u) || englishActive(u)));
+// A paid account whose year has run out drops to the free role, keeping any live add-on.
+const roleOf = (u) => (u.tier === 'free' || !mainAlive(u)) ? 'free' : 'member';
+
 function authRole(token, users) {
   const admin = process.env.ADMIN_SECRET;
-  if (admin && token && token === admin) return { role: 'admin', name: 'Gaurav Jain', email: process.env.ADMIN_EMAIL || '' };
+  if (admin && token && token === admin) return { role: 'admin', name: 'Gaurav Jain', email: process.env.ADMIN_EMAIL || '', english: true };
   const u = token && users[token];
-  if (u && u.active !== false && (!u.expiresAt || Date.parse(u.expiresAt) > Date.now())) {
+  if (canSignIn(u)) {
     // Free accounts are logged in but do NOT get paid content.
-    if (u.tier === 'free') return { role: 'free', name: u.name, email: u.email, code: token };
-    return { role: 'member', name: u.name, code: token, expiresAt: u.expiresAt };
+    if (roleOf(u) === 'free') return { role: 'free', name: u.name, email: u.email, code: token, english: englishActive(u) };
+    return { role: 'member', name: u.name, email: u.email, code: token, expiresAt: u.expiresAt, english: englishActive(u) };
   }
   return { role: 'none' };
 }
@@ -106,14 +117,20 @@ export default async (req) => {
 
     let foundCode = null;
     let foundUser = null;
-    for (const [code, u] of Object.entries(users)) {
-      if (u && u.email && String(u.email).toLowerCase().trim() === email && u.active !== false) {
-        if (!u.expiresAt || Date.parse(u.expiresAt) > Date.now()) {
-          foundCode = code;
-          foundUser = u;
-          break;
-        }
+    // Prefer a live paid account; otherwise any account that may still sign in
+    // (a free account, or a lapsed paid account that holds the English add-on).
+    for (const pass of [0, 1]) {
+      for (const [code, u] of Object.entries(users)) {
+        if (!u || !u.email || String(u.email).toLowerCase().trim() !== email || !canSignIn(u)) continue;
+        if (pass === 0 && roleOf(u) !== 'member') continue;
+        foundCode = code; foundUser = u; break;
       }
+      if (foundCode) break;
+    }
+
+    if (foundCode && foundUser && roleOf(foundUser) === 'free') {
+      // A returning free account: no device lock, no paid content.
+      return json({ ok: true, role: 'free', token: foundCode, name: foundUser.name || payload.name, email: payload.email, tier: 'free', english: englishActive(foundUser), needsPhone: !foundUser.phone });
     }
 
     if (!foundCode || !foundUser) {
@@ -138,7 +155,7 @@ export default async (req) => {
         };
         await store.setJSON('users', users);
       }
-      return json({ ok: true, role: 'free', token: freeCode, name: users[freeCode].name, email: payload.email, tier: 'free', needsPhone: !users[freeCode].phone });
+      return json({ ok: true, role: 'free', token: freeCode, name: users[freeCode].name, email: payload.email, tier: 'free', english: englishActive(users[freeCode]), needsPhone: !users[freeCode].phone });
     }
 
     const deviceId = String(body.device || '').trim().slice(0, 100);
@@ -163,7 +180,8 @@ export default async (req) => {
       token: foundCode,
       name: foundUser.name || payload.name,
       email: payload.email,
-      expiresAt: foundUser.expiresAt || null
+      expiresAt: foundUser.expiresAt || null,
+      english: englishActive(foundUser),
     });
   }
 
@@ -189,15 +207,15 @@ export default async (req) => {
 
     // Already has a PAID subscription on this email -> tell them to use their code.
     for (const [code, u] of Object.entries(users)) {
-      if (u && u.tier !== 'free' && String(u.email || '').toLowerCase().trim() === email && u.active !== false) {
-        return json({ ok: true, role: 'member', token: code, name: u.name, email: u.email, expiresAt: u.expiresAt || null });
+      if (u && u.tier !== 'free' && String(u.email || '').toLowerCase().trim() === email && canSignIn(u)) {
+        return json({ ok: true, role: roleOf(u), token: code, name: u.name, email: u.email, expiresAt: u.expiresAt || null, english: englishActive(u) });
       }
     }
     // Reuse an existing free account for this email, topping up the phone if missing.
     for (const [code, u] of Object.entries(users)) {
       if (u && u.tier === 'free' && String(u.email || '').toLowerCase().trim() === email) {
         if (!u.phone) { u.phone = phone; await store.setJSON('users', users); }
-        return json({ ok: true, role: 'free', token: code, name: u.name, email: u.email, tier: 'free' });
+        return json({ ok: true, role: 'free', token: code, name: u.name, email: u.email, tier: 'free', english: englishActive(u) });
       }
     }
     const code = genCode();
@@ -244,10 +262,10 @@ export default async (req) => {
         }
       }
     }
-    return json({ ok: true, role: a.role, name: a.name, email: a.email || null, expiresAt: a.expiresAt || null });
+    return json({ ok: true, role: a.role, name: a.name, email: a.email || null, expiresAt: a.expiresAt || null, english: !!a.english });
   }
   if (action === 'me') {
-    return json({ role: auth.role, name: auth.name || null, email: auth.email || null, expiresAt: auth.expiresAt || null });
+    return json({ role: auth.role, name: auth.name || null, email: auth.email || null, expiresAt: auth.expiresAt || null, english: !!auth.english });
   }
 
   // ----- password login -----
@@ -275,11 +293,11 @@ export default async (req) => {
     const bad = () => json({ ok: false, error: 'Incorrect email or password.' });
     if (!user || !verifyPassword(password, user.passwordHash)) return bad();
     if (user.active === false) return json({ ok: false, error: 'This account has been deactivated.' });
-    if (user.expiresAt && Date.parse(user.expiresAt) <= Date.now()) {
+    if (!mainAlive(user) && !englishActive(user)) {
       return json({ ok: false, error: 'Your subscription has expired. Please renew to continue.' });
     }
     const deviceId = String(body.device || '').trim().slice(0, 100);
-    if (deviceId && user.tier !== 'free') {
+    if (deviceId && roleOf(user) === 'member') {
       const devices = Array.isArray(user.devices) ? user.devices : [];
       const existing = devices.find((d) => d.id === deviceId);
       if (existing) { existing.lastSeen = new Date().toISOString(); await store.setJSON('users', users); }
@@ -288,12 +306,13 @@ export default async (req) => {
     }
     return json({
       ok: true,
-      role: user.tier === 'free' ? 'free' : 'member',
+      role: roleOf(user),
       token: code,
       name: user.name,
       email: user.email,
       expiresAt: user.expiresAt || null,
       tier: user.tier || 'paid',
+      english: englishActive(user),
       needsPhone: !user.phone,
     });
   }
@@ -351,6 +370,23 @@ export default async (req) => {
   if (action === 'reset-devices') {
     if (!users[body.code]) return json({ error: 'Unknown code.' }, 404);
     users[body.code].devices = [];
+    await store.setJSON('users', users);
+    return json({ ok: true });
+  }
+  if (action === 'grant-english') {
+    if (!users[body.code]) return json({ error: 'Unknown code.' }, 404);
+    const days = parseInt(body.days || '365', 10);
+    if (!Number.isFinite(days) || days < 1 || days > 3650) return json({ error: 'Duration must be between 1 and 3650 days.' }, 400);
+    const u = users[body.code];
+    const prev = u.english || {};
+    const base = englishActive(u) && prev.expiresAt ? Date.parse(prev.expiresAt) : Date.now();
+    u.english = { ...prev, active: true, purchasedAt: prev.purchasedAt || new Date().toISOString(), expiresAt: new Date(base + days * 86400000).toISOString(), source: prev.source || 'admin', amount: prev.amount != null ? prev.amount : (parseInt(body.amount != null ? body.amount : '199', 10) || 0) };
+    await store.setJSON('users', users);
+    return json({ ok: true, english: u.english });
+  }
+  if (action === 'revoke-english') {
+    if (!users[body.code]) return json({ error: 'Unknown code.' }, 404);
+    if (users[body.code].english) users[body.code].english.active = false;
     await store.setJSON('users', users);
     return json({ ok: true });
   }
